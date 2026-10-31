@@ -18,7 +18,7 @@
 - 新增 `loader.js` 自动更新引导：localStorage 缓存 + `version.json` 版本比对 + GitHub Raw → jsDelivr 双源兜底 + 断网降级。
 - 新增 `build.py`：读 `panel.js` 的 `VERSION` → 写 `version.json`、生成 `dist/` 两个导入包。
 - 新增 `tests/loader.test.js`：11 条断言（首次拉取 / 同版不重下 / 新版覆盖 / 断网降级 / 接口暴露）。
-- 新增 `content/` 下载区：世界书 2 本、数据库模板 3 份、面板 2 份、条目 3 份、文档 3 份。
+- 新增 `content/` 下载区：世界书 2 本、数据库模板 2 份、条目 3 份、文档 3 份（面板成品只在 `dist/`，不复制到 content）。
 - CI 模板放 `ci/release.yml.example`（推 `.github/workflows` 需 token 带 `workflow` scope，故不默认启用）。
 
 ### 世界书
@@ -61,3 +61,13 @@
 - 为什么改：……（故障现象或设计决策）
 - 影响面：……（涉及哪个键行 / 哪张表 / 哪个条目）
 ```
+
+---
+
+## 文档结构变更（不计版本号）
+
+### 2026-10-31
+- **README 一分为二**：首页只保留玩家内容（安装三步 / 从零还原环境 / 常见错误 / 排错）；部署、发版、国内网络、文件说明全部移入 `AGENTS.md`（新增 5.4 从零自建、5.5 国内网络）。
+- **README 新增「从零还原完整环境」**：谁提供什么（酒馆本体 / 酒馆助手 / 数据库插件由各自作者提供，世界书 / 模板 / 面板由本仓库提供）、七步安装顺序及原因、四处装完自检。
+- **移除第三方插件**：`content/database/插件入口_数据库本体.json` 已删除，改为指向作者仓库 https://github.com/AlbusKen/shujuku 。仓库不再存放、不转发任何第三方插件文件；`AGENTS.md` 增加 2.3 条明确此规则。
+- **清除重复副本**：删除 `content/panel/`（与 `dist/` 字节一致），面板成品只保留 `dist/` 一个出处；`content/README.md` 的安装顺序与首页对齐。
