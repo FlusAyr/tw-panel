@@ -9,7 +9,33 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.11.1';
+  const VERSION = '3.12.0';
+
+  /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
+  const SIZE_KEY = 'tw-card:size';
+  function isMini() {
+    try { return localStorage.getItem(SIZE_KEY) === 'mini'; } catch (e) { return false; }
+  }
+  function setMini(v) {
+    try { localStorage.setItem(SIZE_KEY, v ? 'mini' : 'full'); } catch (e) { /* 沙箱无存储时仅本次生效 */ }
+    const wraps = DOC.querySelectorAll('.tc-wrap');
+    for (const w of wraps) {
+      w.classList.toggle('tc-mini', v);
+      const btn = w.querySelector('.tc-size');
+      if (btn) { btn.textContent = v ? '＋' : '－'; btn.title = v ? '切换到完整面板' : '切换到紧凑面板'; }
+      const ver = w.querySelector('.tc-ver');
+      if (ver) ver.textContent = 'tw-card v' + VERSION + (v ? ' · 紧凑' : '');
+    }
+  }
+  /* 全局点击委托：面板会被 sweep 反复重建，监听必须挂在 document 上且只装一次 */
+  function installSizeToggle() {
+    if (DOC.__twSizeBound) return;
+    DOC.__twSizeBound = true;
+    DOC.addEventListener('click', (e) => {
+      const t = e.target && e.target.closest ? e.target.closest('.tc-size') : null;
+      if (t) { e.preventDefault(); e.stopPropagation(); setMini(!isMini()); }
+    }, true);
+  }
 
   const DOC = (function () {
     try {
@@ -987,7 +1013,10 @@
 
     out.push(renderNext(st.next));
 
-    return `<div class="tc-wrap" data-tw-ver="${VERSION}">${out.filter(Boolean).join('')}<div class="tc-ver">tw-card v${VERSION}</div></div>`;
+    const mini = isMini();
+    return `<div class="tc-wrap${mini ? ' tc-mini' : ''}" data-tw-ver="${VERSION}">` +
+      `<button class="tc-size" type="button" title="${mini ? '切换到完整面板' : '切换到紧凑面板'}">${mini ? '＋' : '－'}</button>` +
+      `${out.filter(Boolean).join('')}<div class="tc-ver">tw-card v${VERSION}${mini ? ' · 紧凑' : ''}</div></div>`;
   }
 
   /* ══════════ 扫描 ══════════ */
@@ -1575,6 +1604,31 @@
   .tc-cbody{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tc-opts{grid-template-columns:1fr}
 }
+
+/* ── 尺寸切换（全局持久偏好，点击 .tc-size 在 紧凑/完整 间切换）──
+   .tc-mini 置于所有基础规则与手机媒体查询之后，同级选择器下后写胜出 */
+.tc-size{position:absolute;top:7px;right:9px;z-index:5;width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;padding:0;
+  background:rgba(20,28,40,.85);border:1px solid rgba(125,211,252,.28);border-radius:5px;
+  color:#7dd3fc;font-size:12px;line-height:1;cursor:pointer;opacity:.45;
+  transition:opacity .15s,background .15s}
+.tc-size:hover{opacity:1;background:rgba(30,42,60,.95)}
+.tc-mini{padding:8px 9px;font-size:11.5px;line-height:1.45}
+.tc-mini .tc-cmdbar{gap:3px 10px;font-size:11px}
+.tc-mini .tc-sect{margin:7px 0 4px;font-size:10px}
+.tc-mini .tc-attrs{gap:0 8px;font-size:10.5px}
+.tc-mini .tc-bgrid{gap:2px 8px;grid-template-columns:repeat(auto-fit,minmax(74px,1fr))}
+.tc-mini .tc-bv{font-size:10px}
+.tc-mini .tc-bbar{height:2px}
+.tc-mini .tc-nb-wm,.tc-mini .tc-nf-wm,.tc-mini .tc-nu-wm{display:none}
+.tc-mini .tc-nb-ring{width:32px;height:32px}
+.tc-mini .tc-nb-ring text{font-size:9px}
+.tc-mini .tc-nb{padding:6px 8px}
+.tc-mini .tc-nf,.tc-mini .tc-nh,.tc-mini .tc-nd,.tc-mini .tc-nl{padding:5px 8px;font-size:10.5px}
+.tc-mini .tc-nd-r,.tc-mini .tc-nl-i{padding:3px 0}
+.tc-mini .tc-next>span{font-size:11px}
+.tc-mini .tc-ver{margin-top:3px;font-size:9px}
+.tc-mini::after{display:none}
 `;
 
   function injectCss() {
@@ -1586,6 +1640,7 @@
   }
 
   injectCss();
+  installSizeToggle();
   let n = 0;
   function loop() {
     try { injectCss(); sweep(); } catch (e) { /* 静默 */ }
