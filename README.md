@@ -111,7 +111,24 @@
 
 ---
 
-## 附三 · 给维护者
+## 附三 · 让 AI 助手替你装
+
+懒得一步步点？把下面这份手册整个丢给任意 AI 助手（Claude Code / Cursor / 带终端的模型都行），它会从装 SillyTavern 开始往下做，遇到必须在浏览器点的步骤会停下来指导你。
+
+- **[AGENT_DEPLOY.md](AGENT_DEPLOY.md)** —— 给 AI 的执行手册：环境检查、clone、装扩展、放世界书、四次手工点击的精确路径、总验收清单、失败处理表
+- **[deploy.py](deploy.py)** —— 一键脚本，把文件层的活全干完，跑完打印剩下的手工步骤
+
+```bash
+python deploy.py --dir "D:/st-env"   # 从零装（约 20 分钟，含 npm install）
+python deploy.py --skip-st           # 已有酒馆，只放世界书和导入包
+python deploy.py --dry-run           # 先看会执行什么，不动磁盘
+```
+
+分工说明：脚本能干的是**文件系统与命令行**（clone、npm install、下载世界书、建目录）；**必须在浏览器里点的四处**是「导入数据库插件」「导入数据库模板」「导入渲染器」「启用世界书」——这些数据存在浏览器端，命令行写不进去，AI 也不该用注入存储的方式绕过。
+
+---
+
+## 附四 · 给维护者
 
 本仓库同时是面板的发布源。改代码、发版、从零自建一份、内容不变量、已知陷阱，全部在 [**AGENTS.md**](AGENTS.md)；版本历史见 [**CHANGELOG.md**](CHANGELOG.md)。
 

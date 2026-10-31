@@ -26,6 +26,8 @@ tw-panel/
 ├── panel.js                ★ 唯一源文件：状态块 → HUD 卡片渲染器（约 1450 行）
 ├── loader.js               自动更新引导器（玩家只导入这一支）
 ├── build.py                打包：读 panel.js 的 VERSION → 写 version.json + dist/
+├── deploy.py               一键部署脚本：装 ST + 扩展 + 放世界书 + 备好导入包（给外部用户/agent 用）
+├── AGENT_DEPLOY.md         给外部 AI 助手的部署执行手册（从装 SillyTavern 开始）
 ├── version.json            版本清单，loader 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
 ├── tests/loader.test.js    loader 的 11 条断言（node 跑，无需依赖）
@@ -39,7 +41,7 @@ tw-panel/
 └── README.md               仓库首页：只讲玩家怎么装（维护内容不写在这里）
 ```
 
-**文档分工（别混）**：`README.md` 只回答"玩家怎么装"，面向不关心代码的人；本文件回答"怎么改、怎么发"，面向维护者；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
+**文档分工（别混）**：`README.md` 只回答"玩家怎么装"；`AGENT_DEPLOY.md` 是给**外部** AI 装环境用的执行手册（不是给你维护仓库用的，别照着它改仓库）；本文件回答"怎么改、怎么发"；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
 
 **单一出处**：面板成品只在 `dist/`（`build.py` 生成），**不要往 `content/` 复制一份**——两份副本必然漂移，之前已经出现过。
 
