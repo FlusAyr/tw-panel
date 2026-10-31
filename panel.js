@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.8';
+  const VERSION = '3.9';
 
   const DOC = (function () {
     try {
@@ -308,6 +308,24 @@
     return o;
   }
 
+  /* npc 行：npc1: 姓名 ｜ 身份 xx ｜ 态度 xx ｜ 状态 xx ｜ 备注 xx
+     未匹配键的段落并入备注，兼容旧版裸文本写法 */
+  function parseNpc(v) {
+    const p = seg(v);
+    const o = { name: (p[0] || '').trim(), role: '', att: '', status: '', note: '' };
+    const rest = [];
+    for (const x of p.slice(1)) {
+      let m;
+      if ((m = x.match(/^(?:身份|职业|角色)\s*(.+)$/))) o.role = m[1].trim();
+      else if ((m = x.match(/^(?:态度|立场)\s*(.+)$/))) o.att = m[1].trim();
+      else if ((m = x.match(/^(?:状态|情况)\s*(.+)$/))) o.status = m[1].trim();
+      else if ((m = x.match(/^(?:备注|情报|信息)\s*([\s\S]*)$/))) o.note = m[1].trim();
+      else rest.push(x.trim());
+    }
+    if (rest.length) o.note = [o.note, ...rest].filter(Boolean).join(' ');
+    return o;
+  }
+
   function parseMob(v) {
     const p = seg(v);
     const o = { name: '', grade: '', hp: null, hpMax: null, hpUnknown: false, attrs: [], attrsUnknown: false, armor: '', status: [], target: '', intent: '', weak: '' };
@@ -454,7 +472,7 @@
       else if (/^eq\d+$/.test(k)) emap.set(+k.slice(2), parseEquip(v));
       else if (/^bond\d*$/.test(k)) bmap.set(k === 'bond' ? 1 : +k.slice(4), parseBond(v));
       else if (/^foe\d*$/.test(k)) fmap.set(k === 'foe' ? 1 : +k.slice(3), parseFoe(v));
-      else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), v);
+      else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
       else if (/^ti\d+$/.test(k)) tim.set(+k.slice(2), parseTi(v));
@@ -616,6 +634,27 @@
     </div>`;
   }
 
+  /* NPC 卡：非敌对在场人物。紫金情报网风格，与敌方红色系完全区分。
+     态度分三档着色：友善(青) / 中立·警惕(琥珀) / 敌意(暗红角标，仍不进威胁区) */
+  function renderNpc(n) {
+    const attTone = (s) => {
+      const x = String(s || '');
+      if (/友善|友好|亲近|信任|盟|伙伴|好感|热/.test(x)) return 'a-friend';
+      if (/敌|敌视|敌对|仇| hostile /i.test(x)) return 'a-hostile';
+      return 'a-neutral';
+    };
+    const name = n.name || '未知人物';
+    return `<div class="tc-npc">
+      <div class="tc-npc-hd">
+        <b class="tc-npc-name">${esc(name)}</b>
+        ${n.role ? `<span class="tc-npc-role">${esc(n.role)}</span>` : ''}
+        ${n.att ? `<span class="tc-npc-att ${attTone(n.att)}">${esc(n.att)}</span>` : ''}
+      </div>
+      ${n.status ? `<div class="tc-npc-st">${esc(n.status)}</div>` : ''}
+      ${n.note ? `<div class="tc-npc-note">${esc(n.note)}</div>` : ''}
+    </div>`;
+  }
+
   function renderMob(m) {
     const g = /BOSS|Boss|首领|头目/.test(m.grade) ? 'g-boss' : (/精英/.test(m.grade) ? 'g-elite' : 'g-mob');
     const pct = (m.hp != null && m.hpMax) ? Math.max(0, Math.min(100, Math.round(m.hp / m.hpMax * 100))) : 0;
@@ -710,6 +749,10 @@
       colR.push(sect('宿敌', 'NEMESIS'));
       colR.push(`<div class="tc-foes">${st.foes.map(renderFoe).join('')}</div>`);
     }
+    if (st.npcs.length) {
+      colL.push(sect('在场人物', 'CONTACTS'));
+      colL.push(`<div class="tc-npcs">${st.npcs.map(renderNpc).join('')}</div>`);
+    }
     if (st.mobs.length) {
       colR.push(sect('敌方威胁', 'THREAT'));
       colR.push(`<div class="tc-mobs">${st.mobs.map(renderMob).join('')}</div>`);
@@ -717,10 +760,6 @@
     if (st.checks.length) {
       colR.push(sect('判定流', 'CHECK LOG'));
       st.checks.forEach((c, i) => colR.push(renderCheck(c, i)));
-    }
-    if (st.npcs.length) {
-      colR.push(sect('在场 NPC', 'NPC'));
-      colR.push(`<div class="tc-npcs">${st.npcs.map(n => `<div class="tc-npc">👹 ${esc(n)}</div>`).join('')}</div>`);
     }
     if (colL.length || colR.length) {
       out.push(`<div class="tc-main">${
@@ -1005,9 +1044,26 @@
 .tc-mob-intent{background:#2a1013;border:1px solid #7f1d1d;border-radius:6px;padding:3px 8px;font-size:12px;color:#fecaca;font-weight:600}
 .tc-mob-intent::before{content:"➤ "}
 .tc-mob-weak{margin-top:5px;font-size:11px;color:#8a7a80}
-.tc-npcs{display:flex;flex-direction:column;gap:5px;margin-bottom:7px}
-.tc-npc{font-size:12px;color:var(--red);background:rgba(248,113,113,.07);
-  border-left:3px solid rgba(248,113,113,.5);border-radius:6px;padding:5px 10px}
+/* ── NPC 卡：紫金情报网（非敌对在场人物，与敌方红色系彻底区分） ── */
+.tc-npcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-npc{position:relative;overflow:hidden;font-size:12px;color:#cfc3e8;
+  background:linear-gradient(135deg,#131020 0%,#1c1733 55%,#131020 100%);
+  border:1px solid #372a55;border-left:3px solid #a78bfa;border-radius:10px;padding:7px 11px;
+  transition:border-color .2s,box-shadow .2s}
+.tc-npc:hover{border-color:#5b4a8a;box-shadow:0 0 10px rgba(167,139,250,.22)}
+.tc-npc::after{content:'◈';position:absolute;right:9px;top:6px;font-size:11px;color:#a78bfa;opacity:.4;pointer-events:none}
+.tc-npc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#a78bfa 0%,rgba(167,139,250,.2) 50%,transparent 85%);opacity:.55}
+.tc-npc-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tc-npc-name{font-weight:700;font-size:13.5px;color:#e4dbf7;letter-spacing:.5px}
+.tc-npc-role{font-size:10px;padding:1px 7px;border-radius:4px;background:#2b2144;color:#c4b5fd;
+  border:1px solid #453568;white-space:nowrap}
+.tc-npc-att{font-size:10px;padding:1px 7px;border-radius:4px;white-space:nowrap;font-weight:600}
+.tc-npc-att.a-friend{background:#0e2a26;color:#5eead4;border:1px solid #1d5148}
+.tc-npc-att.a-neutral{background:#2b2144;color:#fbbf24;border:1px solid #57451f}
+.tc-npc-att.a-hostile{background:#2a1418;color:#f0a5b0;border:1px solid #4a2630}
+.tc-npc-st{margin-top:4px;font-size:11.5px;color:#b9a8e0;letter-spacing:.3px}
+.tc-npc-st::before{content:'◇ ';color:#8b5cf6}
 
 .tc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
 /* 玩家卡：青蓝钢甲、切角装甲板、编号水印、辉光呼吸 */
