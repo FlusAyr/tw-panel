@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.9';
+  const VERSION = '3.9.1';
 
   const DOC = (function () {
     try {
@@ -309,20 +309,34 @@
   }
 
   /* npc 行：npc1: 姓名 ｜ 身份 xx ｜ 态度 xx ｜ 状态 xx ｜ 备注 xx
+     同时兼容世界书口径：npc: 名称 | 立场 | STR.. WIL.. | HP当前/最大 | 位置与行动
      未匹配键的段落并入备注，兼容旧版裸文本写法 */
+  const NPC_ATTR_KEYS = { STR: '力', DEX: '敏', CON: '体', INT: '智', PER: '感', CHA: '魅', WIL: '志', 力量: '力', 敏捷: '敏', 体质: '体', 智力: '智', 感知: '感', 魅力: '魅', 意志: '志' };
   function parseNpc(v) {
     const p = seg(v);
-    const o = { name: (p[0] || '').trim(), role: '', att: '', status: '', note: '' };
+    const o = { name: (p[0] || '').trim(), role: '', att: '', status: '', note: '', attrs: [] };
     const rest = [];
-    for (const x of p.slice(1)) {
+    const grabAttrs = (x) => {
+      const out = [];
+      const re = /(STR|DEX|CON|INT|PER|CHA|WIL|力量|敏捷|体质|智力|感知|魅力|意志)\s*(\d+)/g;
+      let m;
+      while ((m = re.exec(x))) out.push({ k: NPC_ATTR_KEYS[m[1]] || m[1], v: +m[2] });
+      return out;
+    };
+    for (let i = 0; i < p.length - 1; i++) {
+      const x = p[i + 1];
       let m;
       if ((m = x.match(/^(?:身份|职业|角色)\s*(.+)$/))) o.role = m[1].trim();
       else if ((m = x.match(/^(?:态度|立场)\s*(.+)$/))) o.att = m[1].trim();
       else if ((m = x.match(/^(?:状态|情况)\s*(.+)$/))) o.status = m[1].trim();
       else if ((m = x.match(/^(?:备注|情报|信息)\s*([\s\S]*)$/))) o.note = m[1].trim();
+      else if (/^HP\s*\d+\s*\/\s*\d+$/i.test(x)) o.status = o.status || x.replace(/^HP/i, 'HP ');
+      else if (/^\d+\s*\/\s*\d+$/.test(x)) o.status = o.status || 'HP ' + x;
+      else if (grabAttrs(x).length >= 2) o.attrs = grabAttrs(x);
+      else if (i === 0) o.att = x;   // 位置制（世界书口径）：姓名后第一段即立场
       else rest.push(x.trim());
     }
-    if (rest.length) o.note = [o.note, ...rest].filter(Boolean).join(' ');
+    if (rest.length) o.note = [o.note, ...rest].filter(Boolean).join(' ｜ ');
     return o;
   }
 
@@ -650,6 +664,7 @@
         ${n.role ? `<span class="tc-npc-role">${esc(n.role)}</span>` : ''}
         ${n.att ? `<span class="tc-npc-att ${attTone(n.att)}">${esc(n.att)}</span>` : ''}
       </div>
+      ${n.attrs && n.attrs.length >= 2 ? `<div class="tc-npc-attrs">${n.attrs.map(a => `<span>${a.k}<b>${a.v}</b></span>`).join('')}</div>` : ''}
       ${n.status ? `<div class="tc-npc-st">${esc(n.status)}</div>` : ''}
       ${n.note ? `<div class="tc-npc-note">${esc(n.note)}</div>` : ''}
     </div>`;
@@ -1064,6 +1079,11 @@
 .tc-npc-att.a-hostile{background:#2a1418;color:#f0a5b0;border:1px solid #4a2630}
 .tc-npc-st{margin-top:4px;font-size:11.5px;color:#b9a8e0;letter-spacing:.3px}
 .tc-npc-st::before{content:'◇ ';color:#8b5cf6}
+.tc-npc-attrs{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tc-npc-attrs span{display:inline-flex;align-items:center;gap:2px;background:#221b3a;border:1px solid #3a2d5c;
+  border-radius:4px;padding:1px 6px;font-size:10px;color:#9d8cc7;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tc-npc-attrs span b{color:#d6c9f5;font-weight:700;font-size:11.5px}
+.tc-npc-note{margin-top:4px;font-size:11px;color:#8f82ad;line-height:1.5}
 
 .tc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
 /* 玩家卡：青蓝钢甲、切角装甲板、编号水印、辉光呼吸 */
