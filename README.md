@@ -3,6 +3,7 @@
 > 线上仓库：https://github.com/FlusAyr/tw-panel
 > 玩家导入：`dist/loader-script.json`（酒馆助手 → 脚本 → 导入）
 > 当前版本：v3.8.0
+> 接手维护请先读 [AGENTS.md](AGENTS.md)（AI/人通用作业手册）；版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
 酒馆助手（SillyTavern）渲染器 `panel.js` 的发布仓库。解决一件事：**改一次面板，不用再让每个玩家重新导入脚本。**
 
@@ -112,4 +113,6 @@ git tag v3.9.0 && git push && git push --tags
 | `build.py` | 打包：读 `panel.js` 的 VERSION → 刷新 `version.json` → 生成 `dist/*.json` |
 | `dist/loader-script.json` | 酒馆助手可直接导入的引导脚本包 |
 | `dist/panel-script-vX.json` | 手动导入版（离线用，不自动更新） |
+| `AGENTS.md` | 维护者手册：目录职责、三件绝不能做的事、状态块契约、标准作业流程、验收与已知陷阱 |
+| `CHANGELOG.md` | 版本历史与存档格式 |
 | `ci/release.yml.example` | 可选 CI：想启用自动 Release，把文件拷到 `.github/workflows/release.yml` 再推（推 workflow 需要 token 带 `workflow` 权限） |
