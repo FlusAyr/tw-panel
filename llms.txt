@@ -1,0 +1,47 @@
+# 主神空间 · tw-panel
+
+> SillyTavern（酒馆）+ 酒馆助手（TavernHelper）的状态块渲染器与规则内容仓库。把 `scene:` / `p1:` / `cr1:` 这类键行文本渲染成 HUD 卡片，并分发配套的世界书、数据库模板与自定义条目。
+
+本文件是给 AI 助手与检索工具的入口清单。人类请从 [README](https://github.com/FlusAyr/tw-panel) 开始。
+
+## 按诉求跳转
+
+- [AGENT_DEPLOY.md](https://github.com/FlusAyr/tw-panel/blob/main/AGENT_DEPLOY.md)：**装环境**。从安装 SillyTavern 起到渲染器可用，含可自动/必须人工的步骤划分、总验收清单、失败处理表、五条红线。
+- [AGENTS.md](https://github.com/FlusAyr/tw-panel/blob/main/AGENTS.md)：**维护仓库**。目录职责、四条绝对不能做的事、面板架构与状态块键行契约、内容不变量、发版流程、已知陷阱、交接自查。
+- [CHANGELOG.md](https://github.com/FlusAyr/tw-panel/blob/main/CHANGELOG.md)：**版本谱系**。版本号规则、每次改动的原因与影响面。
+- [README.md](https://github.com/FlusAyr/tw-panel/blob/main/README.md)：**玩家安装**。Part 1 装渲染器（1 分钟）/ Part 2 还原完整环境。
+
+## 部署脚本
+
+- [deploy.py](https://github.com/FlusAyr/tw-panel/blob/main/deploy.py)：一键部署。`--dir <路径>` 从零装、`--skip-st` 只放内容、`--dry-run` 只打印命令。不代启动酒馆，也不代点浏览器界面。
+
+## 渲染器
+
+- [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。自动更新引导器，装一次后从 CDN 拉最新面板。
+- [dist/panel-script-v3.8.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.8.json)：离线手动版，不自动更新。
+- [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，约 1450 行。改这个文件，然后跑 `python build.py`。
+- [loader.js](https://github.com/FlusAyr/tw-panel/blob/main/loader.js)：引导器源码，含 `REPO` 常量与双源顺序。
+- [version.json](https://github.com/FlusAyr/tw-panel/blob/main/version.json)：版本清单，loader 据此判断是否更新。
+- [build.py](https://github.com/FlusAyr/tw-panel/blob/main/build.py)：打包脚本，读 `panel.js` 的 `VERSION` → 写 `version.json` 与 `dist/`。
+
+## 规则内容
+
+- [content/worldbook/无限恐怖_v2_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/无限恐怖_v2_联机版_AI精简.json)：主世界书，24 条目，含实时结算三级触发器。
+- [content/worldbook/跑团用世界书_v4_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/跑团用世界书_v4_联机版_AI精简.json)：通用规则层，18 条目，含 cr 行规范。
+- [content/database/无限恐怖数据库模板_主神空间深度版.json](https://github.com/FlusAyr/tw-panel/blob/main/content/database/无限恐怖数据库模板_主神空间深度版.json)：10 表模板（全局/名册/强化台账/结算台账/敌情/势力/物资/任务/纪要/选项）。
+- [content/entries/](https://github.com/FlusAyr/tw-panel/tree/main/content/entries)：自定义条目（超高校级幸运、魔药体系 v1.0）。
+- [content/docs/提示词_自定义血统内功创作系统.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/提示词_自定义血统内功创作系统.md)：交给创作 AI 的规范（三准则、八项功能契约、代价五不变量、七步指引、自检清单）。
+- [content/docs/酒馆状态面板系统_维护手册.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/酒馆状态面板系统_维护手册.md)：面板系统维护手册。
+
+## 硬约束（任何改动都不得违反）
+
+1. 数据库模板的「纪要」表（uid `sheet_3NoMc1wI`）必须保持原版：6 列、编码 `AM0001` 递增。酒馆助手的记忆追回依赖它。
+2. 发布必须打新 tag，不得覆盖旧 tag（jsDelivr 对 tag 永久缓存）。
+3. 面板只替换状态块所在节点，不得改动正文其余 DOM。
+4. 不存放、不转发第三方插件。数据库插件「龙血玄黄·数据库」由 AlbusKen 维护：https://github.com/AlbusKen/shujuku
+5. 不编辑 SillyTavern 的 `default/` 目录（含 `!DO-NOT-EDIT-THESE-FILES.txt`）。
+
+## 可选
+
+- [ci/release.yml.example](https://github.com/FlusAyr/tw-panel/blob/main/ci/release.yml.example)：可选 GitHub Actions 发布模板，启用需 token 带 `workflow` 权限。
+- [tests/loader.test.js](https://github.com/FlusAyr/tw-panel/blob/main/tests/loader.test.js)：引导器回归测试，`node tests/loader.test.js`，应 11 条全过。

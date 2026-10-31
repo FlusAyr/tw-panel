@@ -38,10 +38,11 @@ tw-panel/
 │   ├── database/           10 表深度版模板、原版备份（不含第三方插件）
 │   ├── entries/            超高校级幸运、魔药体系 v1.0
 │   └── docs/               创作系统提示词、面板维护手册、状态块样例
+├── llms.txt                给 AI / 检索工具的入口索引（改文件后要同步更新）
 └── README.md               仓库首页：只讲玩家怎么装（维护内容不写在这里）
 ```
 
-**文档分工（别混）**：`README.md` 只回答"玩家怎么装"；`AGENT_DEPLOY.md` 是给**外部** AI 装环境用的执行手册（不是给你维护仓库用的，别照着它改仓库）；本文件回答"怎么改、怎么发"；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
+**文档分工（别混）**：`llms.txt` 是所有文档的机器可读索引——新增/改名/删除文件时**必须同步它**，否则 AI 会按旧路径找文件；`README.md` 只回答"玩家怎么装"；`AGENT_DEPLOY.md` 是给**外部** AI 装环境用的执行手册（不是给你维护仓库用的，别照着它改仓库）；本文件回答"怎么改、怎么发"；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
 
 **单一出处**：面板成品只在 `dist/`（`build.py` 生成），**不要往 `content/` 复制一份**——两份副本必然漂移，之前已经出现过。
 
@@ -143,6 +144,14 @@ git tag v3.9.0 && git push && git push --tags
 
 - `https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json`
 - `https://cdn.jsdelivr.net/gh/FlusAyr/tw-panel@v3.9.0/panel.js`
+
+### 5.1.1 新增或改名任何文件后
+
+同步三处，缺一处就会让后来者读到旧路径：
+
+1. `llms.txt` 的对应小节（AI 与检索工具靠它找入口）
+2. 本文件第 1 节的仓库地图
+3. 如果面向玩家，`README.md` 与 `content/README.md` 的表格
 
 ### 5.2 改内容（世界书 / 模板 / 条目）
 
