@@ -5,7 +5,18 @@
 
 ---
 
-## 2026-11-01 · 引导 v2.0（面板仍为 v3.10.1，无需新 tag）
+## 2026-11-01 · v3.11.0（当前）—— 手机端适配
+
+### panel.js —— ≤760px 双栏变横向滑动页
+- **故障**：`.tc-main` 是 `minmax(430px,1fr)` 双栏 grid，手机屏（~390px）下右栏整列被挤出屏幕，显示不完整。
+- **修复**：媒体查询 ≤760px 时双栏改为 `grid-auto-flow:column; grid-auto-columns:100%; overflow-x:auto; scroll-snap-type:x mandatory`——左右滑动在左栏/右栏之间翻页（吸附），每页内容正常上下滚动；双栏都存在时顶部显示「左右滑动切换分区」提示条。
+- 附带：手机端缩小面板内边距与字号；mob 三列属性降为两列；NEXT 选项单列。
+- 程序化验证：390px 视口下两页各 386px、scrollWidth=780 可滑、snap 生效、提示条显示；两页截图内容正确。桌面布局不受影响（媒体查询外不变）。
+- 已知限制：jsDelivr 对 @main 分支缓存 ≤12h 且 purge 传播慢——本版到达全部玩家可能有数小时延迟，属 CDN 特性。
+
+---
+
+## 2026-11-01 · 引导 v2.0（面板 v3.10.1，无需新 tag）
 
 ### boot.mjs —— ESM 双通道引导（关键修复）
 - **设置面板**：脚本按钮「面板设置」弹出设置卡——当前版本/缓存源/更新时间展示；开关：自动刷新页面、启动时检查更新（存 localStorage tw-card:opts）；操作：立即检查更新 / 强制重拉最新（忽略版本号直连 main 并热启动）/ 清除缓存并停用。控制台备用入口 window.twPanelOpenSettings()。按钮声明在导入包 button.buttons（面板设置、检查更新），boot.mjs 内 eventOn(getButtonEvent()) 监听

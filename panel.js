@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.10.1';
+  const VERSION = '3.11.0';
 
   const DOC = (function () {
     try {
@@ -971,7 +971,8 @@
       st.checks.forEach((c, i) => colR.push(renderCheck(c, i)));
     }
     if (colL.length || colR.length) {
-      out.push(`<div class="tc-main">${
+      const hint = colL.length && colR.length ? `<div class="tc-swipe-hint">左右滑动切换分区</div>` : '';
+      out.push(hint + `<div class="tc-main">${
         colL.length ? `<div class="tc-col">${colL.join('')}</div>` : ''
       }${colR.length ? `<div class="tc-col">${colR.join('')}</div>` : ''}</div>`);
     }
@@ -1554,6 +1555,26 @@
 .tc-opt::after{content:'▸';position:absolute;right:9px;top:50%;transform:translateY(-50%);
   color:rgba(103,232,249,.65);font-size:11px}
 .tc-next>span{font-size:12.5px}
+
+/* ── 手机端适配（≤760px）：双栏 → 横向滑动页 ──
+   左右滑在「左栏/右栏」之间切换（scroll-snap 吸附），每页内容正常上下滚动 */
+.tc-swipe-hint{display:none}
+@media (max-width:760px){
+  .tc-wrap{padding:10px 11px;font-size:12.5px}
+  .tc-main{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:100%;
+    overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;gap:8px}
+  .tc-main::-webkit-scrollbar{display:none}
+  .tc-main>.tc-col{scroll-snap-align:start;min-width:0}
+  .tc-swipe-hint{display:flex;align-items:center;justify-content:center;gap:10px;
+    color:#51617a;font-size:9.5px;letter-spacing:.22em;margin:0 0 6px;white-space:nowrap}
+  .tc-swipe-hint::before,.tc-swipe-hint::after{content:'';height:1px;flex:1;min-width:20px;
+    background:linear-gradient(90deg,transparent,rgba(125,211,252,.4))}
+  .tc-swipe-hint::after{background:linear-gradient(90deg,rgba(125,211,252,.4),transparent)}
+  .tc-attrs{gap:0 10px}
+  .tc-cbody{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tc-opts{grid-template-columns:1fr}
+}
 `;
 
   function injectCss() {

@@ -1,0 +1,751 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<title>MOB:{"exists":true,"display":"grid","gtc":"386px 386px","gaf":"column","gac":"100%","ovx":"auto","scrollW":780,"clientW":386,"cols":2,"col1W":386,"col2W":386,"hintDisplay":"flex","bodyW":496}</title>
+<style>
+  body{margin:0;padding:24px;background:#0b0e14;font-family:"Microsoft YaHei",system-ui,sans-serif;color:#dbe6f4}
+  h3{margin:18px 0 8px;font-size:14px;color:#94a3b8;font-weight:600}
+  .mes_text{background:#11151f;border:1px solid #1e2635;border-radius:12px;padding:16px 18px;max-width:1360px}
+  #log{color:#64748b;font-size:12px;margin-top:10px}
+</style>
+<style id="tw-card-style">
+.tc-ver{font-size:10px;color:#3a4557;text-align:right;margin-top:6px;letter-spacing:.04em}
+.tc-wrap{
+  --bg: rgba(14,19,28,.95); --bg2: rgba(27,33,45,.92); --bd: rgba(120,140,170,.2);
+  --fg: #dde5f0; --dim: #8794a8; --acc: #7dd3fc; --gold: #fbbf24; --pink: #f472b6; --red: #fca5a5;
+  --hud: rgba(125,211,252,.6);
+  position:relative;
+  margin:10px 0; padding:12px 13px; border-radius:13px;
+  background-color:var(--bg);
+  background-image:
+    linear-gradient(var(--hud),var(--hud)),linear-gradient(var(--hud),var(--hud)),
+    linear-gradient(var(--hud),var(--hud)),linear-gradient(var(--hud),var(--hud)),
+    linear-gradient(var(--hud),var(--hud)),linear-gradient(var(--hud),var(--hud)),
+    linear-gradient(var(--hud),var(--hud)),linear-gradient(var(--hud),var(--hud));
+  background-repeat:no-repeat;
+  background-size:17px 2px,2px 17px,17px 2px,2px 17px,17px 2px,2px 17px,17px 2px,2px 17px;
+  background-position:left top,left top,right top,right top,left bottom,left bottom,right bottom,right bottom;
+  border:1px solid rgba(125,211,252,.16);
+  box-shadow:inset 0 0 26px rgba(103,232,249,.04),0 2px 14px rgba(0,0,0,.35);
+  font-size:13px; line-height:1.55; color:var(--fg);
+  font-variant-numeric:tabular-nums; white-space:normal; word-break:break-word;
+}
+.tc-wrap::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.013) 3px 4px)}
+.tc-wrap *{box-sizing:border-box;white-space:normal}
+
+/* 鈹€鈹€ 椤堕儴鎸囦护鏍?鈹€鈹€ */
+.tc-cmdbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px 14px;
+  background:linear-gradient(180deg,rgba(125,211,252,.10),rgba(125,211,252,.02));
+  border:1px solid rgba(125,211,252,.22);border-left:3px solid var(--acc);
+  border-radius:7px;padding:6px 11px;margin-bottom:8px;font-size:12.5px}
+.tc-time{display:inline-flex;align-items:center;gap:7px;color:var(--acc);font-weight:700;letter-spacing:.03em}
+.tc-time u{text-decoration:none;width:7px;height:7px;border-radius:50%;background:#22d3ee;
+  box-shadow:0 0 7px #22d3ee;animation:tc-rec 1.7s ease-in-out infinite}
+@keyframes tc-rec{0%,100%{opacity:1}50%{opacity:.22}}
+.tc-loc{color:#e3ecf7;font-weight:600}
+.tc-atmo{color:var(--dim);font-size:11.5px;margin-left:auto}
+.tc-team{display:flex;flex-wrap:wrap;gap:5px 14px;margin:0 0 8px;font-size:12px;color:#a9b8cc}
+.tc-team span::before{content:'鈻?';color:#51617a}
+
+/* 鈹€鈹€ HUD 鍒嗗尯鏍囧ご 鈹€鈹€ */
+.tc-sect{display:flex;align-items:center;gap:8px;margin:11px 0 7px}
+.tc-sect i{flex:0 0 auto;width:7px;height:7px;background:var(--acc);transform:rotate(45deg);
+  box-shadow:0 0 7px rgba(125,211,252,.85)}
+.tc-sect b{flex:0 0 auto;font-size:11.5px;letter-spacing:.16em;color:#d3e8f8;font-weight:700}
+.tc-sect em{flex:0 0 auto;font-style:normal;font-size:9.5px;letter-spacing:.24em;color:#51617a}
+.tc-sect::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(125,211,252,.32),transparent)}
+
+/* 鈹€鈹€ 鍙屾爮鎴樺満 鈹€鈹€ */
+.tc-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:2px 16px;align-items:start}
+.tc-grid.tc-stack{display:flex;flex-direction:column;gap:8px}
+.tc-col .tc-card{max-width:none}
+
+.tc-quest{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.26);
+  border-radius:9px;padding:8px 12px;margin-bottom:8px;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);
+  box-shadow:inset 0 0 18px rgba(251,191,36,.05)}
+.tc-qmain{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:12.5px}
+.tc-qmain b{font-size:10px;background:rgba(251,191,36,.2);color:var(--gold);border-radius:4px;padding:1px 7px;letter-spacing:.06em}
+.tc-qmain em{font-style:normal;font-size:11.5px;color:var(--gold)}
+.tc-qmain em.bad{color:#f87171}
+.tc-qsubs{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:6px}
+.tc-sub{font-size:11.5px;color:#b9c6d8;background:rgba(255,255,255,.06);border-radius:5px;padding:1px 8px}
+.tc-sub i{font-style:normal;color:var(--acc);margin-left:6px}
+
+.tc-check{background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.22);
+  border-radius:9px;padding:7px 11px;margin-bottom:7px;font-size:12.5px}
+.tc-check summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 10px;cursor:pointer;list-style:none}
+.tc-check summary::-webkit-details-marker{display:none}
+.tc-check summary>b{font-size:12px}
+.tc-ctitle{font-weight:600;color:#f0e2b8}
+.tc-check summary u{text-decoration:none;font-size:11px;border-radius:20px;padding:1px 9px}
+.tc-check summary u.ok{background:rgba(74,222,128,.16);color:#4ade80}
+.tc-check summary u.bad{background:rgba(248,113,113,.16);color:#f87171}
+.tc-check summary em{font-style:normal;font-size:11px;color:var(--gold);margin-left:auto}
+.tc-check.none{display:flex;gap:10px;align-items:baseline;color:var(--dim)}
+.tc-check.none b{font-size:10px;background:rgba(255,255,255,.07);border-radius:4px;padding:1px 7px}
+.tc-cbody{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:2px 16px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)}
+.tc-crow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:12px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.045);min-width:0}
+.tc-crow span{color:var(--dim);flex:0 0 auto;font-size:11px}
+.tc-crow b{font-weight:600;text-align:right;color:#e8eef8;min-width:0;
+  overflow-wrap:anywhere;word-break:break-word}
+.tc-cnote{margin-top:7px;font-size:12px;color:#cbd8e8;background:rgba(255,255,255,.04);
+  border-left:3px solid var(--acc);border-radius:5px;padding:5px 10px}
+.tc-cfoot{margin-top:5px;font-size:11px;color:var(--dim);text-align:right}
+
+.tc-mobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:8px;margin-bottom:8px;align-items:start}
+.tc-mob{position:relative;background:#1a1114;border:1px solid #4a2630;border-left:3px solid #b91c1c;border-radius:10px;padding:8px 11px;min-width:0}
+/* 鏉傚叺锛氱揣鍑戜綆璋冿紝琛緱绮捐嫳鍜孊OSS鏇存湁鎺掗潰 */
+.tc-mob.g-mob{background:#150f13;border-left-width:2px;border-left-color:#6b2730;padding:6px 10px}
+.tc-mob.g-mob .tc-mob-name{font-size:12px;font-weight:600;color:#d3bcc1}
+.tc-mob.g-mob .tc-mob-grade{background:#241318;color:#b08a92}
+.tc-mob.g-mob .tc-mob-hp{font-size:11px;color:#b08a92}
+.tc-mob.g-mob .tc-mob-bar{height:4px;margin:4px 0 5px}
+.tc-mob.g-mob .tc-mattr b{font-size:11px;color:#b99ba2}
+/* 绮捐嫳锛氬垏瑙掕鐢叉澘銆佺惀鐝€閲戞祦鍏夊懠鍚?*/
+.tc-mob.g-elite{border:1px solid #8a5c16;border-left:4px solid #f59e0b;background:linear-gradient(135deg,#1c1410 0%,#261b0d 55%,#1c1410 100%);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));filter:drop-shadow(0 0 7px rgba(245,158,11,.30));padding:12px 15px;animation:tc-eliteglow 3s ease-in-out infinite}
+@keyframes tc-eliteglow{0%,100%{filter:drop-shadow(0 0 6px rgba(245,158,11,.22))}50%{filter:drop-shadow(0 0 14px rgba(245,158,11,.48))}}
+.tc-mob.g-elite .tc-mob-name{font-size:16px;color:#ffe9c2;text-shadow:0 0 9px rgba(245,158,11,.55)}
+.tc-mob.g-elite .tc-mob-grade{background:linear-gradient(90deg,#7a4a0a,#b97a10);color:#fff3d6;font-weight:700;font-size:10.5px;padding:2px 9px;box-shadow:0 0 6px rgba(245,158,11,.45)}
+.tc-mob.g-elite .tc-mob-grade::before{content:'鈼?'}
+.tc-mob.g-elite .tc-mob-hp{color:#fbbf24;font-size:13.5px;font-weight:700}
+.tc-mob.g-elite .tc-mob-bar{height:8px;margin:6px 0 7px;background:#241708;border-radius:2px}
+.tc-mob.g-elite .tc-mattr b{color:#fcd9a0}
+/* BOSS锛氭暣琛屽崰浣嶃€侀噸鍨嬭鐢插垏瑙掋€佹粴鍔ㄨ鎴掔汗銆佸法鍨嬫按鍗般€佺孩鍏夊懠鍚?*/
+.tc-mob.g-boss{grid-column:1/-1;overflow:hidden;border:1px solid #ef4444;border-left:6px solid #ef4444;background:linear-gradient(120deg,#20090c 0%,#3a0d12 45%,#20090c 100%);clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));padding:16px 19px 14px;animation:tc-bosspulse 2.4s ease-in-out infinite}
+.tc-mob.g-boss::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:repeating-linear-gradient(-55deg,#ef4444 0 12px,transparent 12px 24px);opacity:.75;animation:tc-hazard 1.6s linear infinite}
+.tc-mob.g-boss::after{content:'BOSS';position:absolute;right:10px;bottom:-14px;font-size:58px;font-weight:900;letter-spacing:6px;color:#ef4444;opacity:.07;pointer-events:none}
+@keyframes tc-bosspulse{0%,100%{filter:drop-shadow(0 0 9px rgba(239,68,68,.35))}50%{filter:drop-shadow(0 0 24px rgba(239,68,68,.65))}}
+@keyframes tc-hazard{from{background-position:0 0}to{background-position:34px 0}}
+@keyframes tc-shine{from{transform:translateX(-110%)}to{transform:translateX(260%)}}
+@keyframes tc-lowblink{0%,100%{opacity:1}50%{opacity:.3}}
+.tc-mob.g-boss .tc-mob-name{font-size:20px;letter-spacing:2px;color:#ffd7d7;text-shadow:0 0 14px rgba(239,68,68,.9),0 0 34px rgba(239,68,68,.4)}
+.tc-mob.g-boss .tc-mob-grade{background:linear-gradient(90deg,#991b1b,#dc2626);color:#fff1f1;font-size:11.5px;padding:3px 11px;font-weight:800;letter-spacing:1px;box-shadow:0 0 9px rgba(239,68,68,.55)}
+.tc-mob.g-boss .tc-mob-grade::before{content:'鈽?'}
+.tc-mob.g-boss .tc-mob-hp{color:#fca5a5;font-size:16px;font-weight:800}
+.tc-mob.g-boss .tc-mob-bar{height:12px;margin:8px 0 9px;background:#1c0a0d;border-radius:2px}
+.tc-mob.g-boss .tc-mob-bar i{background:linear-gradient(90deg,#7f1d1d,#ef4444 55%,#fbbf24);position:relative;overflow:hidden}
+.tc-mob.g-boss .tc-mob-intent{font-size:13.5px;padding:5px 11px;border-left:3px solid #ef4444;color:#fecaca;background:#2b0d11;font-weight:600}
+.tc-mob.g-boss .tc-mob-intent::before{content:'鈿?'}
+.tc-mob.g-boss .tc-mattr{background:#2b0d11;border-color:#5c1f26}
+.tc-mob.g-boss .tc-mattr b{color:#ffd7d7}
+/* 绮捐嫳/BOSS 琛€鏉℃祦鍏夋壂杩?*/
+.tc-mob.g-elite .tc-mob-bar i{background:linear-gradient(90deg,#92400e,#f59e0b 60%,#fde68a)}
+.tc-mob.g-elite .tc-mob-bar i,.tc-mob.g-boss .tc-mob-bar i{position:relative;overflow:hidden}
+.tc-mob.g-elite .tc-mob-bar i::after,.tc-mob.g-boss .tc-mob-bar i::after{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(105deg,transparent 15%,rgba(255,255,255,.45) 50%,transparent 85%);animation:tc-shine 2.6s linear infinite}
+/* 浣庤閲?<=25%)锛氳鏉℃€ヤ績闂儊鍛婅 */
+.tc-mob.tc-lowhp .tc-mob-bar i{animation:tc-lowblink .7s steps(1) infinite}
+.tc-mob-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tc-mob-name{font-weight:700;color:#f2d6da;font-size:13.5px}
+.tc-mob-grade{font-size:10px;padding:1px 6px;border-radius:4px;background:#3b1418;color:#fca5a5;white-space:nowrap}
+.tc-mob-hp{margin-left:auto;font-variant-numeric:tabular-nums;color:#fca5a5;font-size:12px;white-space:nowrap}
+.tc-mob-bar{height:5px;background:#2a1418;border-radius:3px;overflow:hidden;margin:5px 0 6px}
+.tc-mob-bar i{display:block;height:100%;background:linear-gradient(90deg,#7f1d1d,#ef4444);border-radius:3px}
+/* 鏁屼汉涓冪淮灞炴€ф牸 */
+.tc-mattrs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:2px 0 6px}
+.tc-mattr{display:flex;flex-direction:column;align-items:center;gap:0;background:#241318;border:1px solid #3d2028;border-radius:5px;padding:2px 0;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.15}
+.tc-mattr i{font-style:normal;font-size:8.5px;color:#a89096;letter-spacing:0;white-space:nowrap}
+.tc-mattr b{font-size:12px;color:#e8c9ce;font-weight:700;white-space:nowrap}
+.tc-mattr b{font-size:12.5px;color:#e8c9ce;font-weight:700}
+.tc-mattr u{text-decoration:none;font-size:9px;color:#7dd3a8}
+.tc-mattr.unk{opacity:.55}
+.tc-mattrs .tc-mattr:only-child{grid-column:1/-1}
+.tc-mob-meta{display:flex;flex-wrap:wrap;gap:4px 9px;font-size:11.5px;color:#a89096;margin-bottom:5px;align-items:center}
+.tc-mob-st{background:#2a1418;border:1px solid #4a2630;border-radius:4px;padding:0 5px;color:#f0a5b0}
+.tc-mob-tg{color:#fbbf24;font-weight:600}
+.tc-mob-intent{background:#2a1013;border:1px solid #7f1d1d;border-radius:6px;padding:3px 8px;font-size:12px;color:#fecaca;font-weight:600}
+.tc-mob-intent::before{content:"鉃?"}
+.tc-mob-weak{margin-top:5px;font-size:11px;color:#8a7a80}
+/* 鈹€鈹€ NPC 鍗★細绱噾鎯呮姤缃戯紙闈炴晫瀵瑰湪鍦轰汉鐗╋紝涓庢晫鏂圭孩鑹茬郴褰诲簳鍖哄垎锛?鈹€鈹€ */
+.tc-npcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-npc{position:relative;overflow:hidden;font-size:12px;color:#cfc3e8;
+  background:linear-gradient(135deg,#131020 0%,#1c1733 55%,#131020 100%);
+  border:1px solid #372a55;border-left:3px solid #a78bfa;border-radius:10px;padding:7px 11px;
+  transition:border-color .2s,box-shadow .2s}
+.tc-npc:hover{border-color:#5b4a8a;box-shadow:0 0 10px rgba(167,139,250,.22)}
+.tc-npc::after{content:'鈼?;position:absolute;right:9px;top:6px;font-size:11px;color:#a78bfa;opacity:.4;pointer-events:none}
+.tc-npc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#a78bfa 0%,rgba(167,139,250,.2) 50%,transparent 85%);opacity:.55}
+.tc-npc-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tc-npc-name{font-weight:700;font-size:13.5px;color:#e4dbf7;letter-spacing:.5px}
+.tc-npc-role{font-size:10px;padding:1px 7px;border-radius:4px;background:#2b2144;color:#c4b5fd;
+  border:1px solid #453568;white-space:nowrap}
+.tc-npc-att{font-size:10px;padding:1px 7px;border-radius:4px;white-space:nowrap;font-weight:600}
+.tc-npc-att.a-friend{background:#0e2a26;color:#5eead4;border:1px solid #1d5148}
+.tc-npc-att.a-neutral{background:#2b2144;color:#fbbf24;border:1px solid #57451f}
+.tc-npc-att.a-hostile{background:#2a1418;color:#f0a5b0;border:1px solid #4a2630}
+.tc-npc-st{margin-top:4px;font-size:11.5px;color:#b9a8e0;letter-spacing:.3px}
+.tc-npc-st::before{content:'鈼?';color:#8b5cf6}
+.tc-npc-attrs{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tc-npc-attrs span{display:inline-flex;align-items:center;gap:2px;background:#221b3a;border:1px solid #3a2d5c;
+  border-radius:4px;padding:1px 6px;font-size:10px;color:#9d8cc7;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tc-npc-attrs span b{color:#d6c9f5;font-weight:700;font-size:11.5px}
+.tc-npc-note{margin-top:4px;font-size:11px;color:#8f82ad;line-height:1.5}
+
+.tc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+/* 鐜╁鍗★細闈掕摑閽㈢敳銆佸垏瑙掕鐢叉澘銆佺紪鍙锋按鍗般€佽緣鍏夊懠鍚?*/
+.tc-card{position:relative;overflow:hidden;background:linear-gradient(135deg,#0e141d 0%,#16202e 55%,#0e141d 100%);
+  border:1px solid #24384f;border-left:3px solid #22d3ee;max-width:560px;
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+  padding:9px 12px;display:flex;flex-direction:column;gap:6px;
+  animation:tc-cardglow 4.5s ease-in-out infinite}
+.tc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#22d3ee 0%,rgba(34,211,238,.25) 45%,transparent 80%);opacity:.8}
+.tc-card::after{content:attr(data-n);position:absolute;right:8px;top:-8px;font-size:52px;font-weight:900;letter-spacing:2px;color:#38bdf8;opacity:.06;pointer-events:none}
+@keyframes tc-cardglow{0%,100%{filter:drop-shadow(0 0 4px rgba(34,211,238,.14))}50%{filter:drop-shadow(0 0 11px rgba(34,211,238,.30))}}
+.tc-chead{display:flex;align-items:center;gap:7px;padding-bottom:5px;border-bottom:1px dashed #24384f}
+.tc-pnum{font-size:9.5px;font-weight:800;letter-spacing:1px;color:#67e8f9;background:rgba(34,211,238,.10);border:1px solid rgba(34,211,238,.35);border-radius:3px;padding:1px 5px;white-space:nowrap}
+.tc-name{font-size:15px;font-weight:700;letter-spacing:.5px;color:#e8f6ff;text-shadow:0 0 10px rgba(34,211,238,.45)}
+.tc-badge{margin-left:auto;font-size:10.5px;padding:1px 10px;white-space:nowrap;
+  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.tc-badge.ok{background:rgba(74,222,128,.15);color:#4ade80}
+.tc-badge.warn{background:rgba(251,191,36,.15);color:#fbbf24}
+.tc-badge.bad{background:rgba(248,113,113,.16);color:#f87171}
+
+.tc-attrs{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.tc-attr{display:grid;grid-template-columns:40px 1fr auto;gap:0 4px;align-items:baseline;
+  font-size:11.5px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.045);min-width:0}
+.tc-ak{color:var(--dim);font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-av{color:#94a3b8;font-weight:400;white-space:nowrap;font-size:11px}
+.tc-av small{font-size:8.5px;color:#4ade80}
+.tc-at{font-weight:700;color:#e2ecf8;justify-self:end;font-size:12.5px;white-space:nowrap}
+.tc-at::before{content:"= ";color:#3f4d61;font-weight:400;font-size:10px}
+.tc-attr.ov .tc-at{color:var(--gold)}
+.tc-attr.ov .tc-ak{color:#d0a94a}
+
+.tc-vitals{display:flex;flex-direction:column;gap:3px}
+.tc-vit{display:grid;grid-template-columns:56px 1fr;gap:2px 8px;align-items:center;font-size:11.5px}
+.tc-vit>span{color:var(--dim);font-size:10px;white-space:nowrap}
+.tc-vit>b{text-align:right;font-weight:600}
+.tc-bar{grid-column:2;height:6px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden}
+.tc-bar i{display:block;height:100%;border-radius:2px;position:relative;overflow:hidden}
+.tc-bar i.hp{background:linear-gradient(90deg,#7f1d1d,#ef4444 60%,#f87171)}
+.tc-bar i.sp{background:linear-gradient(90deg,#1e3a8a,#3b82f6 60%,#7dd3fc)}
+.tc-bar i.wt{background:linear-gradient(90deg,#a16207,#fbbf24)}
+.tc-bar i.hp::after,.tc-bar i.sp::after{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(105deg,transparent 15%,rgba(255,255,255,.40) 50%,transparent 85%);animation:tc-shine 3s linear infinite}
+/* 鐜╁浣庤閲?<=25%)锛欻P 鏉℃€ヤ績闂儊 + 鍚嶅瓧杞孩 */
+.tc-card.tc-lowhp .tc-bar i.hp{animation:tc-lowblink .7s steps(1) infinite}
+.tc-card.tc-lowhp .tc-name{color:#fca5a5;text-shadow:0 0 10px rgba(239,68,68,.7)}
+
+.tc-nums{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11.5px;color:#b9c6d8}
+.tc-nums .tc-wpn{color:#c4b5fd}
+.tc-pen{font-size:11.5px;color:#f8a5a5;background:rgba(248,113,113,.07);border-radius:5px;padding:2px 8px}
+.tc-tags{display:flex;flex-wrap:wrap;gap:4px}
+.tc-tags span{font-size:10.5px;color:#a9b8cc;background:rgba(255,255,255,.06);border-radius:5px;padding:1px 7px}
+
+.tc-pills{display:flex;flex-wrap:wrap;gap:4px}
+.tc-pill{font-size:10.5px;border-radius:20px;padding:1px 9px;white-space:nowrap;
+  border:1px solid transparent;line-height:1.7}
+.tc-pill.pts{background:rgba(234,179,8,.14);color:#fbbf24;border-color:rgba(234,179,8,.3)}
+.tc-pill.lock{background:rgba(168,85,247,.13);color:#c084fc;border-color:rgba(168,85,247,.3)}
+.tc-pill.lock.hi{background:rgba(168,85,247,.22);color:#e9d5ff;border-color:rgba(192,132,252,.55)}
+.tc-pill.lock.warn{background:rgba(248,113,113,.16);color:#fca5a5;border-color:rgba(248,113,113,.45)}
+.tc-pill.ti{background:rgba(96,165,250,.13);color:#93c5fd;border-color:rgba(96,165,250,.3)}
+.tc-pill.ti i{font-style:normal;opacity:.72;font-size:9.5px}
+.tc-pill.cr{background:rgba(45,212,191,.13);color:#5eead4;border-color:rgba(45,212,191,.32)}
+.tc-pill.cr b{color:#99f6e4;font-weight:700}
+.tc-fold{border-top:1px dashed var(--bd);padding-top:5px;margin-top:1px}
+.tc-fold summary{cursor:pointer;font-size:11px;color:var(--dim);list-style:none;letter-spacing:.04em}
+.tc-fold summary::-webkit-details-marker{display:none}
+.tc-fold summary::before{content:'鈻?';color:var(--acc)}
+.tc-fold[open] summary::before{content:'鈻?'}
+
+.tc-skills{display:flex;flex-direction:column;gap:1px;margin-top:5px}
+.tc-skill{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);font-size:11.5px}
+.tc-skill b{color:#c4b5fd;font-weight:600}
+.tc-skill em{grid-column:2;grid-row:1/3;align-self:center;font-style:normal;
+  font-size:9.5px;color:var(--gold);white-space:nowrap}
+.tc-skill span{grid-column:1;color:#c9d4e3}
+
+.tc-eq{display:flex;flex-direction:column;gap:1px;margin-top:5px}
+.tc-eqrow{display:grid;grid-template-columns:64px 1fr;gap:8px;font-size:11.5px;
+  padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.tc-eqrow span{color:var(--dim);font-size:10.5px}
+.tc-eqrow b{font-weight:600;color:#dbe6f4}
+.tc-eqrow b.empty{color:#5a6778;font-weight:400}
+.tc-eqbonus b{color:#6ee7b7}
+
+.tc-file{display:flex;flex-direction:column;gap:1px;margin-top:5px}
+.tc-file>div{display:grid;grid-template-columns:92px 1fr;gap:8px;font-size:11.5px;padding:3px 0;
+  border-bottom:1px solid rgba(255,255,255,.04)}
+.tc-file span{color:var(--dim);font-size:10.5px}
+.tc-file b{font-weight:600;color:#dbe6f4}
+
+.tc-bonds,.tc-foes{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-bond{background:rgba(224,85,154,.07);border:1px solid rgba(224,85,154,.3);border-radius:10px;padding:8px 11px}
+.tc-bhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tc-bhead b{color:var(--pink);font-size:13px}
+.tc-bhead em{font-style:normal;font-size:10.5px;color:var(--dim);background:rgba(255,255,255,.06);border-radius:4px;padding:1px 8px}
+.tc-bhead .tc-trace{margin-left:auto;font-size:10.5px;color:var(--gold)}
+.tc-bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:4px 12px}
+.tc-bv{display:grid;grid-template-columns:18px 1fr;gap:2px 6px;align-items:center;font-size:11.5px}
+.tc-bv>span{color:var(--dim);font-size:10px}
+.tc-bv>b{text-align:right;font-weight:600}
+.tc-bbar{grid-column:2;height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden}
+.tc-bbar i{display:block;height:100%;border-radius:2px}
+.tc-bbar i.love{background:linear-gradient(90deg,#7f1d3a,#e0559a)}
+.tc-bbar i.crush{background:linear-gradient(90deg,#4c1d95,#c084fc)}
+.tc-bbar i.train{background:linear-gradient(90deg,#5b2a1a,#f59e0b)}
+.tc-bbar i.submit{background:linear-gradient(90deg,#1e3a5f,#38bdf8)}
+.tc-bbar i.lewd{background:linear-gradient(90deg,#7c2d12,#fb7185)}
+.tc-mask{background:#3b1020;border:1px solid #9f1239;color:#fda4af;border-radius:5px;padding:1px 6px;font-size:10.5px}
+.tc-def{margin-top:7px;font-size:11px;color:var(--dim)}
+.tc-dbar{height:5px;margin-top:4px;border-radius:3px;overflow:hidden;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 4px,rgba(255,255,255,.02) 4px 8px)}
+.tc-dbar i{display:block;height:100%;background:repeating-linear-gradient(45deg,#4c1d95 0 4px,#7c3aed 4px 8px)}
+.tc-foe{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.3);border-radius:10px;
+  padding:8px 11px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:12px}
+.tc-foe b{color:var(--red);font-size:13px}
+.tc-foe>span{color:var(--dim)}
+.tc-dots{color:#ef4444;letter-spacing:2px;font-size:11px}
+.tc-foe em{margin-left:auto;font-style:normal;font-size:11px;color:var(--dim)}
+
+/* 鈹€鈹€ NTR 澶鸿蛋鍗★紙nb/nf锛夛細缁孩涓婚锛屼笌 bond/foe 瀹屽叏鍖哄垎 鈹€鈹€ */
+.tc-nbs,.tc-nfs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nb{position:relative;overflow:hidden;border-radius:10px;padding:9px 12px;
+  background:linear-gradient(140deg,rgba(120,10,30,.18),rgba(45,6,16,.10));
+  border:1px solid rgba(225,29,72,.32)}
+.tc-nb::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 88% -25%,rgba(225,29,72,.25),transparent 55%)}
+.tc-nb.s2{border-color:rgba(225,29,72,.45)}
+.tc-nb.s3{border-color:rgba(225,29,72,.6);background:linear-gradient(140deg,rgba(140,12,34,.24),rgba(50,7,18,.12))}
+.tc-nb.s4{border-color:rgba(225,29,72,.75);background:linear-gradient(140deg,rgba(155,14,38,.3),rgba(56,8,20,.15));box-shadow:inset 0 0 18px rgba(225,29,72,.12)}
+.tc-nb.s5{border-color:#e11d48;background:linear-gradient(140deg,rgba(170,16,42,.34),rgba(60,9,22,.18));box-shadow:0 0 14px rgba(225,29,72,.35),inset 0 0 22px rgba(225,29,72,.16)}
+.tc-nb.s4{animation:nbPulse 2.8s ease-in-out infinite}
+.tc-nb.s5{animation:nbPulse 1.7s ease-in-out infinite}
+@keyframes nbPulse{0%,100%{box-shadow:0 0 8px rgba(225,29,72,.22)}50%{box-shadow:0 0 22px rgba(225,29,72,.55)}}
+.tc-nb-wm{position:absolute;right:6px;top:50%;transform:translateY(-52%);pointer-events:none;
+  font-size:58px;font-weight:800;line-height:1;color:rgba(225,29,72,.09);user-select:none}
+.tc-nb-ring{width:52px;height:52px;flex:none;filter:drop-shadow(0 0 5px rgba(225,29,72,.35))}
+.tc-nb-body{position:relative;display:flex;align-items:center;gap:10px}
+.tc-nb-body .tc-bgrid{flex:1;min-width:0}
+.tc-nb-stamp{position:absolute;right:10px;bottom:8px;z-index:1;pointer-events:none;
+  font-size:20px;font-weight:800;letter-spacing:6px;color:rgba(225,29,72,.5);
+  border:2px solid rgba(225,29,72,.5);border-radius:6px;padding:1px 8px 1px 12px;
+  transform:rotate(-11deg);opacity:.75}
+.tc-nb .tc-bhead b{color:#fb7185;font-size:13.5px;letter-spacing:1px}
+.tc-nb .tc-bhead em{background:rgba(225,29,72,.14);color:#fda4af}
+.tc-nb .tc-bhead .tc-trace{color:#fbbf24}
+.tc-bbar i.n-love{background:linear-gradient(90deg,#334155,#93c5fd)}
+.tc-bbar i.n-crush{background:linear-gradient(90deg,#4c0519,#fb7185)}
+.tc-bbar i.n-train{background:linear-gradient(90deg,#4a044e,#e879f9)}
+.tc-bbar i.n-submit{background:linear-gradient(90deg,#450a0a,#f87171)}
+.tc-bbar i.n-lewd{background:linear-gradient(90deg,#7f1d1d,#fda4af)}
+.tc-nb-def{margin-top:7px;font-size:11px;color:#fca5a5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tc-nb-locks{display:inline-flex;gap:2px;font-size:11px;filter:saturate(.85)}
+.tc-nb-locks i{font-style:normal;opacity:.62}
+.tc-nb-locks i.u{opacity:1}
+.tc-nf{position:relative;overflow:hidden;background:linear-gradient(140deg,rgba(90,8,22,.22),rgba(35,5,14,.12));
+  border:1px solid rgba(190,18,60,.4);border-radius:10px;padding:9px 12px;font-size:12px}
+.tc-nf.hot{border-color:#e11d48;animation:nbPulse 1.9s ease-in-out infinite}
+.tc-nf-wm{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;
+  font-size:44px;font-weight:800;line-height:1;color:rgba(225,29,72,.08);user-select:none}
+.tc-nf-atk{color:var(--dim);font-size:10px}
+.tc-nf.ghost{border-style:dashed;opacity:.75;background:none}
+.tc-nf>b{color:#fb7185;font-size:13px;letter-spacing:1px}
+.tc-nf-hd{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.tc-nf-role{font-size:10.5px;color:var(--dim);background:rgba(255,255,255,.06);border-radius:4px;padding:1px 7px}
+.tc-nf-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.tc-nf-method{color:#fda4af;background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.3);
+  border-radius:5px;padding:1px 8px;font-size:11px}
+.tc-nf-method.sub{color:#e9d5ff;background:rgba(147,51,234,.12);border-color:rgba(147,51,234,.3)}
+.tc-nf-dots{color:#f43f5e;letter-spacing:2.5px;font-size:11px}
+.tc-nf em{margin-left:auto;font-style:normal;font-size:11px;color:var(--dim)}
+
+/* 鈹€鈹€ NTR 蹇冨０鍗★紙nh锛夛細鍙岄潰闀滐紝宸﹀喎钃濋潰鍏?/ 鍙崇化绾㈢湡闈㈢洰 鈹€鈹€ */
+.tc-nhs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nh{position:relative;overflow:hidden;border-radius:10px;padding:8px 11px;
+  background:linear-gradient(100deg,rgba(30,58,95,.16) 0 47%,rgba(20,10,16,.10) 50% 53%,rgba(120,10,30,.20) 56% 100%);
+  border:1px solid rgba(190,18,60,.30)}
+.tc-nh-wm{position:absolute;right:6px;bottom:-6px;pointer-events:none;
+  font-size:46px;font-weight:800;line-height:1;color:rgba(225,29,72,.07);user-select:none}
+.tc-nh-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tc-nh-hd>b{color:#fda4af;font-size:13px;letter-spacing:1px;
+  text-shadow:0 0 8px rgba(225,29,72,.25)}
+.tc-nh-mind{font-size:10px;color:#fcd34d;background:rgba(180,120,10,.14);
+  border:1px solid rgba(245,158,11,.3);border-radius:4px;padding:0 6px}
+.tc-nh-split{display:grid;grid-template-columns:1fr 1fr;gap:6px;position:relative}
+.tc-nh-split>div{border-radius:7px;padding:5px 8px;display:flex;flex-direction:column;gap:3px}
+.tc-nh-user{background:rgba(56,130,246,.10);border:1px solid rgba(96,165,250,.25)}
+.tc-nh-rival{background:rgba(225,29,72,.12);border:1px solid rgba(244,63,94,.3)}
+.tc-nh-split i{font-style:normal;font-size:9.5px;letter-spacing:2px;width:fit-content;
+  border-radius:3px;padding:0 5px}
+.tc-nh-user i{color:#93c5fd;background:rgba(96,165,250,.14)}
+.tc-nh-rival i{color:#fda4af;background:rgba(244,63,94,.16)}
+.tc-nh-split em{font-style:normal;font-size:11.5px;line-height:1.45;word-break:break-all}
+.tc-nh-user em{color:#cfe0f2}
+.tc-nh-rival em{color:#ffd6de}
+.tc-nh-inner{position:relative;margin-top:6px;padding:5px 10px;font-size:11.5px;font-style:italic;
+  color:rgba(252,165,165,.85);background:rgba(120,10,30,.10);border-radius:6px;
+  border-left:2px solid rgba(225,29,72,.45)}
+.tc-nh-inner::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
+  box-shadow:0 0 6px rgba(225,29,72,.5)}
+
+/* 鈹€鈹€ NTR 闃茬嚎妗ｆ锛坣d锛夛細澶卞畧绾?/ 鍥炲～闈?/ 鍦ㄥ畧鏆?鈹€鈹€ */
+.tc-nds{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nd{border:1px solid rgba(120,53,15,.35);border-radius:10px;padding:8px 11px;
+  background:linear-gradient(150deg,rgba(80,20,8,.14),rgba(25,8,10,.10))}
+.tc-nd-hd{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.tc-nd-hd b{color:#fdba74;font-size:12.5px;letter-spacing:1px}
+.tc-nd-hd span{font-size:10px;color:var(--dim)}
+.tc-nd-row{display:flex;align-items:baseline;gap:7px;font-size:11.5px;padding:3px 0;
+  border-bottom:1px dashed rgba(255,255,255,.05)}
+.tc-nd-row:last-child{border-bottom:none}
+.tc-nd-row i{font-style:normal;font-size:11px;opacity:.85}
+.tc-nd-row b{color:#e7d7c9;font-weight:600}
+.tc-nd-row u{text-decoration:none;font-size:10px;border-radius:4px;padding:0 6px}
+.tc-nd-row.f-lost u{color:#fca5a5;background:rgba(220,38,38,.16)}
+.tc-nd-row.f-heal u{color:#5eead4;background:rgba(20,184,166,.14)}
+.tc-nd-row.f-hold u{color:#cbd5e1;background:rgba(148,163,184,.14)}
+.tc-nd-row time{font-size:10px;color:var(--dim)}
+.tc-nd-row em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:auto;text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
+
+/* 鈹€鈹€ NTR 鏆楁祦浜嬩欢杞达紙nl锛夛細缁孩绔栫嚎鏃堕棿绾匡紝涓嶇煡鎯呬簨浠堕浘鍖?鈹€鈹€ */
+.tc-nls{position:relative;margin:2px 0 8px;padding-left:14px;display:flex;flex-direction:column;gap:6px}
+.tc-nls::before{content:'';position:absolute;left:3px;top:8px;bottom:8px;width:1px;
+  background:linear-gradient(180deg,rgba(225,29,72,.55),rgba(225,29,72,.2),transparent)}
+.tc-nl{position:relative;border:1px solid rgba(190,18,60,.3);border-radius:9px;padding:6px 10px;
+  background:linear-gradient(140deg,rgba(90,8,22,.16),rgba(30,6,12,.10));font-size:11.5px}
+.tc-nl::before{content:'';position:absolute;left:-14px;top:12px;width:7px;height:7px;border-radius:50%;
+  background:#e11d48;box-shadow:0 0 7px rgba(225,29,72,.85)}
+.tc-nl.blind{opacity:.55;border-style:dashed;background:none}
+.tc-nl.blind::before{background:#64748b;box-shadow:none}
+.tc-nl-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tc-nl-hd time{font-size:10px;color:#fda4af;background:rgba(225,29,72,.12);border-radius:4px;padding:0 6px}
+.tc-nl-hd b{color:#ffd6de;font-weight:600}
+.tc-nl-know{margin-left:auto;font-size:10px;color:#94a3b8}
+.tc-nl-know.no{color:#64748b}
+.tc-nl-what{margin-top:3px;color:#d6c3c9;line-height:1.5}
+.tc-nl-her{margin-top:3px;font-style:italic;color:rgba(252,165,165,.8)}
+.tc-nl-her::before{content:''}
+.tc-nf.ghost b{color:var(--dim)}
+
+/* 鈹€鈹€ 鎴樺満鏃ュ織鏃堕棿绾?鈹€鈹€ */
+.tc-log{position:relative;margin:11px 0 5px;padding-left:15px;display:flex;flex-direction:column;gap:6px}
+.tc-log::before{content:'';position:absolute;left:3px;top:10px;bottom:10px;width:1px;
+  background:linear-gradient(180deg,rgba(52,211,153,.55),rgba(34,211,238,.55),transparent)}
+.tc-log .tc-line{position:relative;margin:0}
+.tc-log .tc-line::before{content:'';position:absolute;left:-15px;top:9px;width:7px;height:7px;border-radius:50%;
+  background:#34d399;box-shadow:0 0 7px rgba(52,211,153,.9)}
+.tc-log .tc-world::before{background:#22d3ee;box-shadow:0 0 7px rgba(34,211,238,.9)}
+.tc-line{display:flex;gap:10px;font-size:12.5px;margin-bottom:6px;align-items:flex-start}
+.tc-line b{flex:0 0 auto;font-size:10px;letter-spacing:.05em;border-radius:4px;padding:2px 8px;width:auto}
+.tc-result{background:rgba(52,211,153,.06);border-radius:7px;padding:6px 10px}
+.tc-result b{background:rgba(52,211,153,.16);color:#6ee7b7}
+.tc-world{background:rgba(34,211,238,.05);border-radius:7px;padding:6px 10px}
+.tc-world b{background:rgba(34,211,238,.16);color:#67e8f9}
+.tc-world span{color:#b9c6d8}
+
+/* 鈹€鈹€ 琛屽姩閫夐」锛氭寚浠ら敭 鈹€鈹€ */
+.tc-next{margin-top:9px}
+.tc-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:6px;margin-top:5px}
+.tc-opt{position:relative;display:flex;gap:9px;align-items:baseline;padding:7px 26px 7px 12px;
+  background:linear-gradient(180deg,rgba(103,232,249,.09),rgba(103,232,249,.025));
+  border:1px solid rgba(103,232,249,.3);
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.tc-opt b{flex:0 0 auto;color:#081420;background:#67e8f9;font-weight:800;font-size:11px;
+  border-radius:3px;padding:1px 7px;box-shadow:0 0 9px rgba(103,232,249,.6)}
+.tc-opt span{color:#dbe6f4}
+.tc-opt::after{content:'鈻?;position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  color:rgba(103,232,249,.65);font-size:11px}
+.tc-next>span{font-size:12.5px}
+
+/* 鈹€鈹€ 鎵嬫満绔€傞厤锛堚墹760px锛夛細鍙屾爮 鈫?妯悜婊戝姩椤?鈹€鈹€
+   宸﹀彸婊戝湪銆屽乏鏍?鍙虫爮銆嶄箣闂村垏鎹紙scroll-snap 鍚搁檮锛夛紝姣忛〉鍐呭姝ｅ父涓婁笅婊氬姩 */
+.tc-swipe-hint{display:none}
+@media (max-width:760px){
+  .tc-wrap{padding:10px 11px;font-size:12.5px}
+  .tc-main{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:100%;
+    overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;gap:8px}
+  .tc-main::-webkit-scrollbar{display:none}
+  .tc-main>.tc-col{scroll-snap-align:start;min-width:0}
+  .tc-swipe-hint{display:flex;align-items:center;justify-content:center;gap:10px;
+    color:#51617a;font-size:9.5px;letter-spacing:.22em;margin:0 0 6px;white-space:nowrap}
+  .tc-swipe-hint::before,.tc-swipe-hint::after{content:'';height:1px;flex:1;min-width:20px;
+    background:linear-gradient(90deg,transparent,rgba(125,211,252,.4))}
+  .tc-swipe-hint::after{background:linear-gradient(90deg,rgba(125,211,252,.4),transparent)}
+  .tc-attrs{gap:0 10px}
+  .tc-cbody{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tc-opts{grid-template-columns:1fr}
+}
+</style></head>
+<body>
+<h3>NTR 鍐屽畬鏁撮潰鏉块瑙?鈥?涓昏 p 鍗?+ 浼翠荆 nb + 鍔犲鑰?nf锛堝熀纭€瑙勫垯鐘舵€佸潡锛孨TR 鎵╁睍琛岋級</h3>
+<div class="mes_text" id="stage"><div class="tc-wrap" data-tw-ver="3.11.0"><div class="tc-cmdbar">
+      <span class="tc-time"><u></u>4鏈?3鏃?娣卞</span>
+      <span class="tc-loc">鈱?鑰佸畢鍗у</span>
+      <span class="tc-atmo">鑳佽揩涓庝緷璧栦氦缁囩殑绌烘皵</span>
+    </div><div class="tc-quest">
+      <div class="tc-qmain"><b>涓荤嚎</b><span>瀹堜綇杩欐鍏崇郴</span>
+        
+        </div>
+      
+    </div><div class="tc-swipe-hint">宸﹀彸婊戝姩鍒囨崲鍒嗗尯</div><div class="tc-main"><div class="tc-col"><div class="tc-sect"><i></i><b>鎴戞柟灏忛槦</b><em>SQUAD</em></div><div class="tc-grid tc-stack"><div class="tc-card" data-n="01">
+      <div class="tc-chead">
+        <span class="tc-pnum">01</span>
+        <span class="tc-name">鑻忎箰</span>
+        <span class="tc-badge ok">鍋ュ悍</span>
+      </div>
+      <div class="tc-attrs">
+      <div class="tc-attr">
+        <span class="tc-ak">馃挭STR</span>
+        <span class="tc-av">3</span>
+        <b class="tc-at">3</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃ΦDEX</span>
+        <span class="tc-av">4</span>
+        <b class="tc-at">4</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃珌CON</span>
+        <span class="tc-av">3</span>
+        <b class="tc-at">3</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃INT</span>
+        <span class="tc-av">8<small>+1</small></span>
+        <b class="tc-at">9</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃憗锔廝ER</span>
+        <span class="tc-av">6</span>
+        <b class="tc-at">6</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃挰CHA</span>
+        <span class="tc-av">7<small>+1</small></span>
+        <b class="tc-at">8</b>
+      </div>
+      <div class="tc-attr">
+        <span class="tc-ak">馃WIL</span>
+        <span class="tc-av">5</span>
+        <b class="tc-at">5</b>
+      </div></div>
+      <div class="tc-vitals">
+        <div class="tc-vit"><span>鉂わ笍 HP</span><b>100/100</b><div class="tc-bar"><i class="hp" style="width:100%"></i></div></div>
+        <div class="tc-vit"><span>馃挔 SP</span><b>90/90</b><div class="tc-bar"><i class="sp" style="width:100%"></i></div></div>
+        <div class="tc-vit"><span>馃摝 璐熼噸</span><b>8/40</b><div class="tc-bar"><i class="wt" style="width:20%"></i></div></div>
+      </div>
+      <div class="tc-nums">
+        <span>馃弮 MOV 3</span>
+        
+        
+      </div>
+      <div class="tc-pen">馃└ HP姝ｅ父 锝?SP姝ｅ父 锝?鍚堣鎯╃綒锛?</div>
+      <div class="tc-tags"><span>鏃?鏃?/span><span>澶氱枒,澶辩湢</span></div>
+      
+      <details class="tc-fold"><summary>妗ｆ</summary>
+        <div class="tc-file">
+          <div><span>馃挵 濂栧姳鐐规暟</span><b>0</b></div>
+          <div><span>馃摐 鏀嚎鍓ф儏</span><b>杩芥煡鏆楄嵂鏉ユ簮 杩涜涓?/b></div>
+          <div><span>馃К 宸插厬鎹?/span><b>鏃?/b></div>
+          <div><span>馃敁 鍩哄洜閿?/span><b>鍩哄洜閿?鏃?/b></div>
+          <div><span>馃弳 绉板彿</span><b>鏃?/b></div>
+        </div>
+      </details>
+    </div></div><div class="tc-sect"><i></i><b>浼翠荆 路 澶鸿蛋杩涘害</b><em>POSSESSION</em></div><div class="tc-nbs"><div class="tc-nb s3"><span class="tc-nb-wm">鎽?/span>
+      <div class="tc-bhead"><b>娌堟爛</b><em>鏈?3 鎽囨憜</em><span class="tc-mask">娣帇 20</span><span class="tc-trace">杩?3</span></div>
+      <div class="tc-nb-body">
+        <div class="tc-bgrid"><div class="tc-bv"><span>鐖?/span><b>62</b><div class="tc-bbar"><i class="n-love" style="width:62%"></i></div></div><div class="tc-bv"><span>鎭?/span><b>28</b><div class="tc-bbar"><i class="n-crush" style="width:28%"></i></div></div><div class="tc-bv"><span>璋?/span><b>34</b><div class="tc-bbar"><i class="n-train" style="width:34%"></i></div></div><div class="tc-bv"><span>灞?/span><b>41</b><div class="tc-bbar"><i class="n-submit" style="width:41%"></i></div></div><div class="tc-bv"><span>娣?/span><b>58</b><div class="tc-bbar"><i class="n-lewd" style="width:58%"></i></div></div></div>
+        <svg class="tc-nb-ring" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="16" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"></circle>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="#e11d48" stroke-width="4" stroke-linecap="round" stroke-dasharray="40.2 100.5" transform="rotate(-90 22 22)"></circle>
+        <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#fda4af">40</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5" fill="rgba(253,164,175,.75)" letter-spacing="1">娌﹂櫡</text>
+      </svg>
+      </div>
+      <div class="tc-nb-def">闃茬嚎 2/5 路 绉拌皳<span class="tc-nb-locks"><i class="u">馃敁</i><i class="u">馃敁</i><i>馃敀</i><i>馃敀</i><i>馃敀</i></span></div>
+    </div><div class="tc-nb s1"><span class="tc-nb-wm">瑁?/span>
+      <div class="tc-bhead"><b>鏋楁櫄</b><em>鏈?1 瑁傜棔</em><span class="tc-trace">杩?0</span></div>
+      <div class="tc-nb-body">
+        <div class="tc-bgrid"><div class="tc-bv"><span>鐖?/span><b>88</b><div class="tc-bbar"><i class="n-love" style="width:88%"></i></div></div><div class="tc-bv"><span>鎭?/span><b>6</b><div class="tc-bbar"><i class="n-crush" style="width:6%"></i></div></div><div class="tc-bv"><span>璋?/span><b>0</b><div class="tc-bbar"><i class="n-train" style="width:0%"></i></div></div><div class="tc-bv"><span>灞?/span><b>5</b><div class="tc-bbar"><i class="n-submit" style="width:5%"></i></div></div><div class="tc-bv"><span>娣?/span><b>2</b><div class="tc-bbar"><i class="n-lewd" style="width:2%"></i></div></div></div>
+        <svg class="tc-nb-ring" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="16" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"></circle>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="#e11d48" stroke-width="4" stroke-linecap="round" stroke-dasharray="3.0 100.5" transform="rotate(-90 22 22)"></circle>
+        <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#fda4af">3</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5" fill="rgba(253,164,175,.75)" letter-spacing="1">娌﹂櫡</text>
+      </svg>
+      </div>
+      <div class="tc-nb-def">闃茬嚎 0/5 路 鍏ㄥ湪<span class="tc-nb-locks"><i>馃敀</i><i>馃敀</i><i>馃敀</i><i>馃敀</i><i>馃敀</i></span></div>
+    </div><div class="tc-nb s5"><span class="tc-nb-wm">瀹?/span><span class="tc-nb-stamp">瀹氬眬</span>
+      <div class="tc-bhead"><b>闄堟洣</b><em>鏈?5 瀹氬眬</em><span class="tc-trace">杩?5</span></div>
+      <div class="tc-nb-body">
+        <div class="tc-bgrid"><div class="tc-bv"><span>鐖?/span><b>12</b><div class="tc-bbar"><i class="n-love" style="width:12%"></i></div></div><div class="tc-bv"><span>鎭?/span><b>93</b><div class="tc-bbar"><i class="n-crush" style="width:93%"></i></div></div><div class="tc-bv"><span>璋?/span><b>88</b><div class="tc-bbar"><i class="n-train" style="width:88%"></i></div></div><div class="tc-bv"><span>灞?/span><b>96</b><div class="tc-bbar"><i class="n-submit" style="width:96%"></i></div></div><div class="tc-bv"><span>娣?/span><b>91</b><div class="tc-bbar"><i class="n-lewd" style="width:91%"></i></div></div></div>
+        <svg class="tc-nb-ring" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="16" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"></circle>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="#e11d48" stroke-width="4" stroke-linecap="round" stroke-dasharray="92.5 100.5" transform="rotate(-90 22 22)"></circle>
+        <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#fda4af">92</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5" fill="rgba(253,164,175,.75)" letter-spacing="1">娌﹂櫡</text>
+      </svg>
+      </div>
+      <div class="tc-nb-def">闃茬嚎 5/5 路 褰掑睘<span class="tc-nb-locks"><i class="u">馃敁</i><i class="u">馃敁</i><i class="u">馃敁</i><i class="u">馃敁</i><i class="u">馃敁</i></span></div>
+    </div></div><div class="tc-sect"><i></i><b>蹇冨０ 路 涓ゅ壇闈㈠瓟</b><em>MIRROR</em></div><div class="tc-nhs"><div class="tc-nh"><span class="tc-nh-wm">蹇?/span>
+      <div class="tc-nh-hd"><b>娌堟爛</b><span class="tc-nh-mind">缃枤</span><span class="tc-nh-mind">娓存眰</span><span class="tc-nh-mind">鑷垜璇存湇</span></div>
+      <div class="tc-nh-split">
+        <div class="tc-nh-user"><i>瀵逛綘</i><em>浠栦粖鏅氫細鍥炴潵鍚冮キ鍚楋紝杩樻槸鍙堛€屽姞鐝€?/em></div>
+        <div class="tc-nh-rival"><i>瀵逛粬</i><em>浠栧彧鏄噦鎴?/em></div>
+      </div>
+      <div class="tc-nh-inner">銆屽彧瑕佷笉鎽婄墝锛岃繖涓灏辫繕鑳借浣滃畬濂姐€?/div>
+    </div><div class="tc-nh"><span class="tc-nh-wm">蹇?/span>
+      <div class="tc-nh-hd"><b>鏋楁櫄</b><span class="tc-nh-mind">渚濊禆</span><span class="tc-nh-mind">瀹夌ǔ</span><span class="tc-nh-mind">姣棤瀵熻</span></div>
+      <div class="tc-nh-split">
+        <div class="tc-nh-user"><i>瀵逛綘</i><em>浠栨渶杩戠槮浜嗭紝鏅氫笂缁欎粬鐐栦釜姹ゅ惂</em></div>
+        <div class="tc-nh-rival"><i>瀵逛粬</i><em>閭ｄ釜浜哄鐪嬩簡鎴戜袱鐪硷紝鏈夌偣涓嶈嚜鍦?/em></div>
+      </div>
+      <div class="tc-nh-inner">銆屽ぇ姒備細涓€鐩磋繖鏍峰垢绂忎笅鍘诲惂銆?/div>
+    </div><div class="tc-nh"><span class="tc-nh-wm">蹇?/span>
+      <div class="tc-nh-hd"><b>闄堟洣</b><span class="tc-nh-mind">璁ゅ懡</span><span class="tc-nh-mind">鑷ｆ湇</span><span class="tc-nh-mind">鎯呮劅鏂仈</span></div>
+      <div class="tc-nh-split">
+        <div class="tc-nh-user"><i>瀵逛綘</i><em>浠栬浠€涔堥兘濂斤紝宸茬粡涓嶉噸瑕佷簡</em></div>
+        <div class="tc-nh-rival"><i>瀵逛粬</i><em>浠栦笉鍦ㄧ殑鏃跺€欙紝杩炲懠鍚搁兘鏄┖鐨?/em></div>
+      </div>
+      <div class="tc-nh-inner">銆屽師鏉ユ垜鏃╁氨涓嶅睘浜庨偅閲屼簡銆?/div>
+    </div></div></div><div class="tc-col"><div class="tc-sect"><i></i><b>鍔犲鑰?/b><em>PREDATOR</em></div><div class="tc-nfs"><div class="tc-nf ghost"><span class="tc-nf-wm">鐚?/span><b>锛燂紵锛?/b><span>韬唤涓嶆槑</span></div><div class="tc-nf hot"><span class="tc-nf-wm">鐚?/span>
+      <div class="tc-nf-hd"><b>闈虫笂</b><span class="tc-nf-role">鐗硅皟灞€瀹樺憳</span></div>
+      <div class="tc-nf-meta"><span class="tc-nf-method">閿?鏉冨姏鑳佽揩</span><span class="tc-nf-method sub">杈?璇卞娌夋拨</span><span class="tc-nf-atk">鏀诲娍</span><span class="tc-nf-dots">鈼嗏梿鈼嗏梿鈼?/span><em>馃幆 寮辩偣 鏃犲簳绾跨殑鑷礋</em></div>
+    </div><div class="tc-nf"><span class="tc-nf-wm">鐚?/span>
+      <div class="tc-nf-hd"><b>娌堢牃</b></div>
+      <div class="tc-nf-meta"><span class="tc-nf-method">閿?鎯呮劅娓楅€?/span><span class="tc-nf-atk">鏀诲娍</span><span class="tc-nf-dots">鈼嗏梿鈼嗏棁鈼?/span><em>馃幆 寮辩偣 鍓嶅</em></div>
+    </div></div><div class="tc-sect"><i></i><b>闃茬嚎 路 澶卞畧妗ｆ</b><em>FALLS</em></div><div class="tc-nds"><div class="tc-nd">
+      <div class="tc-nd-hd"><b>娌堟爛</b><span>闃茬嚎鏄庣粏</span></div>
+      <div class="tc-nd-row f-lost">
+        <i>馃敁</i><b>鐣岄檺</b>
+        <u>澶卞畧</u><time>4鏈?鏃?/time><em>闈虫笂浠ヨ櫄鍋囨璇佽儊杩?/em>
+      </div><div class="tc-nd-row f-heal">
+        <i>馃洜锔?/i><b>绉拌皳</b>
+        <u>鍥炲～</u><time>12鏈?6鏃?/time><em>缁忕粷瀵规不鎰堝洖濉?/em>
+      </div><div class="tc-nd-row f-heal">
+        <i>馃洜锔?/i><b>鐙</b>
+        <u>鍥炲～</u><time>12鏈?6鏃?/time><em>鐬掔潃琛岃釜鐙嚜澶栧嚭</em>
+      </div><div class="tc-nd-row f-lost">
+        <i>馃敁</i><b>涓诲姩</b>
+        <u>澶卞畧</u><time>4鏈?3鏃?/time><em>鏆楄嵂涓庤儊杩笅涓诲姩鍙戣捣</em>
+      </div><div class="tc-nd-row f-heal">
+        <i>馃洜锔?/i><b>褰掑睘</b>
+        <u>鍥炲～</u><time>1鏈?/time><em>鎶婃焺甯︽潵鐨勫綊灞炲姩鎽?/em>
+      </div>
+    </div></div><div class="tc-sect"><i></i><b>鏆楁祦 路 浜嬩欢杞?/b><em>UNDERCURRENT</em></div><div class="tc-nls"><div class="tc-nl blind">
+      <div class="tc-nl-hd"><time>4鏈?鏃?/time><b>鐣岄檺澶卞畧</b>
+        <span class="tc-nl-know no">馃檲 涓嶇煡鎯?/span></div>
+      <div class="tc-nl-what">闈虫笂鎸佷吉閫犳璇佺獊鍏ュ伐鍧婏紝鑳佽揩娌堟爛</div>
+      <div class="tc-nl-her">濂?路 涓轰繚鑻忎箰鑷効浜ゅ嚭闃茬嚎</div>
+    </div><div class="tc-nl blind">
+      <div class="tc-nl-hd"><time>4鏈?3鏃?/time><b>绗洓闃茬嚎澶卞畧</b>
+        <span class="tc-nl-know no">馃檲 涓嶇煡鎯?/span></div>
+      <div class="tc-nl-what">鏆楄嵂鎺у埗涓嬪ス涓诲姩鍙戣捣骞朵富瀵艰皟鏁?/div>
+      <div class="tc-nl-her">濂?路 韬綋鍏堜簬鎰忓織鍥炲簲浜嗕粬</div>
+    </div><div class="tc-nl">
+      <div class="tc-nl-hd"><time>4鏈?5鏃?/time><b>璧勬湰鍙嶅嚮</b>
+        <span class="tc-nl-know">鐭ユ儏</span></div>
+      <div class="tc-nl-what">鑻忎箰浠ヨ祫鏈笌娉曞緥姝ｉ潰鍑绘簝娌堢牃锛屽垽澶勬鍒?/div>
+      <div class="tc-nl-her">濂?路 鍦ㄥ満锛屽叏绋嬫矇榛?/div>
+    </div></div><div class="tc-sect"><i></i><b>鍒ゅ畾娴?/b><em>CHECK LOG</em></div><details class="tc-check" open="">
+      <summary>
+        <b>馃幉</b><span class="tc-ctitle">瀵熻寮傚父</span>
+        
+        
+      </summary>
+      <div class="tc-cbody">
+        <div class="tc-crow"><span>馃幆 閫傜敤灞炴€?/span><b>INT</b></div><div class="tc-crow"><span>馃搳 鍩虹闃堝€?/span><b>60</b></div><div class="tc-crow"><span>馃幉 鎺峰嚭缁撴灉</span><b>55</b></div><div class="tc-crow"><span>馃搶 缁撴灉</span><b>鎴愬姛</b></div><div class="tc-crow"><span>馃搶 浜у嚭</span><b>浠栨墜鏈洪噷閭ｆ潯澶囨敞锛屼竴鍛ㄥ唴鏀逛簡涓夋</b></div>
+      </div>
+      
+      
+    </details><details class="tc-check">
+      <summary>
+        <b>馃幉</b><span class="tc-ctitle">鎽婄墝璇曟帰</span>
+        
+        
+      </summary>
+      <div class="tc-cbody">
+        <div class="tc-crow"><span>馃幆 閫傜敤灞炴€?/span><b>CHA</b></div><div class="tc-crow"><span>馃搳 鍩虹闃堝€?/span><b>70</b></div><div class="tc-crow"><span>馃幉 鎺峰嚭缁撴灉</span><b>88</b></div><div class="tc-crow"><span>馃搶 缁撴灉</span><b>澶辫触</b></div><div class="tc-crow"><span>馃搶 浜у嚭</span><b>濂圭瑧鐫€璇翠綘鎯冲浜嗭紝鍙寚灏栧湪鍙戞姈</b></div>
+      </div>
+      
+      
+    </details></div></div><div class="tc-ver">tw-card v3.11.0</div></div></div>
+<div id="log">players=1 ntrBonds=3 ntrFoes=3</div>
+<script src="../panel.js"></script>
+<script>
+  const SAMPLE = [
+    'scene: 4鏈?3鏃?娣卞 锝?鑰佸畢鍗у 锝?鑳佽揩涓庝緷璧栦氦缁囩殑绌烘皵',
+    'quest: 瀹堜綇杩欐鍏崇郴 锝?30 澶?锝?濂瑰交搴曞綊灞炰粬浜虹殑閭ｅぉ',
+    'p1: 鑻忎箰 | 鍋ュ悍 | 100/100 | 90/90 | 8/40 | STR 3+0=3 | DEX 4+0=4 | CON 3+0=3 | INT 8+1=9 | PER 6+0=6 | CHA 7+1=8 | WIL 5+0=5 | MOV 3 3 | 鏃?鏃?| HP姝ｅ父 锝?SP姝ｅ父 锝?鍚堣鎯╃綒锛? | 澶氱枒,澶辩湢 | 濂栧姳鐐规暟 0 | 鏀嚎鍓ф儏 杩芥煡鏆楄嵂鏉ユ簮 杩涜涓?| 宸插厬鎹?鏃?| 鍩哄洜閿?鏃?| 绉板彿 鏃?,
+    'check: 瀵熻寮傚父 | 灞炴€?INT | 闃堝€?60 | 鎺峰嚭 55 | 缁撴灉 鎴愬姛 | 浜у嚭 浠栨墜鏈洪噷閭ｆ潯澶囨敞锛屼竴鍛ㄥ唴鏀逛簡涓夋',
+    'check: 鎽婄墝璇曟帰 | 灞炴€?CHA | 闃堝€?70 | 鎺峰嚭 88 | 缁撴灉 澶辫触 | 浜у嚭 濂圭瑧鐫€璇翠綘鎯冲浜嗭紝鍙寚灏栧湪鍙戞姈',
+    'nb: 娌堟爛 | 鐖?62 | 鎭?28 | 璋?34 | 灞?41 | 娣?58锛堝帇 20锛?| 闃茬嚎 2/5 绉拌皳锛堝洖濉級 | 鏈?3 鎽囨憜 | 杩?3',
+    'nb2: 鏋楁櫄 | 鐖?88 | 鎭?6 | 璋?0 | 灞?5 | 娣?2 | 闃茬嚎 0/5 鍏ㄥ湪 | 鏈?1 瑁傜棔 | 杩?0',
+    'nb3: 闄堟洣 | 鐖?12 | 鎭?93 | 璋?88 | 灞?96 | 娣?91 | 闃茬嚎 5/5 褰掑睘 | 鏈?5 瀹氬眬 | 杩?5',
+    'nf: 鏈煡 | 涓嶆槑 | 鏀诲娍 ?/5 | 寮辩偣 鏈煡',
+    'nf2: 闈虫笂 | 韬唤 鐗硅皟灞€瀹樺憳 | 鎵嬫 鏉冨姏鑳佽揩 | 娆＄敤鎵嬫 璇卞娌夋拨 | 鏀诲娍 5/5 | 寮辩偣 鏃犲簳绾跨殑鑷礋',
+    'nf3: 娌堢牃 | 鎯呮劅娓楅€?| 鏀诲娍 3/5 | 寮辩偣 鍓嶅',
+    'nh: 娌堟爛 | 瀵逛綘 浠栦粖鏅氫細鍥炴潵鍚冮キ鍚楋紝杩樻槸鍙堛€屽姞鐝€?| 瀵逛粬 浠栧彧鏄噦鎴?| 蹇?缃枤,娓存眰,鑷垜璇存湇 | 鐧?銆屽彧瑕佷笉鎽婄墝锛岃繖涓灏辫繕鑳借浣滃畬濂姐€?,
+    'nh2: 鏋楁櫄 | 瀵逛綘 浠栨渶杩戠槮浜嗭紝鏅氫笂缁欎粬鐐栦釜姹ゅ惂 | 瀵逛粬 閭ｄ釜浜哄鐪嬩簡鎴戜袱鐪硷紝鏈夌偣涓嶈嚜鍦?| 蹇?渚濊禆,瀹夌ǔ,姣棤瀵熻 | 鐧?銆屽ぇ姒備細涓€鐩磋繖鏍峰垢绂忎笅鍘诲惂銆?,
+    'nh3: 闄堟洣 | 瀵逛綘 浠栬浠€涔堥兘濂斤紝宸茬粡涓嶉噸瑕佷簡 | 瀵逛粬 浠栦笉鍦ㄧ殑鏃跺€欙紝杩炲懠鍚搁兘鏄┖鐨?| 蹇?璁ゅ懡,鑷ｆ湇,鎯呮劅鏂仈 | 鐧?銆屽師鏉ユ垜鏃╁氨涓嶅睘浜庨偅閲屼簡銆?,
+    'nd: 娌堟爛 | 鐣岄檺 澶卞畧 4鏈?鏃?闈虫笂浠ヨ櫄鍋囨璇佽儊杩?| 绉拌皳 鍥炲～ 12鏈?6鏃?缁忕粷瀵规不鎰堝洖濉?| 鐙 鍥炲～ 12鏈?6鏃?鐬掔潃琛岃釜鐙嚜澶栧嚭 | 涓诲姩 澶卞畧 4鏈?3鏃?鏆楄嵂涓庤儊杩笅涓诲姩鍙戣捣 | 褰掑睘 鍥炲～ 1鏈?鎶婃焺甯︽潵鐨勫綊灞炲姩鎽?,
+    'nl: 4鏈?鏃?| 鐣岄檺澶卞畧 | 缁忚繃 闈虫笂鎸佷吉閫犳璇佺獊鍏ュ伐鍧婏紝鑳佽揩娌堟爛 | 濂?涓轰繚鑻忎箰鑷効浜ゅ嚭闃茬嚎 | 浣?涓嶇煡鎯?,
+    'nl2: 4鏈?3鏃?| 绗洓闃茬嚎澶卞畧 | 缁忚繃 鏆楄嵂鎺у埗涓嬪ス涓诲姩鍙戣捣骞朵富瀵艰皟鏁?| 濂?韬綋鍏堜簬鎰忓織鍥炲簲浜嗕粬 | 浣?涓嶇煡鎯?,
+    'nl3: 4鏈?5鏃?| 璧勬湰鍙嶅嚮 | 缁忚繃 鑻忎箰浠ヨ祫鏈笌娉曞緥姝ｉ潰鍑绘簝娌堢牃锛屽垽澶勬鍒?| 濂?鍦ㄥ満锛屽叏绋嬫矇榛?| 浣?鐭ユ儏',
+  ].join('\n');
+  function boot() {
+    const api = window.__twCard || (window.parent && window.parent.__twCard);
+    if (!api) { document.getElementById('log').textContent = 'FAIL: __twCard 鏈氨缁?; return; }
+    const st = api.parseState(SAMPLE);
+    document.getElementById('stage').innerHTML = api.render(st);
+    document.getElementById('log').textContent =
+      'players=' + st.players.length + ' ntrBonds=' + st.ntrBonds.length + ' ntrFoes=' + st.ntrFoes.length;
+  }
+  if (window.__twCard) boot();
+  else { let n = 0; const t = setInterval(() => { if (window.__twCard || ++n > 50) { clearInterval(t); boot(); } }, 100); }
+</script>
+<script>
+if (new URLSearchParams(location.search).get('p2') === '1') {
+  setTimeout(() => { document.querySelectorAll('.tc-main').forEach(m => m.scrollLeft = 9999); }, 1500);
+}
+</script><script>
+setTimeout(() => {
+  const m = document.querySelector('.tc-main');
+  const cs = m && getComputedStyle(m);
+  const hint = document.querySelector('.tc-swipe-hint');
+  const cols = document.querySelectorAll('.tc-main>.tc-col');
+  const r = {
+    exists: !!m,
+    display: cs && cs.display,
+    gtc: cs && cs.gridTemplateColumns,
+    gaf: cs && cs.gridAutoFlow,
+    gac: cs && cs.gridAutoColumns,
+    ovx: cs && cs.overflowX,
+    scrollW: m && m.scrollWidth,
+    clientW: m && m.clientWidth,
+    cols: cols.length,
+    col1W: cols[0] && cols[0].getBoundingClientRect().width,
+    col2W: cols[1] && cols[1].getBoundingClientRect().width,
+    hintDisplay: hint && getComputedStyle(hint).display,
+    bodyW: document.documentElement.clientWidth
+  };
+  document.title = 'MOB:' + JSON.stringify(r);
+  const pre = document.createElement('pre'); pre.id = 'mobdiag';
+  pre.textContent = JSON.stringify(r, null, 1);
+  document.body.appendChild(pre);
+}, 6000);
+</script>
+
+<pre id="mobdiag">{
+ "exists": true,
+ "display": "grid",
+ "gtc": "386px 386px",
+ "gaf": "column",
+ "gac": "100%",
+ "ovx": "auto",
+ "scrollW": 780,
+ "clientW": 386,
+ "cols": 2,
+ "col1W": 386,
+ "col2W": 386,
+ "hintDisplay": "flex",
+ "bodyW": 496
+}</pre></body></html>
