@@ -96,4 +96,4 @@ git tag v3.9.0 && git push && git push --tags
 | `build.py` | 打包：读 `panel.js` 的 VERSION → 刷新 `version.json` → 生成 `dist/*.json` |
 | `dist/loader-script.json` | 酒馆助手可直接导入的引导脚本包 |
 | `dist/panel-script-vX.json` | 手动导入版（离线用，不自动更新） |
-| `.github/workflows/release.yml` | 打 tag 时自动构建并发布 Release 附件 |
+| `ci/release.yml.example` | 可选 CI：想启用自动 Release，把文件拷到 `.github/workflows/release.yml` 再推（推 workflow 需要 token 带 `workflow` 权限） |
