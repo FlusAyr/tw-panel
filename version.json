@@ -1,6 +1,6 @@
 {
-  "version": "3.10.0",
+  "version": "3.10.1",
   "file": "panel.js",
-  "notes": "NTR夺走体系：nb/nf/nh/nd/nl 五字段 + 绯红沦陷主题",
+  "notes": "修复 next: 被正文隔断时丢失的问题",
   "updated": "2026-11-01"
 }

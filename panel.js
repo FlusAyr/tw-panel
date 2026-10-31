@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.10.0';
+  const VERSION = '3.10.1';
 
   const DOC = (function () {
     try {
@@ -1062,7 +1062,14 @@
           if (!blk) break;
 
           const st = parseState(blk.body);
-          if (!st.players.length && !st.scene && !st.mobs.length && !st.ntrBonds.length && !st.ntrFoes.length && !st.ntrHearts.length && !st.ntrFalls.length && !st.ntrLogs.length) break;
+          /* 守卫：完全没有已定义状态键的段才跳过。
+             孤立的 next: / check: / bond: 等附属段（被正文与主状态块隔开）也必须渲染，
+             否则主块渲染完、后续孤段会被静默丢弃（v3.10.0 真实故障：next: 丢失）。 */
+          const meaningful = st.players.length || st.scene || st.mobs.length ||
+            st.bonds.length || st.foes.length || st.npcs.length ||
+            st.ntrBonds.length || st.ntrFoes.length || st.ntrHearts.length || st.ntrFalls.length || st.ntrLogs.length ||
+            st.checks.length || st.quest || st.next || st.result || st.world || st.team;
+          if (!meaningful) break;
 
           const holder = DOC.createElement('div');
           holder.innerHTML = render(st);
