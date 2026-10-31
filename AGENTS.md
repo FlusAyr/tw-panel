@@ -31,7 +31,8 @@ tw-panel/
 ├── version.json            版本清单，loader 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
 ├── tests/loader.test.js    loader 的 11 条断言（node 跑，无需依赖）
-├── ci/release.yml.example  可选 GitHub Actions（启用需 token 带 workflow 权限）
+├── ci/release.yml.example  可选自动 Release（启用需 token 带 workflow 权限）
+├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
 │   ├── README.md           玩家安装顺序与文件说明
 │   ├── worldbook/          无限恐怖 v2（24 条目）、跑团用 v4（18 条目）

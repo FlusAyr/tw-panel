@@ -1,0 +1,31 @@
+# tw-panel CI：push 时验证渲染器语法并运行测试套件
+# 取代误建的 python-package.yml（本仓库无 Python 包测试，pytest 会红叉）
+name: tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  panel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 语法检查（panel.js / loader.js）
+        run: |
+          node --check panel.js
+          node --check loader.js
+      - name: NPC 渲染回归（14 断言）
+        run: node tests/npc.test.js
+      - name: 引导器回归（11 断言）
+        run: node tests/loader.test.js
+      - name: 打包自检（build.py 应产出 version.json 与 dist）
+        run: |
+          python3 build.py
+          test -f version.json
+          test -f dist/loader-script.json

@@ -97,3 +97,4 @@
 - 发现世界书（跑团用 v4 条目 12/13/14）的 npc 行真实格式是位置制：`npc: 名称 | 立场 | 七维属性 | HP当前/最大 | 位置与行动`，与渲染器原先的键制（身份/态度/状态/备注）不一致。
 - parseNpc 现在双口径兼容：键制照旧；位置制下「姓名后第一段无键段落→立场/态度」、属性段（≥2 项 STR..WIL/中文键）→属性芯片条、HP 段→状态行、末段自由文本→备注。
 - 新增 `tests/npc.test.js`（14 断言）。发版纪律执行：v3.9.0 tag 已发布不覆盖，升 v3.9.1。
+- **CI 现状说明**：仓库曾被网页误建 `.github/workflows/python-package.yml`（默认 pytest 模板，本仓库无 Python 测试，每次 push 恒红叉）。移除与替换它需要令牌带 `workflow` 权限，当前令牌只有 `repo`，故保留。本地已备好替换方案 `ci/tests.yml.example`（渲染器语法检查 + npc/loader 回归 + 打包自检）——想启用时，把它和删除 python-package.yml 一起提交（需要带 workflow scope 的令牌，或在网页上操作）。
