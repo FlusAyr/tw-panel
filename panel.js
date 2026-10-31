@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
    TavernWeave · tw-state 卡片渲染器 v3
    承载：判定块(17项) / 玩家卡(属性·HP·SP·惩罚·状态·点数·支线·已兑换·基因锁·称号)
-         / 技能 / 装备 / NPC / 关系(bond·foe) / 结果·世界涟漪·后续方向
+         / 技能 / 装备 / NPC / 关系(bond·foe) / NTR夺走(nb·nf·绯红主题) / 结果·世界涟漪·后续方向
    装法：酒馆助手 → 脚本 → 新建 → 粘贴全文 → 启用
    ══════════════════════════════════════════════════════════════ */
 (function () {
@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.9.1';
+  const VERSION = '3.10.0';
 
   const DOC = (function () {
     try {
@@ -23,7 +23,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|npc[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
 
   /* 无键名 mob 裸文本识别（「变异体甲 精英 80/80」式——AI 抄面板/联机同步丢格式时兜底） */
@@ -308,6 +308,77 @@
     return o;
   }
 
+  /* nh 行（NTR 心声）：nh: 沈栀 | 对你 他今天又没回来吃饭 | 对他 他只是懂我 | 心 罪疚,渴求,自我说服 | 白 「只要不摊牌，这个家就还能装作完好」
+     每个伴侣一条：对主角/对加害者的短句看法 + 心理状态 + 内心独白 */
+  function parseNtrHeart(v) {
+    const p = seg(v);
+    const o = { name: (p[0] || '').trim(), toUser: '', toRival: '', mind: [], inner: '' };
+    for (let i = 1; i < p.length; i++) {
+      const x = p[i];
+      let m;
+      if ((m = x.match(/^对(?:你|主角|玩家)\s*([\s\S]*)$/))) o.toUser = m[1].trim();
+      else if ((m = x.match(/^对(?:他|加害者|奸夫)\s*([\s\S]*)$/))) o.toRival = m[1].trim();
+      else if ((m = x.match(/^心(?:理|理状态)?\s*([\s\S]*)$/))) o.mind = m[1].split(/[·、,，|｜]/).map(s => s.trim()).filter(Boolean);
+      else if ((m = x.match(/^(?:白|内心|独白)\s*([\s\S]*)$/))) o.inner = m[1].trim();
+    }
+    return o;
+  }
+
+  /* nd 行（NTR 防线档案）：nd: 沈栀 | 界限 失守 4月6日 虚假死证胁迫 | 称谓 回填 12月16日 绝对治愈 | 独处 在守 ...
+     每段 = 防线名 + 状态(失守/回填/在守) + 日期 + 经过备注 */
+  function parseNtrFalls(v) {
+    const p = seg(v);
+    const o = { name: (p[0] || '').trim(), rows: [] };
+    const DATE = '[0-9一二三四五六七八九十百]+月[0-9一二三四五六七八九十百日前后上下]*|^[0-9]+$';
+    for (let i = 1; i < p.length; i++) {
+      const x = p[i];
+      const m = x.match(new RegExp('^(.*?)(失守|回填|在守|未失守)\\s*(' + DATE + ')?\\s*(.*)$'));
+      if (m && m[2]) {
+        o.rows.push({ name: m[1].trim(), status: m[2], date: (m[3] || '').trim(), note: (m[4] || '').trim() });
+      } else {
+        /* 无状态关键词的段落：首个词 = 防线名，其余 = 日期或备注 */
+        const sp = x.trim().split(/\s+/);
+        const rest = sp.slice(1).join(' ');
+        const isDate = /^\s*[0-9一二三四五六七八九十百]+月/.test(rest);
+        o.rows.push({ name: sp[0] || '', status: '', date: isDate ? rest : '', note: isDate ? '' : rest });
+      }
+    }
+    return o;
+  }
+
+  /* nl 行（NTR 暗流事件）：nl: 4月6日 | 界限失守 | 经过 靳渊持伪造死证突入工坊 | 她 为保你自愿交出防线 | 你 不知情
+     你=知情/不知情；不知情的事件渲染时雾化，体现主角被蒙在鼓里 */
+  function parseNtrLog(v) {
+    const p = seg(v);
+    const o = { date: (p[0] || '').trim(), title: (p[1] || '').trim(), what: '', her: '', known: '' };
+    for (let i = 2; i < p.length; i++) {
+      const x = p[i];
+      let m;
+      if ((m = x.match(/^经过\s*([\s\S]*)$/))) o.what = m[1].trim();
+      else if ((m = x.match(/^她\s*([\s\S]*)$/))) o.her = m[1].trim();
+      else if ((m = x.match(/^你\s*([\s\S]*)$/))) o.known = m[1].trim();
+    }
+    return o;
+  }
+
+  /* nf 行（NTR 加害者）：nf: 靳渊 | 身份 特调局官员 | 手段 权力胁迫 | 攻势 5/5 | 弱点 无底线的自负
+     兼容 foe 旧式位置制：nf: 沈砚 | 情感渗透 | 攻势 3/5 | 弱点 前妻 */
+  function parseNtrFoe(v) {
+    const p = seg(v);
+    const o = { name: p[0] || '', role: '', method: p[1] || '', step: null, total: 5, weak: '' };
+    let start = 2;
+    if (p.length > 1 && /^(身份|职业)\s*/.test(p[1])) { o.role = p[1].replace(/^(身份|职业)\s*/, '').trim(); start = 2; }
+    if (p.length > 2 && /^(手段|主用手段)\s*/.test(p[2])) { o.method = p[2].replace(/^(手段|主用手段)\s*/, '').trim(); start = 3; }
+    for (const x of p.slice(start)) {
+      let m;
+      if ((m = x.match(/^(?:次用手段|次手段)\s*(.*)$/))) o.method2 = m[1].trim();
+      else if ((m = x.match(/^攻势\s*(\d+)\s*\/\s*(\d+)/))) { o.step = +m[1]; o.total = +m[2]; }
+      else if ((m = x.match(/^弱点\s*([\s\S]*)$/))) o.weak = m[1].trim();
+      else if (!o.role && /^(身份|职业)\s*/.test(x)) o.role = x.replace(/^(身份|职业)\s*/, '').trim();
+    }
+    return o;
+  }
+
   /* npc 行：npc1: 姓名 ｜ 身份 xx ｜ 态度 xx ｜ 状态 xx ｜ 备注 xx
      同时兼容世界书口径：npc: 名称 | 立场 | STR.. WIL.. | HP当前/最大 | 位置与行动
      未匹配键的段落并入备注，兼容旧版裸文本写法 */
@@ -458,11 +529,12 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], bonds: [], foes: [], mobs: [],
+      players: [], npcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
+    const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
     const mmap = new Map();
     const checks = [];
@@ -486,6 +558,11 @@
       else if (/^eq\d+$/.test(k)) emap.set(+k.slice(2), parseEquip(v));
       else if (/^bond\d*$/.test(k)) bmap.set(k === 'bond' ? 1 : +k.slice(4), parseBond(v));
       else if (/^foe\d*$/.test(k)) fmap.set(k === 'foe' ? 1 : +k.slice(3), parseFoe(v));
+      else if (/^nb\d*$/.test(k)) nbmap.set(k === 'nb' ? 1 : +k.slice(2), parseBond(v));
+      else if (/^nf\d*$/.test(k)) nfmap.set(k === 'nf' ? 1 : +k.slice(2), parseNtrFoe(v));
+      else if (/^nh\d*$/.test(k)) nhmap.set(k === 'nh' ? 1 : +k.slice(2), parseNtrHeart(v));
+      else if (/^nd\d*$/.test(k)) ndmap.set(k === 'nd' ? 1 : +k.slice(2), parseNtrFalls(v));
+      else if (/^nl\d*$/.test(k)) nlmap.set(k === 'nl' ? 1 : +k.slice(2), parseNtrLog(v));
       else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -511,6 +588,11 @@
     });
     st.bonds = [...bmap.keys()].sort((a, b) => a - b).map(k => bmap.get(k));
     st.foes = [...fmap.keys()].sort((a, b) => a - b).map(k => fmap.get(k));
+    st.ntrBonds = [...nbmap.keys()].sort((a, b) => a - b).map(k => nbmap.get(k));
+    st.ntrFoes = [...nfmap.keys()].sort((a, b) => a - b).map(k => nfmap.get(k));
+    st.ntrHearts = [...nhmap.keys()].sort((a, b) => a - b).map(k => nhmap.get(k));
+    st.ntrFalls = [...ndmap.keys()].sort((a, b) => a - b).map(k => ndmap.get(k));
+    st.ntrLogs = [...nlmap.keys()].sort((a, b) => a - b).map(k => nlmap.get(k));
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
@@ -670,6 +752,48 @@
     </div>`;
   }
 
+  /* NTR 心声卡（nh 行）：双面镜分屏 —— 左冷蓝「对你·面具」，右绯红「对他·真面目」；
+     心理状态琥珀芯片；内心独白引号压底。 */
+  function renderNtrHeart(h) {
+    if (!h.name && !h.toUser && !h.toRival && !h.inner && !(h.mind || []).length) return '';
+    const quote = (s) => /^[「『"“]/.test(s) ? s : `「${s}」`;
+    return `<div class="tc-nh"><span class="tc-nh-wm">心</span>
+      <div class="tc-nh-hd"><b>${esc(h.name || '？？？')}</b>${(h.mind || []).map(x => `<span class="tc-nh-mind">${esc(x)}</span>`).join('')}</div>
+      ${(h.toUser || h.toRival) ? `<div class="tc-nh-split">
+        <div class="tc-nh-user"><i>对你</i>${h.toUser ? `<em>${esc(h.toUser)}</em>` : ''}</div>
+        <div class="tc-nh-rival"><i>对他</i>${h.toRival ? `<em>${esc(h.toRival)}</em>` : ''}</div>
+      </div>` : ''}
+      ${h.inner ? `<div class="tc-nh-inner">${esc(quote(h.inner))}</div>` : ''}
+    </div>`;
+  }
+
+  /* NTR 防线档案卡（nd 行）：五道防线逐条明细。
+     失守=红🔓 / 回填=青🛠 / 在守=暗🔒；日期 + 经过备注。 */
+  function renderNtrFalls(f) {
+    if (!f.rows.length) return '';
+    const tone = (s) => s === '失守' ? 'f-lost' : (s === '回填' ? 'f-heal' : 'f-hold');
+    const icon = (s) => s === '失守' ? '🔓' : (s === '回填' ? '🛠️' : '🔒');
+    return `<div class="tc-nd">
+      <div class="tc-nd-hd"><b>${esc(f.name || '？？？')}</b><span>防线明细</span></div>
+      ${f.rows.map(r => `<div class="tc-nd-row ${tone(r.status)}">
+        <i>${icon(r.status)}</i><b>${esc(r.name)}</b>
+        ${r.status ? `<u>${esc(r.status)}</u>` : ''}${r.date ? `<time>${esc(r.date)}</time>` : ''}${r.note ? `<em>${esc(r.note)}</em>` : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+
+  /* NTR 暗流事件轴（nl 行）：绯红竖线时间线。
+     「你 不知情」的事件整条雾化 + 🙈，主角视角的蒙在鼓里直接可视。 */
+  function renderNtrLog(l) {
+    const blind = /不知情|未察觉|无察觉|被瞒/.test(l.known);
+    return `<div class="tc-nl${blind ? ' blind' : ''}">
+      <div class="tc-nl-hd"><time>${esc(l.date)}</time><b>${esc(l.title || '——')}</b>
+        ${l.known ? `<span class="tc-nl-know${blind ? ' no' : ''}">${blind ? '🙈 ' : ''}${esc(l.known)}</span>` : ''}</div>
+      ${l.what ? `<div class="tc-nl-what">${esc(l.what)}</div>` : ''}
+      ${l.her ? `<div class="tc-nl-her">她 · ${esc(l.her)}</div>` : ''}
+    </div>`;
+  }
+
   function renderMob(m) {
     const g = /BOSS|Boss|首领|头目/.test(m.grade) ? 'g-boss' : (/精英/.test(m.grade) ? 'g-elite' : 'g-mob');
     const pct = (m.hp != null && m.hpMax) ? Math.max(0, Math.min(100, Math.round(m.hp / m.hpMax * 100))) : 0;
@@ -701,6 +825,56 @@
   function renderFoe(f) {
     const dots = f.step == null ? '' : `<span class="tc-dots">${'●'.repeat(f.step)}${'○'.repeat(Math.max(0, f.total - f.step))}</span>`;
     return `<div class="tc-foe"><b>${esc(f.name)}</b><span>${esc(f.method)}</span>${dots}${f.weak ? `<em>弱点 ${esc(f.weak)}</em>` : ''}</div>`;
+  }
+
+  /* NTR 伴侣卡（nb 行）：绯红「沦陷」主题。
+     阶段 1-5 逐级加深（边框/辉光/脉冲），期 5 定局盖印；
+     右侧沦陷度环 =（恋+调+屈+淫)/4；阶段水印大字（裂/蚀/摇/沦/定）；
+     防线用锁形进度（🔓/🔒），五维条配色与 bond 卡区分（爱=冷白蓝，其余绯红系）。 */
+  const NB_WM = { 1: '裂', 2: '蚀', 3: '摇', 4: '沦', 5: '定' };
+  function renderNtrBond(b) {
+    const one = (label, v, cls) => v == null ? '' :
+      `<div class="tc-bv"><span>${label}</span><b>${v}</b><div class="tc-bbar"><i class="${cls}" style="width:${Math.max(0, Math.min(100, v))}%"></i></div></div>`;
+    const stage = Math.max(1, Math.min(5, b.stage || 1));
+    /* 沦陷度：恋/调/屈/淫 均值（缺失值按 0 计，全部缺失则不显示） */
+    const parts = [b.crush, b.train, b.submit, b.lewd].filter(x => x != null);
+    let ring = '';
+    if (parts.length) {
+      const pct = Math.round(parts.reduce((a, c) => a + c, 0) / parts.length);
+      const C = 2 * Math.PI * 16;
+      ring = `<svg class="tc-nb-ring" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="16" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"/>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="#e11d48" stroke-width="4" stroke-linecap="round"
+          stroke-dasharray="${(pct / 100 * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 22 22)"/>
+        <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#fda4af">${pct}</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5" fill="rgba(253,164,175,.75)" letter-spacing="1">沦陷</text>
+      </svg>`;
+    }
+    const locks = b.defLost == null ? '' :
+      `<span class="tc-nb-locks">${Array.from({ length: b.defTotal }, (_, i) =>
+        i < b.defLost ? '<i class="u">🔓</i>' : '<i>🔒</i>').join('')}</span>`;
+    const stamp = stage === 5 ? '<span class="tc-nb-stamp">定局</span>' : '';
+    return `<div class="tc-nb s${stage}"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
+      <div class="tc-bhead"><b>${esc(b.name)}</b>${b.stage ? `<em>期 ${b.stage} ${esc(b.stageName)}</em>` : ''}${b.lewdMask ? `<span class="tc-mask">淫压 ${b.lewdMask}</span>` : ''}${b.trace != null ? `<span class="tc-trace">迹 ${b.trace}</span>` : ''}</div>
+      <div class="tc-nb-body">
+        <div class="tc-bgrid">${one('爱', b.love, 'n-love')}${one('恋', b.crush, 'n-crush')}${one('调', b.train, 'n-train')}${one('屈', b.submit, 'n-submit')}${one('淫', b.lewd, 'n-lewd')}</div>
+        ${ring}
+      </div>
+      ${b.defLost != null ? `<div class="tc-nb-def">防线 ${b.defLost}/${b.defTotal}${b.defName ? ' · ' + esc(b.defName) : ''}${locks}</div>` : ''}
+    </div>`;
+  }
+
+  /* NTR 加害者卡（nf 行）：暗红「猎手」档案。攻势 ◆/◇ + 攻势标签，八成以上热度加 hot 辉光；
+     未现身显示「身份不明」幽灵卡。 */
+  function renderNtrFoe(f) {
+    const unknown = !f.name || /^(未知|不明|？|\?|——|-|—)$/.test(f.name.trim());
+    const dots = f.step == null ? '' : `<span class="tc-nf-atk">攻势</span><span class="tc-nf-dots">${'◆'.repeat(f.step)}${'◇'.repeat(Math.max(0, f.total - f.step))}</span>`;
+    const hot = (f.step != null && f.total > 0 && f.step / f.total >= 0.8) ? ' hot' : '';
+    if (unknown) return `<div class="tc-nf ghost"><span class="tc-nf-wm">猎</span><b>？？？</b><span>身份不明</span>${dots ? `<span class="tc-nf-atk">攻势</span><span class="tc-nf-dots">${'◇'.repeat(f.total || 5)}</span>` : ''}</div>`;
+    return `<div class="tc-nf${hot}"><span class="tc-nf-wm">猎</span>
+      <div class="tc-nf-hd"><b>${esc(f.name)}</b>${f.role ? `<span class="tc-nf-role">${esc(f.role)}</span>` : ''}</div>
+      <div class="tc-nf-meta">${f.method ? `<span class="tc-nf-method">锋 ${esc(f.method)}</span>` : ''}${f.method2 ? `<span class="tc-nf-method sub">辅 ${esc(f.method2)}</span>` : ''}${dots}${f.weak ? `<em>🎯 弱点 ${esc(f.weak)}</em>` : ''}</div>
+    </div>`;
   }
 
   function renderQuest(q) {
@@ -763,6 +937,26 @@
     if (st.foes.length) {
       colR.push(sect('宿敌', 'NEMESIS'));
       colR.push(`<div class="tc-foes">${st.foes.map(renderFoe).join('')}</div>`);
+    }
+    if (st.ntrBonds.length) {
+      colL.push(sect('伴侣 · 夺走进度', 'POSSESSION'));
+      colL.push(`<div class="tc-nbs">${st.ntrBonds.map(renderNtrBond).join('')}</div>`);
+    }
+    if (st.ntrHearts.length) {
+      colL.push(sect('心声 · 两副面孔', 'MIRROR'));
+      colL.push(`<div class="tc-nhs">${st.ntrHearts.map(renderNtrHeart).join('')}</div>`);
+    }
+    if (st.ntrFoes.length) {
+      colR.push(sect('加害者', 'PREDATOR'));
+      colR.push(`<div class="tc-nfs">${st.ntrFoes.map(renderNtrFoe).join('')}</div>`);
+    }
+    if (st.ntrFalls.length) {
+      colR.push(sect('防线 · 失守档案', 'FALLS'));
+      colR.push(`<div class="tc-nds">${st.ntrFalls.map(renderNtrFalls).join('')}</div>`);
+    }
+    if (st.ntrLogs.length) {
+      colR.push(sect('暗流 · 事件轴', 'UNDERCURRENT'));
+      colR.push(`<div class="tc-nls">${st.ntrLogs.map(renderNtrLog).join('')}</div>`);
     }
     if (st.npcs.length) {
       colL.push(sect('在场人物', 'CONTACTS'));
@@ -868,7 +1062,7 @@
           if (!blk) break;
 
           const st = parseState(blk.body);
-          if (!st.players.length && !st.scene && !st.mobs.length) break;
+          if (!st.players.length && !st.scene && !st.mobs.length && !st.ntrBonds.length && !st.ntrFoes.length && !st.ntrHearts.length && !st.ntrFalls.length && !st.ntrLogs.length) break;
 
           const holder = DOC.createElement('div');
           holder.innerHTML = render(st);
@@ -1202,6 +1396,127 @@
 .tc-foe>span{color:var(--dim)}
 .tc-dots{color:#ef4444;letter-spacing:2px;font-size:11px}
 .tc-foe em{margin-left:auto;font-style:normal;font-size:11px;color:var(--dim)}
+
+/* ── NTR 夺走卡（nb/nf）：绯红主题，与 bond/foe 完全区分 ── */
+.tc-nbs,.tc-nfs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nb{position:relative;overflow:hidden;border-radius:10px;padding:9px 12px;
+  background:linear-gradient(140deg,rgba(120,10,30,.18),rgba(45,6,16,.10));
+  border:1px solid rgba(225,29,72,.32)}
+.tc-nb::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 88% -25%,rgba(225,29,72,.25),transparent 55%)}
+.tc-nb.s2{border-color:rgba(225,29,72,.45)}
+.tc-nb.s3{border-color:rgba(225,29,72,.6);background:linear-gradient(140deg,rgba(140,12,34,.24),rgba(50,7,18,.12))}
+.tc-nb.s4{border-color:rgba(225,29,72,.75);background:linear-gradient(140deg,rgba(155,14,38,.3),rgba(56,8,20,.15));box-shadow:inset 0 0 18px rgba(225,29,72,.12)}
+.tc-nb.s5{border-color:#e11d48;background:linear-gradient(140deg,rgba(170,16,42,.34),rgba(60,9,22,.18));box-shadow:0 0 14px rgba(225,29,72,.35),inset 0 0 22px rgba(225,29,72,.16)}
+.tc-nb.s4{animation:nbPulse 2.8s ease-in-out infinite}
+.tc-nb.s5{animation:nbPulse 1.7s ease-in-out infinite}
+@keyframes nbPulse{0%,100%{box-shadow:0 0 8px rgba(225,29,72,.22)}50%{box-shadow:0 0 22px rgba(225,29,72,.55)}}
+.tc-nb-wm{position:absolute;right:6px;top:50%;transform:translateY(-52%);pointer-events:none;
+  font-size:58px;font-weight:800;line-height:1;color:rgba(225,29,72,.09);user-select:none}
+.tc-nb-ring{width:52px;height:52px;flex:none;filter:drop-shadow(0 0 5px rgba(225,29,72,.35))}
+.tc-nb-body{position:relative;display:flex;align-items:center;gap:10px}
+.tc-nb-body .tc-bgrid{flex:1;min-width:0}
+.tc-nb-stamp{position:absolute;right:10px;bottom:8px;z-index:1;pointer-events:none;
+  font-size:20px;font-weight:800;letter-spacing:6px;color:rgba(225,29,72,.5);
+  border:2px solid rgba(225,29,72,.5);border-radius:6px;padding:1px 8px 1px 12px;
+  transform:rotate(-11deg);opacity:.75}
+.tc-nb .tc-bhead b{color:#fb7185;font-size:13.5px;letter-spacing:1px}
+.tc-nb .tc-bhead em{background:rgba(225,29,72,.14);color:#fda4af}
+.tc-nb .tc-bhead .tc-trace{color:#fbbf24}
+.tc-bbar i.n-love{background:linear-gradient(90deg,#334155,#93c5fd)}
+.tc-bbar i.n-crush{background:linear-gradient(90deg,#4c0519,#fb7185)}
+.tc-bbar i.n-train{background:linear-gradient(90deg,#4a044e,#e879f9)}
+.tc-bbar i.n-submit{background:linear-gradient(90deg,#450a0a,#f87171)}
+.tc-bbar i.n-lewd{background:linear-gradient(90deg,#7f1d1d,#fda4af)}
+.tc-nb-def{margin-top:7px;font-size:11px;color:#fca5a5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tc-nb-locks{display:inline-flex;gap:2px;font-size:11px;filter:saturate(.85)}
+.tc-nb-locks i{font-style:normal;opacity:.62}
+.tc-nb-locks i.u{opacity:1}
+.tc-nf{position:relative;overflow:hidden;background:linear-gradient(140deg,rgba(90,8,22,.22),rgba(35,5,14,.12));
+  border:1px solid rgba(190,18,60,.4);border-radius:10px;padding:9px 12px;font-size:12px}
+.tc-nf.hot{border-color:#e11d48;animation:nbPulse 1.9s ease-in-out infinite}
+.tc-nf-wm{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;
+  font-size:44px;font-weight:800;line-height:1;color:rgba(225,29,72,.08);user-select:none}
+.tc-nf-atk{color:var(--dim);font-size:10px}
+.tc-nf.ghost{border-style:dashed;opacity:.75;background:none}
+.tc-nf>b{color:#fb7185;font-size:13px;letter-spacing:1px}
+.tc-nf-hd{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.tc-nf-role{font-size:10.5px;color:var(--dim);background:rgba(255,255,255,.06);border-radius:4px;padding:1px 7px}
+.tc-nf-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.tc-nf-method{color:#fda4af;background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.3);
+  border-radius:5px;padding:1px 8px;font-size:11px}
+.tc-nf-method.sub{color:#e9d5ff;background:rgba(147,51,234,.12);border-color:rgba(147,51,234,.3)}
+.tc-nf-dots{color:#f43f5e;letter-spacing:2.5px;font-size:11px}
+.tc-nf em{margin-left:auto;font-style:normal;font-size:11px;color:var(--dim)}
+
+/* ── NTR 心声卡（nh）：双面镜，左冷蓝面具 / 右绯红真面目 ── */
+.tc-nhs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nh{position:relative;overflow:hidden;border-radius:10px;padding:8px 11px;
+  background:linear-gradient(100deg,rgba(30,58,95,.16) 0 47%,rgba(20,10,16,.10) 50% 53%,rgba(120,10,30,.20) 56% 100%);
+  border:1px solid rgba(190,18,60,.30)}
+.tc-nh-wm{position:absolute;right:6px;bottom:-6px;pointer-events:none;
+  font-size:46px;font-weight:800;line-height:1;color:rgba(225,29,72,.07);user-select:none}
+.tc-nh-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tc-nh-hd>b{color:#fda4af;font-size:13px;letter-spacing:1px;
+  text-shadow:0 0 8px rgba(225,29,72,.25)}
+.tc-nh-mind{font-size:10px;color:#fcd34d;background:rgba(180,120,10,.14);
+  border:1px solid rgba(245,158,11,.3);border-radius:4px;padding:0 6px}
+.tc-nh-split{display:grid;grid-template-columns:1fr 1fr;gap:6px;position:relative}
+.tc-nh-split>div{border-radius:7px;padding:5px 8px;display:flex;flex-direction:column;gap:3px}
+.tc-nh-user{background:rgba(56,130,246,.10);border:1px solid rgba(96,165,250,.25)}
+.tc-nh-rival{background:rgba(225,29,72,.12);border:1px solid rgba(244,63,94,.3)}
+.tc-nh-split i{font-style:normal;font-size:9.5px;letter-spacing:2px;width:fit-content;
+  border-radius:3px;padding:0 5px}
+.tc-nh-user i{color:#93c5fd;background:rgba(96,165,250,.14)}
+.tc-nh-rival i{color:#fda4af;background:rgba(244,63,94,.16)}
+.tc-nh-split em{font-style:normal;font-size:11.5px;line-height:1.45;word-break:break-all}
+.tc-nh-user em{color:#cfe0f2}
+.tc-nh-rival em{color:#ffd6de}
+.tc-nh-inner{position:relative;margin-top:6px;padding:5px 10px;font-size:11.5px;font-style:italic;
+  color:rgba(252,165,165,.85);background:rgba(120,10,30,.10);border-radius:6px;
+  border-left:2px solid rgba(225,29,72,.45)}
+.tc-nh-inner::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
+  box-shadow:0 0 6px rgba(225,29,72,.5)}
+
+/* ── NTR 防线档案（nd）：失守红 / 回填青 / 在守暗 ── */
+.tc-nds{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
+.tc-nd{border:1px solid rgba(120,53,15,.35);border-radius:10px;padding:8px 11px;
+  background:linear-gradient(150deg,rgba(80,20,8,.14),rgba(25,8,10,.10))}
+.tc-nd-hd{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.tc-nd-hd b{color:#fdba74;font-size:12.5px;letter-spacing:1px}
+.tc-nd-hd span{font-size:10px;color:var(--dim)}
+.tc-nd-row{display:flex;align-items:baseline;gap:7px;font-size:11.5px;padding:3px 0;
+  border-bottom:1px dashed rgba(255,255,255,.05)}
+.tc-nd-row:last-child{border-bottom:none}
+.tc-nd-row i{font-style:normal;font-size:11px;opacity:.85}
+.tc-nd-row b{color:#e7d7c9;font-weight:600}
+.tc-nd-row u{text-decoration:none;font-size:10px;border-radius:4px;padding:0 6px}
+.tc-nd-row.f-lost u{color:#fca5a5;background:rgba(220,38,38,.16)}
+.tc-nd-row.f-heal u{color:#5eead4;background:rgba(20,184,166,.14)}
+.tc-nd-row.f-hold u{color:#cbd5e1;background:rgba(148,163,184,.14)}
+.tc-nd-row time{font-size:10px;color:var(--dim)}
+.tc-nd-row em{font-style:normal;font-size:10.5px;color:var(--dim);margin-left:auto;text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
+
+/* ── NTR 暗流事件轴（nl）：绯红竖线时间线，不知情事件雾化 ── */
+.tc-nls{position:relative;margin:2px 0 8px;padding-left:14px;display:flex;flex-direction:column;gap:6px}
+.tc-nls::before{content:'';position:absolute;left:3px;top:8px;bottom:8px;width:1px;
+  background:linear-gradient(180deg,rgba(225,29,72,.55),rgba(225,29,72,.2),transparent)}
+.tc-nl{position:relative;border:1px solid rgba(190,18,60,.3);border-radius:9px;padding:6px 10px;
+  background:linear-gradient(140deg,rgba(90,8,22,.16),rgba(30,6,12,.10));font-size:11.5px}
+.tc-nl::before{content:'';position:absolute;left:-14px;top:12px;width:7px;height:7px;border-radius:50%;
+  background:#e11d48;box-shadow:0 0 7px rgba(225,29,72,.85)}
+.tc-nl.blind{opacity:.55;border-style:dashed;background:none}
+.tc-nl.blind::before{background:#64748b;box-shadow:none}
+.tc-nl-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tc-nl-hd time{font-size:10px;color:#fda4af;background:rgba(225,29,72,.12);border-radius:4px;padding:0 6px}
+.tc-nl-hd b{color:#ffd6de;font-weight:600}
+.tc-nl-know{margin-left:auto;font-size:10px;color:#94a3b8}
+.tc-nl-know.no{color:#64748b}
+.tc-nl-what{margin-top:3px;color:#d6c3c9;line-height:1.5}
+.tc-nl-her{margin-top:3px;font-style:italic;color:rgba(252,165,165,.8)}
+.tc-nl-her::before{content:''}
+.tc-nf.ghost b{color:var(--dim)}
 
 /* ── 战场日志时间线 ── */
 .tc-log{position:relative;margin:11px 0 5px;padding-left:15px;display:flex;flex-direction:column;gap:6px}
