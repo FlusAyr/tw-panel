@@ -37,6 +37,9 @@ const GH = [
   'https://fastly.jsdelivr.net/gh/' + REPO + '@',
   'https://raw.githubusercontent.com/' + REPO + '/'
 ];
+/* 版本探测顺序：raw 最先（分支内容约 5 分钟新鲜；jsDelivr 系 @main 有 ≤12h 缓存，只作后备）。
+   代码拉取仍 gcore 优先（tag 不可变，缓存无新鲜度问题）。 */
+const VERSION_BASES = [GH[3]].concat(GH.slice(0, 3));
 /* import 兜底通道只用 jsDelivr 系（raw 的 MIME 是 text/plain，模块加载会拒） */
 const IMPORT_BASES = GH.slice(0, 3);
 
@@ -132,7 +135,7 @@ async function refresh() {
   const meta = jget(META_KEY) || {};
   const curVer = meta.version || (window.__twCard && window.__twCard.version) || '0.0.0';
 
-  for (const base of GH) {
+  for (const base of VERSION_BASES) {
     try {
       const remote = JSON.parse(await fetchText(base + 'main/version.json'));
       const v = String(remote.version || '').replace(/^v/i, '');
