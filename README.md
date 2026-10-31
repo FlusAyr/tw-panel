@@ -6,6 +6,18 @@
 
 酒馆助手（SillyTavern）渲染器 `panel.js` 的发布仓库。解决一件事：**改一次面板，不用再让每个玩家重新导入脚本。**
 
+## 〇、内容下载（世界书 / 数据库模板 / 条目 / 文档）
+
+玩家需要的东西都在 [`content/`](content/) 里，安装顺序见 [content/README.md](content/README.md)：
+
+| 目录 | 内容 |
+|---|---|
+| `content/worldbook/` | 无限恐怖 v2、跑团用世界书 v4（AI 精简版） |
+| `content/database/` | 无限恐怖数据库模板 10 表深度版、原版备份、插件入口 |
+| `content/panel/` | 自动更新引导包（推荐）、v3.8 手动导入版 |
+| `content/entries/` | 超高校级幸运、魔药体系 v1.0 |
+| `content/docs/` | 自定义血统创作系统提示词、面板维护手册、状态块样例 |
+
 ## 一、原理
 
 ```
