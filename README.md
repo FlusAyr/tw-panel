@@ -1,5 +1,9 @@
 # tw-panel · 主神空间 tw-card 状态面板（自动更新仓库）
 
+> 线上仓库：https://github.com/FlusAyr/tw-panel
+> 玩家导入：`dist/loader-script.json`（酒馆助手 → 脚本 → 导入）
+> 当前版本：v3.8.0
+
 酒馆助手（SillyTavern）渲染器 `panel.js` 的发布仓库。解决一件事：**改一次面板，不用再让每个玩家重新导入脚本。**
 
 ## 一、原理
@@ -26,7 +30,7 @@ GitHub 新建 public 仓库，名字随你（下文以 `你的账号/tw-panel` �
 const REPO = 'CHANGE_ME/tw-panel';
 ```
 
-改成 `'你的账号/tw-panel'`。然后重新打包，让 dist 里的引导脚本也带上这个地址：
+已配置为 `'FlusAyr/tw-panel'`（仓库已上线，无需再改）。然后重新打包，让 dist 里的引导脚本也带上这个地址：
 
 ```bash
 python build.py
@@ -44,8 +48,8 @@ git push --tags
 
 推送完成后自检两个地址（把账号换成你的）：
 
-- `https://raw.githubusercontent.com/你的账号/tw-panel/main/version.json`
-- `https://cdn.jsdelivr.net/gh/你的账号/tw-panel@v3.8.0/panel.js`
+- `https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json`
+- `https://cdn.jsdelivr.net/gh/FlusAyr/tw-panel@v3.8.0/panel.js`
 
 都能打开 → 部署完成。
 
