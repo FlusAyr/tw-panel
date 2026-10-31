@@ -30,14 +30,18 @@ tw-panel/
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
 ├── tests/loader.test.js    loader 的 11 条断言（node 跑，无需依赖）
 ├── ci/release.yml.example  可选 GitHub Actions（启用需 token 带 workflow 权限）
-├── content/                玩家下载区（世界书 / 数据库模板 / 条目 / 文档）
+├── content/                内容下载区（只放内容，不放面板）
+│   ├── README.md           玩家安装顺序与文件说明
 │   ├── worldbook/          无限恐怖 v2（24 条目）、跑团用 v4（18 条目）
 │   ├── database/           10 表深度版模板、原版备份、插件入口
-│   ├── panel/              引导包、v3.8 手动版
 │   ├── entries/            超高校级幸运、魔药体系 v1.0
 │   └── docs/               创作系统提示词、面板维护手册、状态块样例
-└── README.md               部署与发版说明（面向人）
+└── README.md               仓库首页：只讲玩家怎么装（维护内容不写在这里）
 ```
+
+**文档分工（别混）**：`README.md` 只回答"玩家怎么装"，面向不关心代码的人；本文件回答"怎么改、怎么发"，面向维护者；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
+
+**单一出处**：面板成品只在 `dist/`（`build.py` 生成），**不要往 `content/` 复制一份**——两份副本必然漂移，之前已经出现过。
 
 **本地全量备份**（不在仓库里）：`F:\主神空间\`，含 07_脚本 的 13 个测试脚本、08_样例回复、09_归档 的旧版。改东西前先在那里找历史版本对照。
 
@@ -140,6 +144,36 @@ git tag v3.9.0 && git push && git push --tags
 ### 5.3 新增自定义条目（血统/内功）
 
 按 `content/docs/提示词_自定义血统内功创作系统.md` 执行：八项功能契约、五不变量、cr 行三段、自检清单十条。交付后同时放 `content/entries/`，并在 `content/README.md` 登记。
+
+### 5.4 从零自建一份（换账号 / 换托管）
+
+想给另一个群开一套独立的面板源：
+
+```bash
+# 1. 建一个 public 仓库，假定 用户名/tw-panel
+# 2. loader.js 顶部改地址
+const REPO = '用户名/tw-panel';
+# 3. 重新打包（dist 里的引导包会带上新地址）
+python build.py
+# 4. 推上去，tag 必须 = v + version.json 里的 version
+git add -A && git commit -m "v3.8.0"
+git tag v3.8.0 && git push -u origin main && git push --tags
+```
+
+自检两个地址都能打开（第一个必须带 CORS 头）：
+
+- `https://raw.githubusercontent.com/用户名/tw-panel/main/version.json`
+- `https://cdn.jsdelivr.net/gh/用户名/tw-panel@v3.8.0/panel.js`
+
+推送用的令牌：classic PAT 勾 `repo` 即可（fine-grained 建不了仓库，见 7.2）。推完就可以把令牌删掉。
+
+### 5.5 国内网络 / CDN 打不开
+
+loader 的取源顺序是 **GitHub Raw（版本清单）→ jsDelivr（代码）**，两者任一可用就能更新。若两条都慢：
+
+1. **优先用 jsDelivr 兜底**——它是全球 CDN，国内通常可达，代码按 tag 取所以永不过期。
+2. **自建静态托管**：把 `panel.js` + `version.json` 放 Cloudflare Pages / Vercel，改 `loader.js` 的 `SOURCES` 指向自己的域名。缓存策略自控，也能挂自定义域名防污染。
+3. **不要改用 Gitee 做源**——raw 无 CORS，浏览器 fetch 必被拦，原因见 7.1。Gitee 最多作为人工下载的镜像。
 
 ---
 
