@@ -1,0 +1,25 @@
+name: build & release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build
+        run: python build.py
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/loader-script.json
+            dist/panel-script-*.json
+            version.json
+          generate_release_notes: true
