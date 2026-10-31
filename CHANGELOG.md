@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-11-01 · 引导 v2.0（面板仍为 v3.10.1，无需新 tag）
+
+### boot.mjs —— ESM 双通道引导（关键修复）
+- **故障根因**：旧 loader 全靠 `fetch()`（version.json + 代码 + 缓存）。酒馆助手的 iframe 沙箱可能用 `connect-src` CSP 拦截外部 fetch，链路整体哑掉 → 永不更新。而数据库插件等正常更新的脚本都是**一行 `import 'https://gcore.jsdelivr.net/...'`**——模块加载走 `script-src`，沙箱必然放行。
+- **修复**：玩家导入包改为一行 `import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'`；boot.mjs 双通道：
+  1. **快速通道**：fetch version.json 比对 → fetch tag 代码 → localStorage 缓存（分钟级更新，多源 gcore/cdn/fastly/raw 轮询）；
+  2. **import 兜底**：fetch 任何一步失败 → `import('@main/panel.js')` 直连面板（jsDelivr 分支缓存 ≤12h，必然能通）。
+- 无头 Edge 双模式实测：正常浏览器走通道 A；模拟 fetch 全拦后自动降级通道 B，均成功启动 v3.10.1。
+- build.py：loader 产物改为一行 import（id 不变，重装覆盖旧引导）；version.json 的 updated 字段自动填当日。
+- **已装 v1.0 旧引导的玩家需重新导入一次 v2.0 引导包**（引导自身无法自动更新，一次性成本）。
+
+---
+
 ## 2026-11-01 · v3.10.1（当前）
 
 ### 面板 panel.js —— 修复 next: 丢失

@@ -8,18 +8,18 @@ tw-panel 打包脚本
   2. python build.py
   3. git add -A && git commit -m "v3.9" && git tag v3.9 && git push --tags
 """
-import json, re, sys, pathlib
+import json, re, sys, pathlib, datetime
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PANEL = ROOT / "panel.js"
-LOADER = ROOT / "loader.js"
+LOADER = ROOT / "boot.mjs"     # v2.0：玩家导入包内容是一行 import，入口为 ESM boot
 VERSION_JSON = ROOT / "version.json"
 DIST = ROOT / "dist"
 
 LOADER_ID = "8f3c1d92-6b47-4a10-9c55-1d2e7f8a0b31"   # 引导脚本固定 id，勿改
 PANEL_ID = "1604cbb8-ce4d-4974-8efb-1b6d186e37fb"    # 与 v3.8 手动版同 id
 
-NOTES = "HUD 作战指挥台布局；cr 行自定义资源（LP/因果债/擦边）"
+NOTES = "NTR 夺走体系 + next 修复；引导 v2.0：一行 import 双通道（fetch 快速通道 + import 兜底）"
 
 
 def read(p):
@@ -39,18 +39,19 @@ def main():
         "version": semver,
         "file": "panel.js",
         "notes": NOTES,
-        "updated": "",
+        "updated": datetime.date.today().isoformat(),
     }
     VERSION_JSON.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    # 2) dist/loader：玩家导入一次
+    # 2) dist/loader：玩家导入一次（v2.0 一行 import，与数据库插件同机制）
     loader = {
         "type": "script",
         "enabled": True,
-        "name": "tw-card 自动更新引导 v1.0",
+        "name": "tw-card 自动更新引导 v2.0",
         "id": LOADER_ID,
-        "content": read(LOADER),
-        "info": "只装这一支。面板本体从 git 仓库自动拉取并缓存，更新后刷新页面即生效。",
+        "content": "import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'",
+        "info": "只装这一支。ESM 一行 import 引导：能 fetch 走快速通道（分钟级更新），"
+                "被沙箱 CSP 拦截时自动降级 import 直连面板。更新后刷新页面即生效。",
         "button": {"enabled": True, "buttons": []},
         "data": {},
         "export_with": {"data": True, "button": True},

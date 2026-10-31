@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>boot-e2e</title></head>
+<body style="background:#0b0e14;color:#9f8;font-family:monospace;padding:8px">
+<pre id="log">booting...</pre>\n<script>
+(function () {
+  const lines = [];
+  const el = document.getElementById('log');
+  const push = (m) => { lines.push(String(m)); el.textContent = lines.join('\n'); };
+  ['log','warn','error'].forEach(k => {
+    const orig = console[k].bind(console);
+    console[k] = (...a) => { push('[c.'+k+'] ' + a.map(x => (x && x.message) ? x.message : x).join(' ')); orig(...a); };
+  });
+  window.addEventListener('unhandledrejection', e => push('[rej] ' + (e.reason && e.reason.message || e.reason)));
+  if (new URLSearchParams(location.search).get('nofetch') === '1') {
+    window.fetch = () => Promise.reject(new TypeError('Blocked by connect-src (simulated)'));
+    push('[sim] fetch 已被模拟拦截');
+  }
+  setTimeout(() => {
+    push('== RESULT ==');
+    push('__twCard.version = ' + (window.__twCard && window.__twCard.version));
+    let meta = null;
+    try { meta = JSON.parse(localStorage.getItem('tw-card:meta') || 'null'); } catch (e) {}
+    push('meta.src = ' + (meta && meta.src) + ' | meta.version = ' + (meta && meta.version));
+    document.title = 'V:' + (window.__twCard && window.__twCard.version);
+  }, 14000);
+})();
+</script>
+<script>
+/* 诊断壳 */
+(function () {
+  const lines = [];
+  const el = document.getElementById('log');
+  const push = (m) => { lines.push(String(m)); el.textContent = lines.join('\n'); };
+  window.__push = push;
+  ['log', 'warn', 'error'].forEach(k => {
+    const orig = console[k].bind(console);
+    console[k] = (...a) => { push('[c.' + k + '] ' + a.map(x => (x && x.message) ? x.message : x).join(' ')); orig(...a); };
+  });
+  window.addEventListener('unhandledrejection', e => push('[rej] ' + (e.reason && e.reason.message || e.reason)));
+  /* 模式：?nofetch=1 → 模拟酒馆助手沙箱把 fetch 全拦掉 */
+  if (new URLSearchParams(location.search).get('nofetch') === '1') {
+    window.fetch = () => Promise.reject(new TypeError('Blocked by connect-src (simulated)'));
+    push('[sim] fetch 已被模拟拦截');
+  }
+  setTimeout(() => {
+    push('== RESULT ==');
+    push('__twCard.version = ' + (window.__twCard && window.__twCard.version));
+    push('__twCardLoaded = ' + window.__twCardLoaded);
+    let meta = null;
+    try { meta = JSON.parse(localStorage.getItem('tw-card:meta') || 'null'); } catch (e) { }
+    push('meta.src = ' + (meta && meta.src) + ' meta.version = ' + (meta && meta.version));
+    document.title = 'V:' + (window.__twCard && window.__twCard.version);
+  }, 14000);
+})();
+</script>
+<script type="module">
+/* ══════════════════════════════════════════════════════════════
+   tw-card 自动更新引导（boot）v2.0 —— ESM 版
+   玩家导入的脚本只有一行：
+     import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'
+   ──────────────────────────────────────────────────────────────
+   双通道设计（v2.0 关键改进）：
+   ① 快速通道：fetch version.json 比对版本 → fetch 新代码 → 缓存。
+      适用于普通浏览器（更新粒度：分钟级）。
+   ② 兜底通道：酒馆助手等 iframe 沙箱可能用 connect-src CSP 拦掉
+      fetch（实测会导致整个更新链路哑掉），而 import() 走 script-src
+      通道必然放行——此时直接 import @main 面板本体。
+      适用于沙箱环境（更新粒度：jsDelivr 分支缓存 ≤12 小时）。
+   ──────────────────────────────────────────────────────────────
+   【部署前只改一处】把 REPO 改成你自己的 GitHub 仓库：用户名/仓库名
+   ══════════════════════════════════════════════════════════════ */
+
+const REPO = 'FlusAyr/tw-panel';
+const AUTO_RELOAD = false;      // true = 拉到新版本立刻刷新页面
+const CHECK_ON_BOOT = true;     // 每次页面加载都检查更新
+const TIMEOUT = 6000;           // 快速通道单请求超时(ms)
+
+const CACHE_KEY = 'tw-card:cache';
+const META_KEY = 'tw-card:meta';
+
+/* jsDelivr 多域名（gcore 对国内最稳）+ GitHub Raw；分支/标签前缀 */
+const GH = [
+  'https://gcore.jsdelivr.net/gh/' + REPO + '@',
+  'https://cdn.jsdelivr.net/gh/' + REPO + '@',
+  'https://fastly.jsdelivr.net/gh/' + REPO + '@',
+  'https://raw.githubusercontent.com/' + REPO + '/'
+];
+/* import 兜底通道只用 jsDelivr 系（raw 的 MIME 是 text/plain，模块加载会拒） */
+const IMPORT_BASES = GH.slice(0, 3);
+
+/* ═════════ 小工具 ═════════ */
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+const jget = (k) => { try { return JSON.parse(lsGet(k) || 'null'); } catch (e) { return null; } };
+
+function cmpVer(a, b) {
+  const pa = String(a).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function toast(msg, kind, ms) {
+  try {
+    const d = document.createElement('div');
+    const color = kind === 'err' ? '#f87171' : kind === 'warn' ? '#fbbf24' : '#4ade80';
+    d.textContent = msg;
+    d.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:99999;max-width:380px;' +
+      'font:12.5px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8eef7;' +
+      'background:rgba(12,18,28,.94);border:1px solid ' + color + '55;border-left:3px solid ' + color + ';' +
+      'border-radius:8px;padding:9px 13px;box-shadow:0 8px 26px rgba(0,0,0,.5)';
+    (document.body || document.documentElement).appendChild(d);
+    setTimeout(() => d.remove(), ms || 4200);
+  } catch (e) { }
+}
+
+async function fetchText(url) {
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const t = setTimeout(() => { try { ac && ac.abort(); } catch (e) { } }, TIMEOUT);
+  try {
+    const r = await fetch(url, { signal: ac ? ac.signal : undefined, cache: 'no-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  } finally { clearTimeout(t); }
+}
+
+async function fetchFirst(urls) {
+  let lastErr;
+  for (const u of urls) {
+    try { return await fetchText(u); } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('无可用地址');
+}
+
+/* ═════════ 执行面板代码 ═════════ */
+function boot(code, ver) {
+  try {
+    if (typeof window.__twCardLoaded !== 'undefined' && window.__twCardLoaded) return false;
+    window.__twCardLoaded = false;
+    try {
+      new Function(code).call(window);
+    } catch (e) {
+      const s = document.createElement('script');
+      s.textContent = code;
+      (document.head || document.documentElement).appendChild(s);
+      s.remove();
+    }
+    const cur = (window.__twCard && window.__twCard.version) || ver || '?';
+    console.log('[tw-boot] 面板已启动 v' + cur);
+    return true;
+  } catch (e) {
+    console.error('[tw-boot] 面板启动失败:', e);
+    toast('tw-card：面板启动失败，' + (e && e.message ? e.message : e), 'err', 8000);
+    return false;
+  }
+}
+
+/* 兜底通道：import() 直连面板本体，逐域尝试 */
+async function bootViaImport() {
+  for (const base of IMPORT_BASES) {
+    try {
+      console.log('[tw-boot] 快速通道不可用，走 import 兜底：' + base + 'main/panel.js');
+      await import(base + 'main/panel.js');
+      const cur = (window.__twCard && window.__twCard.version) || '?';
+      console.log('[tw-boot] 面板已启动 v' + cur + '（import 兜底）');
+      try { lsSet(META_KEY, JSON.stringify({ version: cur, at: Date.now(), src: 'import', notes: '' })); } catch (e) { }
+      return true;
+    } catch (e) {
+      console.warn('[tw-boot] import 失败（' + base + '）：', e && e.message);
+    }
+  }
+  return false;
+}
+
+/* ═════════ 快速通道：版本检查 + 缓存更新 ═════════ */
+async function refresh() {
+  const meta = jget(META_KEY) || {};
+  const curVer = meta.version || (window.__twCard && window.__twCard.version) || '0.0.0';
+
+  for (const base of GH) {
+    try {
+      const remote = JSON.parse(await fetchText(base + 'main/version.json'));
+      const v = String(remote.version || '').replace(/^v/i, '');
+      if (!v) continue;
+      if (cmpVer(v, curVer) <= 0) {
+        console.log('[tw-boot] 已是最新 v' + curVer + '（' + base.split('/gh/').pop() + '）');
+        return true;
+      }
+      const code = await fetchFirst([base + 'v' + v + '/panel.js', base + 'v' + v.replace(/\.0$/, '') + '/panel.js']);
+      if (!code || code.length < 2000) throw new Error('内容异常');
+      lsSet(CACHE_KEY, code);
+      lsSet(META_KEY, JSON.stringify({ version: v, at: Date.now(), src: base, notes: remote.notes || '' }));
+      console.log('[tw-boot] 拉到新版本 v' + v);
+      if (!window.__twCardLoaded) { boot(code, v); return true; }
+      if (AUTO_RELOAD) { location.reload(); return true; }
+      toast('tw-card 面板已更新至 v' + v + '，刷新页面后生效' +
+        (remote.notes ? '（' + remote.notes + '）' : ''), 'ok', 6000);
+      return true;
+    } catch (e) {
+      console.warn('[tw-boot] 源不可用：', base, e && e.message);
+    }
+  }
+  return false; // 快速通道全灭 → 交给 import 兜底
+}
+
+/* ═════════ 启动 ═════════ */
+// 已装旧的手动脚本 → 提醒停用，避免两份互相抢渲染
+if (window.__twCardLoaded && window.__twCard && !window.__twCardLoader) {
+  toast('tw-card：检测到旧版手动脚本仍在运行，请到酒馆助手 → 脚本 停用旧面板脚本，否则自动更新不会生效', 'warn', 10000);
+}
+
+window.__twCardLoader = true;
+
+const cache = lsGet(CACHE_KEY);
+if (cache) boot(cache, (jget(META_KEY) || {}).version);
+
+const start = async () => {
+  let ok = false;
+  if (CHECK_ON_BOOT) ok = await refresh();
+  if (!ok) ok = await bootViaImport();   // 快速通道失败/被 CSP 拦 → import 兜底
+  if (!ok && !lsGet(CACHE_KEY)) {
+    toast('tw-card：无法连接任何更新源，且本地无缓存。请检查网络，或手动导入面板脚本。', 'err', 9000);
+  }
+};
+
+if (cache) setTimeout(start, 1200); else start();
+
+window.twPanelCheck = start;
+window.twPanelVersion = () => (jget(META_KEY) || {}).version || (window.__twCard && window.__twCard.version) || 'unknown';
+</script>
+
+</body>
+</html>

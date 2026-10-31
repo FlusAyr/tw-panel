@@ -1,6 +1,6 @@
 {
   "version": "3.10.1",
   "file": "panel.js",
-  "notes": "修复 next: 被正文隔断时丢失的问题",
-  "updated": "2026-11-01"
+  "notes": "NTR 夺走体系 + next 修复；引导 v2.0：一行 import 双通道（fetch 快速通道 + import 兜底）",
+  "updated": ""
 }

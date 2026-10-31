@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>loader-e2e</title></head>
+<body style="background:#0b0e14;color:#9f8;font-family:monospace;padding:8px">
+<pre id="log">booting...</pre>
+<script>
+/* 诊断壳：截获 console/onerror，把 loader 的每一步落到 DOM */
+(function () {
+  const lines = [];
+  const el = document.getElementById('log');
+  const push = (m) => { lines.push(String(m)); el.textContent = lines.join('\n'); };
+  ['log', 'warn', 'error'].forEach(k => {
+    const orig = console[k].bind(console);
+    console[k] = (...a) => { push('[console.' + k + '] ' + a.map(x => (x && x.message) ? x.message : x).join(' ')); orig(...a); };
+  });
+  window.onerror = (msg, src, l, c, err) => { push('[onerror] ' + msg + ' @' + (src || '') + ':' + l); };
+  window.addEventListener('unhandledrejection', e => push('[unhandledrejection] ' + (e.reason && e.reason.message || e.reason)));
+  setTimeout(() => {
+    let meta = null, cacheLen = 0;
+    try { meta = JSON.parse(localStorage.getItem('tw-card:meta') || 'null'); } catch (e) { push('[ls err] ' + e.message); }
+    try { cacheLen = (localStorage.getItem('tw-card:cache') || '').length; } catch (e) { }
+    push('== RESULT ==');
+    push('__twCard.version = ' + (window.__twCard && window.__twCard.version));
+    push('__twCardLoaded = ' + window.__twCardLoaded);
+    push('meta = ' + JSON.stringify(meta));
+    push('cache.length = ' + cacheLen);
+    push('title=' + 'V:' + (window.__twCard && window.__twCard.version));
+    document.title = 'V:' + (window.__twCard && window.__twCard.version);
+  }, 12000);
+})();
+</script>
+<script src="../loader.js"></script>
+</body>
+</html>
