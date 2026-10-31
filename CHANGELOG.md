@@ -73,3 +73,5 @@
 - **移除第三方插件**：`content/database/插件入口_数据库本体.json` 已删除，改为指向作者仓库 https://github.com/AlbusKen/shujuku 。仓库不再存放、不转发任何第三方插件文件；`AGENTS.md` 增加 2.3 条明确此规则。
 - **清除重复副本**：删除 `content/panel/`（与 `dist/` 字节一致），面板成品只保留 `dist/` 一个出处；`content/README.md` 的安装顺序与首页对齐。
 - **新增给 AI 的部署手册** `AGENT_DEPLOY.md` + 一键脚本 `deploy.py`：从装 SillyTavern（release 分支、Node ≥ 20）到酒馆助手扩展、世界书、数据库插件、模板、渲染器的完整流程；明确划分「agent 可自动」与「必须人工点击」两类步骤，附总验收清单、分支排错表与红线（不改 default/、不动纪要表、不分发第三方插件）。README 增「附三 · 让 AI 助手替你装」入口。
+- **README 顶部加 AI 助手导航块**：`🤖 如果你是 AI 助手` 表格，按用户诉求分派到 AGENT_DEPLOY / AGENTS / CHANGELOG / llms.txt，并列出三条硬规矩（规则以 AGENTS 为准、三条红线、不要凭命令成功就宣布完成）。
+- **新增 `llms.txt`**：机器可读入口索引，含「按诉求跳转」「部署脚本」「渲染器」「规则内容」「硬约束」「可选」六节，19 个链接全部实测 200。`AGENTS.md` 增加维护约定（新增/改名文件后必须同步 llms.txt、仓库地图、玩家表格三处）。
