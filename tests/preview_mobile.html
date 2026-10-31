@@ -51,7 +51,7 @@
 if (new URLSearchParams(location.search).get('p2') === '1') {
   const t = setInterval(() => {
     const m = document.querySelector('.tc-main');
-    if (m && m.scrollWidth > m.clientWidth) { clearInterval(t); m.scrollLeft = 9999; }
+    if (m && m.scrollWidth > m.clientWidth) { clearInterval(t); m.scrollLeft = 300; }
   }, 300);
 }
 </script></body>
