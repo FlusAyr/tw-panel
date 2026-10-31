@@ -8,6 +8,7 @@
 ## 2026-11-01 · 引导 v2.0（面板仍为 v3.10.1，无需新 tag）
 
 ### boot.mjs —— ESM 双通道引导（关键修复）
+- **设置面板**：脚本按钮「面板设置」弹出设置卡——当前版本/缓存源/更新时间展示；开关：自动刷新页面、启动时检查更新（存 localStorage tw-card:opts）；操作：立即检查更新 / 强制重拉最新（忽略版本号直连 main 并热启动）/ 清除缓存并停用。控制台备用入口 window.twPanelOpenSettings()。按钮声明在导入包 button.buttons（面板设置、检查更新），boot.mjs 内 eventOn(getButtonEvent()) 监听
 - **故障根因**：旧 loader 全靠 `fetch()`（version.json + 代码 + 缓存）。酒馆助手的 iframe 沙箱可能用 `connect-src` CSP 拦截外部 fetch，链路整体哑掉 → 永不更新。而数据库插件等正常更新的脚本都是**一行 `import 'https://gcore.jsdelivr.net/...'`**——模块加载走 `script-src`，沙箱必然放行。
 - **修复**：玩家导入包改为一行 `import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'`；boot.mjs 双通道：
   1. **快速通道**：fetch version.json 比对 → fetch tag 代码 → localStorage 缓存（分钟级更新，多源 gcore/cdn/fastly/raw 轮询）；

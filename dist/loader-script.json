@@ -4,10 +4,19 @@
   "name": "tw-card 自动更新引导 v2.0",
   "id": "8f3c1d92-6b47-4a10-9c55-1d2e7f8a0b31",
   "content": "import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'",
-  "info": "只装这一支。ESM 一行 import 引导：能 fetch 走快速通道（分钟级更新），被沙箱 CSP 拦截时自动降级 import 直连面板。更新后刷新页面即生效。",
+  "info": "只装这一支。ESM 一行 import 引导：能 fetch 走快速通道（分钟级更新），被沙箱 CSP 拦截时自动降级 import 直连面板。更新后刷新页面即生效。快速回复栏的「面板设置」按钮可调整更新选项。",
   "button": {
     "enabled": true,
-    "buttons": []
+    "buttons": [
+      {
+        "name": "面板设置",
+        "visible": true
+      },
+      {
+        "name": "检查更新",
+        "visible": true
+      }
+    ]
   },
   "data": {},
   "export_with": {
