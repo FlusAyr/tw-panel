@@ -9,7 +9,7 @@
   'use strict';
 
   /* ═════════ 配置区 ═════════ */
-  const REPO = 'CHANGE_ME/tw-panel';   // ← 例：'zhangsan/tw-panel'
+  const REPO = 'FlusAyr/tw-panel';      // 仓库地址：用户名/仓库名
   const AUTO_RELOAD = false;           // true = 拉到新版本立刻刷新页面；false = 提示后由玩家下次刷新生效
   const CHECK_ON_BOOT = true;          // 每次页面加载都检查更新
   const TIMEOUT = 6000;                // 单个源超时(ms)
