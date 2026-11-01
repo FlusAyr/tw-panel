@@ -108,6 +108,8 @@ const POINTS = [
   { id: 'README.md:62', file: 'README.md', name: '控制台日志示例', re: /\[tw-boot\] 面板已启动/ },
   { id: 'llms.txt:22', file: 'llms.txt', name: 'dist 离线手动版链接', re: /dist\/panel-script-v\d+\.\d+\.\d+\.json/ },
   { id: '维护手册:4', file: 'content/docs/酒馆状态面板系统_维护手册.md', name: '面板脚本当前版本', re: /面板脚本当前版本/ },
+  /* content/README.md 是唯一「玩家能看见 / 测试不覆盖 / QA 不读」的版本落点：三处都不管，它烂了没人会红。 */
+  { id: 'content/README.md:8', file: 'content/README.md', name: '玩家安装页版本行', re: /\*\*v\d+\.\d+\.\d+\*\*/ },
 ];
 
 POINTS.forEach((pt) => {

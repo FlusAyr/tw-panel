@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.14.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.15.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.14.0**（tag 未推） | 渲染器唯一源文件，≈1.7k 行 |
+| `panel.js` | **v3.15.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -80,6 +80,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **boot v2.1**：玩家包一行 `import` 钉不可变 tag 的 boot（`@vX.Y.Z/boot.mjs`，不走 `@main`）；fetch 快速通道并行探测全镜像 version.json 取最大版本，失败即降级 `import()` 兜底；带设置面板（显示 `BOOT_VERSION` 可自检，开关存 `tw-card:opts`，支持立即检查/强制重拉/清缓存）
 - **v3.13.0** 引导升级配套：面板无功能变更，仅为让 `dist/loader-script.json` 指向钉 tag 的新 boot 而 bump
 - **v3.14.0** 拓展键前缀：`kbnpc[<N>]`/`ntrnpc[<N>]` 独立前缀并登记进 `KEYS`（缺登记会截断其后状态行）；删除 `.github/workflows/` 恒红叉模板，不再新建 CI
+- **v3.15.0** 行内 A/B 双值：任何 `名字 30/70` 自动出两根条、`名字 15` 仍单值（面板不认识具体是哪本书，纯通用解析）；旧面板会把 `调 34/12` 静默截成 `34`，带双值的书须面板 v3.15+
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）；长期解法是 `version.json` 加独立 `boot` 字段，让引导版本可独立分发（backlog）
 
 ## 5. 发版 SOP（命令级，照抄即可）

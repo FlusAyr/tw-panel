@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.14.0';
+  const VERSION = '3.15.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -317,17 +317,31 @@
 
   function parseBond(v) {
     const p = seg(v);
-    const o = { name: p[0] || '', love: null, crush: null, train: null, submit: null, lewd: null, lewdMask: null, defLost: null, defTotal: 5, defName: '', stage: null, stageName: '', trace: null };
+    const o = { name: p[0] || '', love: null, crush: null, foeLove: null, train: null, trainYou: null, submit: null, submitYou: null, role: '', roleRaw: '', kink: null, lewd: null, lewdMask: null, defLost: null, defTotal: 5, defName: '', stage: null, stageName: '', trace: null, extra: [] };
+    /* 数值按「形态」收，不按字段名收：`名字 数字` 或 `名字 数字/数字`（前=A 侧，后=B 侧）。
+       面板不认识是哪本世界书 —— 书里多写一个 `xx 30/70` 这里也认，不用改代码。
+       缺的那一侧一律 null，绝不用另一侧顶替：旧卡本来没有这一侧的数据，补一个值等于伪造。 */
+    const num = (t) => { const m = String(t).match(/^\s*(-?\d+)(?:\s*\/\s*(-?\d+))?/); return m ? [+m[1], m[2] == null ? null : +m[2]] : null; };
+    const NUM_FIELDS = [['爱', 'love'], ['恋', 'crush'], ['敌', 'foeLove'], ['调', 'train', 'trainYou'], ['屈', 'submit', 'submitYou']];
     for (const x of p.slice(1)) {
-      let m;
-      if ((m = x.match(/^爱\s*(-?\d+)/))) o.love = +m[1];
-      else if ((m = x.match(/^恋\s*(-?\d+)/))) o.crush = +m[1];
-      else if ((m = x.match(/^调\s*(-?\d+)/))) o.train = +m[1];
-      else if ((m = x.match(/^屈\s*(-?\d+)/))) o.submit = +m[1];
+      let m, r;
+      const hit = NUM_FIELDS.find((f) => x.startsWith(f[0]) && /^\s*-?\d/.test(x.slice(f[0].length)));
+      if (hit) {
+        r = num(x.slice(hit[0].length));
+        if (r) { o[hit[1]] = r[0]; if (hit[2]) o[hit[2]] = r[1]; }
+      }
       else if ((m = x.match(/^防线\s*(\d+)\s*\/\s*(\d+)\s*([^（(]*)/))) { o.defLost = +m[1]; o.defTotal = +m[2]; o.defName = m[3].trim(); }
       else if ((m = x.match(/^期\s*(\d+)\s*(.*)$/))) { o.stage = +m[1]; o.stageName = m[2].trim(); }
       else if ((m = x.match(/^淫\s*(-?\d+)\s*(?:[（(]\s*压\s*(\d+)\s*[)）])?/))) { o.lewd = +m[1]; if (m[2]) o.lewdMask = +m[2]; }
       else if ((m = x.match(/^迹\s*(\d+)/))) o.trace = +m[1];
+      /* 位（受害/被夺/夺取）与 癖（0-100）只能写在 nb 行内。写成独立键行会让 extractBlock 停在该行，
+         吞掉其后全部状态行（表现为面板少栏 + 裸文本漏出），而且不报错 —— 契约硬规则。 */
+      else if ((m = x.match(/^位\s*([\s\S]*)$/))) { o.roleRaw = m[1].trim(); o.role = /^(受害|被夺|夺取)$/.test(o.roleRaw) ? o.roleRaw : '受害'; }
+      else if ((m = x.match(/^癖\s*(\d+)/))) o.kink = Math.max(0, Math.min(100, +m[1]));
+      /* 兜底：任何未知的「名字 数字(/数字)」都收进 extra，按形态渲染 —— 不认识的名字也不丢。 */
+      else if ((m = x.match(/^\s*([^\s：:\/]{1,12})\s*(-?\d+)(?:\s*\/\s*(-?\d+))?\s*$/))) {
+        o.extra.push({ label: m[1], a: +m[2], b: m[3] == null ? null : +m[3] });
+      }
     }
     return o;
   }
@@ -870,12 +884,22 @@
      右侧沦陷度环 =（恋+调+屈+淫)/4；阶段水印大字（裂/蚀/摇/沦/定）；
      防线用锁形进度（🔓/🔒），五维条配色与 bond 卡区分（爱=冷白蓝，其余绯红系）。 */
   const NB_WM = { 1: '裂', 2: '蚀', 3: '摇', 4: '沦', 5: '定' };
+  /* 契约里的五道防线名（顺序即槽位顺序）。世界书给了更多道时，多出来的用编号占位。 */
+  const DEF_NAMES = ['界限', '称谓', '独处', '主动', '归属'];
+
   function renderNtrBond(b) {
     const one = (label, v, cls) => v == null ? '' :
       `<div class="tc-bv"><span>${label}</span><b>${v}</b><div class="tc-bbar"><i class="${cls}" style="width:${Math.max(0, Math.min(100, v))}%"></i></div></div>`;
     const stage = Math.max(1, Math.min(5, b.stage || 1));
-    /* 沦陷度：恋/调/屈/淫 均值（缺失值按 0 计，全部缺失则不显示） */
-    const parts = [b.crush, b.train, b.submit, b.lewd].filter(x => x != null);
+    /* 位=被夺 时第三方那一栏读「敌」，其余位读「恋」；另一个字段整条忽略（不显示、不参与环）。 */
+    const taken = b.role === '被夺';
+    const rival = taken ? b.foeLove : b.crush;
+    /* 按「值有几位」决定画几根条：a 有值画一根，b 也有值再画一根。不看字段名。 */
+    /* 双值 = 同一维度两面：一根条分两层（上=A 实心、下=B 同色降透明），标签只写一次，数值写 34/12（B 降一档）。归属靠位置与透明度表达，不靠「你」这种通用字。 */
+    const pair = (label, a, bc, cls) => a == null ? '' : (bc == null ? one(label, a, cls) :
+      `<div class="tc-bv"><span>${label}</span><b>${a}<i>/</i><em>${bc}</em></b><div class="tc-bbar two"><i class="${cls} a" style="width:${Math.max(0, Math.min(100, a))}%"></i><i class="${cls} b" style="width:${Math.max(0, Math.min(100, bc))}%"></i></div></div>`);
+    /* 沦陷度：恋(敌)/调/屈/淫 均值（缺失值按 0 计，全部缺失则不显示） */
+    const parts = [rival, b.train, b.submit, b.lewd].filter(x => x != null);
     let ring = '';
     if (parts.length) {
       const pct = Math.round(parts.reduce((a, c) => a + c, 0) / parts.length);
@@ -885,20 +909,100 @@
         <circle cx="22" cy="22" r="16" fill="none" stroke="#e11d48" stroke-width="4" stroke-linecap="round"
           stroke-dasharray="${(pct / 100 * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 22 22)"/>
         <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#fda4af">${pct}</text>
-        <text x="22" y="31" text-anchor="middle" font-size="5" fill="rgba(253,164,175,.75)" letter-spacing="1">沦陷</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5.2" font-weight="700" fill="rgba(253,164,175,.95)">↑ 沦陷</text>
+      </svg>`;
+    }
+    /* 回撤环 =（爱 + 调你 + 屈你）/3，只看「对你」这一侧。三个值至少两个非空才画：
+       旧卡这一侧只有一个「爱」，画出来是玩家从没填过的环 —— 不凭空造数据。 */
+    const recParts = [b.love, b.trainYou, b.submitYou].filter(x => x != null);
+    let ring2 = '';
+    if (recParts.length >= 2) {
+      const rpct = Math.round(recParts.reduce((a, c) => a + c, 0) / recParts.length);
+      const C2 = 2 * Math.PI * 16;
+      ring2 = `<svg class="tc-nb-ring recall" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="16" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"/>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"
+          stroke-dasharray="${(rpct / 100 * C2).toFixed(1)} ${C2.toFixed(1)}" transform="rotate(-90 22 22)"/>
+        <text x="22" y="21.5" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="700" fill="#bae6fd">${rpct}</text>
+        <text x="22" y="31" text-anchor="middle" font-size="5.2" font-weight="700" fill="rgba(186,230,253,.95)">↓ 回撤</text>
       </svg>`;
     }
     const locks = b.defLost == null ? '' :
       `<span class="tc-nb-locks">${Array.from({ length: b.defTotal }, (_, i) =>
         i < b.defLost ? '<i class="u">🔓</i>' : '<i>🔒</i>').join('')}</span>`;
-    const stamp = stage === 5 ? '<span class="tc-nb-stamp">定局</span>' : '';
-    return `<div class="tc-nb s${stage}"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
-      <div class="tc-bhead"><b>${esc(b.name)}</b>${b.stage ? `<em>期 ${b.stage} ${esc(b.stageName)}</em>` : ''}${b.lewdMask ? `<span class="tc-mask">淫压 ${b.lewdMask}</span>` : ''}${b.trace != null ? `<span class="tc-trace">迹 ${b.trace}</span>` : ''}</div>
+    const stamp = stage === 5 ? '<span class="tc-nb-stamp">\u5b9a\u5c40</span>' : '';
+    /* ── 按「谁在动」换骨架，不是换徽章 ──
+       受害（A，旧卡默认）：她在被推动 → 主体是她的五维；右侧侵蚀边由 CSS ::after 画（不加 DOM，故旧卡字节不变）。
+       被夺（B）：在动的是你 → 主体换成「你的漂移」三条，她的五维压成一行摘要。
+       夺取（C）：你在拆 → 主体换成防线逐道槽位，五维退成副信息。 */
+    const roleCls = b.role === '\u88ab\u593a' ? ' role-t' : b.role === '\u593a\u53d6' ? ' role-s' : '';
+    const badge = b.roleRaw ? `<span class="tc-mask tc-role r-${b.role === '\u88ab\u593a' ? 't' : b.role === '\u593a\u53d6' ? 's' : 'v'}">位 ${esc(b.roleRaw)}</span>` : '';
+    const head = `<div class="tc-bhead"><b>${esc(b.name)}</b>${b.stage ? `<em>期 ${b.stage} ${esc(b.stageName)}</em>` : ''}${b.lewdMask ? `<span class="tc-mask">淫压 ${b.lewdMask}</span>` : ''}${b.trace != null ? `<span class="tc-trace">迹 ${b.trace}</span>` : ''}${badge}</div>`;
+    const kinkRow = b.kink == null ? '' : `
+      <div class="tc-nb-kink"><span>癖</span><b>${b.kink}</b><em>玩家刻度</em><div class="tc-bbar" style="height:2px;flex:1;grid-column:auto"><i class="n-kink" style="width:${b.kink}%"></i></div></div>`;
+    const defLine = b.defLost != null ? `<div class="tc-nb-def">防线 ${b.defLost}/${b.defTotal}${b.defName ? ' \u00b7 ' + esc(b.defName) : ''}${locks}</div>` : '';
+    /* 她五维压成一行（B/C 副信息用）：只列真有值的 */
+    const miniBits = [];
+    if (b.love != null) miniBits.push('爱 ' + b.love);
+    if (rival != null) miniBits.push((taken ? '敌' : '恋') + ' ' + rival);
+    if (b.train != null) miniBits.push('调 ' + b.train);
+    if (b.submit != null) miniBits.push('屈 ' + b.submit);
+    if (b.lewd != null) miniBits.push('淫 ' + b.lewd);
+    const mini = miniBits.map((t) => `<span>${t}</span>`).join('<i>\u00b7</i>');
+    const extraBits = (b.extra || []).map((e) => pair(e.label, e.a, e.b, 'n-extra')).join('');
+
+    /* 卡 A·受害 / 旧卡：主体 = 她的五维。这一支的字符串与 v3.15.0 逐字节相同。 */
+    if (!roleCls) {
+      return `<div class="tc-nb s${stage}"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
+      ${head}
       <div class="tc-nb-body">
-        <div class="tc-bgrid">${one('爱', b.love, 'n-love')}${one('恋', b.crush, 'n-crush')}${one('调', b.train, 'n-train')}${one('屈', b.submit, 'n-submit')}${one('淫', b.lewd, 'n-lewd')}</div>
-        ${ring}
+        <div class="tc-bgrid">${one('爱', b.love, 'n-love')}${one(taken ? '敌' : '恋', rival, 'n-crush')}${pair('调', b.train, b.trainYou, 'n-train')}${pair('屈', b.submit, b.submitYou, 'n-submit')}${one('淫', b.lewd, 'n-lewd')}${extraBits}</div>
+        ${ring}${ring2}
+      </div>${kinkRow}
+      ${defLine}
+    </div>`;
+    }
+
+    /* 卡 B·被夺：主体 = 你。上半是你自己的漂移，她只剩一行摘要。 */
+    if (b.role === '\u88ab\u593a') {
+      /* 主体是「你」：只放主语真是玩家的值，标签写全中文 —— 三条裸数字等于让人猜「我在往哪边漂」 */
+      const youBits = one('你对她的爱', b.love, 'n-love') + one('你对他的敌意', rival, 'n-you') +
+        (b.kink == null ? '' : one('你的绿帽癖', b.kink, 'n-you'));
+      const empty = b.love == null && rival == null && b.kink == null;
+      /* 她那一侧压成一行：调/屈 仍带双值（A=被他 / B=被你），30、60 这两个数一个都不丢 */
+      const herBits = [];
+      if (b.train != null) herBits.push('调 ' + b.train + (b.trainYou == null ? '' : '/' + b.trainYou));
+      if (b.submit != null) herBits.push('屈 ' + b.submit + (b.submitYou == null ? '' : '/' + b.submitYou));
+      if (b.lewd != null) herBits.push('淫 ' + b.lewd);
+      const herLine = herBits.map((t) => `<span>${t}</span>`).join('<i>\u00b7</i>');
+      return `<div class="tc-nb s${stage} role-t"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
+      ${head}
+      <div class="tc-nb-body">
+        <div class="tc-nb-you">
+          <div class="tc-you-hd"><b>你的漂移</b><em>YOU DRIFT</em></div>
+          <div class="tc-bgrid">${empty ? '<div class="tc-bv tc-you-empty"><span>—</span><b>未提供</b></div>' : youBits}${extraBits}</div>
+        </div>
+        ${ring}${ring2}
       </div>
-      ${b.defLost != null ? `<div class="tc-nb-def">防线 ${b.defLost}/${b.defTotal}${b.defName ? ' · ' + esc(b.defName) : ''}${locks}</div>` : ''}
+      <div class="tc-nb-mini"><b>她</b>${herLine || '<span>\u2014</span>'}</div>
+      ${defLine}
+    </div>`;
+    }
+
+    /* 卡 C·夺取：主体 = 防线逐道。你在拆，关心的是拆到第几道。 */
+    /* 「第N道」是编号不是名字 —— 玩家要知道「她哪道线守住了」。名字做主、状态做次、编号降成角标。 */
+    const defRows = b.defLost == null ? '' : Array.from({ length: b.defTotal }, (_, i) => {
+      const lost = i < b.defLost;
+      const nm = DEF_NAMES[i] || ('第' + (i + 1) + '道');
+      return `<div class="tc-def-row ${lost ? 'lost' : 'hold'}"><i class="tc-def-idx">${i + 1}</i><b>${nm}</b><em>${lost ? '已失守' : '在守'}</em></div>`;
+    }).join('');
+    return `<div class="tc-nb s${stage} role-s"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
+      ${head}
+      <div class="tc-nb-body">
+        <div class="tc-nb-defs">${defRows || '<div class="tc-def-row hold"><b>无防线记录</b><em>不详</em></div>'}</div>
+        ${ring}${ring2}
+      </div>
+      <div class="tc-nb-side"><b>她</b>${mini}</div>${kinkRow}
     </div>`;
   }
 
@@ -1470,7 +1574,7 @@
 @keyframes nbPulse{0%,100%{box-shadow:0 0 8px rgba(225,29,72,.22)}50%{box-shadow:0 0 22px rgba(225,29,72,.55)}}
 .tc-nb-wm{position:absolute;right:6px;top:50%;transform:translateY(-52%);pointer-events:none;
   font-size:58px;font-weight:800;line-height:1;color:rgba(225,29,72,.09);user-select:none}
-.tc-nb-ring{width:52px;height:52px;flex:none;filter:drop-shadow(0 0 5px rgba(225,29,72,.35))}
+.tc-nb-ring{width:58px;height:58px;flex:none;filter:drop-shadow(0 0 5px rgba(225,29,72,.35))}
 .tc-nb-body{position:relative;display:flex;align-items:center;gap:10px}
 .tc-nb-body .tc-bgrid{flex:1;min-width:0}
 .tc-nb-stamp{position:absolute;right:10px;bottom:8px;z-index:1;pointer-events:none;
@@ -1485,6 +1589,76 @@
 .tc-bbar i.n-train{background:linear-gradient(90deg,#4a044e,#e879f9)}
 .tc-bbar i.n-submit{background:linear-gradient(90deg,#450a0a,#f87171)}
 .tc-bbar i.n-lewd{background:linear-gradient(90deg,#7f1d1d,#fda4af)}
+.tc-bbar.two{position:relative;height:7px}
+.tc-bbar.two i{position:absolute;left:0;border-radius:2px}
+.tc-bbar.two i.a{top:0;height:4px}
+/* B 值那条不靠透明度区分（缩略下会整个消失）：同一维度、另一种填法 —— 斜纹 */
+.tc-bbar.two i.b{bottom:0;height:3px;
+  background-image:repeating-linear-gradient(45deg,rgba(8,4,14,.62) 0 2px,transparent 2px 4px)}
+.tc-bv>b i{font-style:normal;font-weight:400;font-size:10px;color:#64748b;margin:0 1px}
+.tc-bv>b em{font-style:normal;font-weight:600;font-size:11px;color:#7dd3fc}
+.tc-bbar i.n-kink{background:linear-gradient(90deg,#78350f,#fbbf24)}
+.tc-bbar i.n-extra{background:linear-gradient(90deg,#1e3a5f,#7dd3fc)}
+.tc-mask.tc-role{font-size:11px;font-weight:700;letter-spacing:.06em;padding:2px 8px;border-radius:6px}
+.tc-mask.tc-role.r-v{background:#0e1c28;border-color:#3f7397;color:#a9c9de}
+.tc-mask.tc-role.r-t{background:#2a1d05;border-color:#b45309;color:#fcd34d}
+.tc-mask.tc-role.r-s{background:#1f1038;border-color:#7c3aed;color:#ddd6fe}
+.tc-nb-ring.recall{filter:drop-shadow(0 0 5px rgba(56,189,248,.35))}
+/* 位=受害 / 旧卡：侵蚀边。CSS 生成、不加 DOM —— 所以旧卡的 render 输出仍然逐字节不变 */
+.tc-nb::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:
+    linear-gradient(270deg,rgba(244,63,94,.34) 0%,rgba(244,63,94,.16) 18%,rgba(244,63,94,.05) 42%,transparent 66%),
+    linear-gradient(270deg,rgba(244,63,94,.55) 0%,transparent 3%);}
+/* 位=被夺：主体是你。琥珀警示色，跟受害的绯红分开 */
+.tc-nb.role-t{border-color:rgba(180,83,9,.5);background:linear-gradient(140deg,rgba(92,54,10,.26),rgba(38,23,6,.14))}
+.tc-nb.role-t::after{background:linear-gradient(180deg,rgba(251,191,36,.2),transparent 58%)}
+.tc-nb.role-t .tc-bhead b{color:#fbbf24}
+.tc-nb.role-t .tc-nb-wm{color:rgba(180,83,9,.13)}
+.tc-nb-you{flex:1;min-width:0}
+/* B 卡的标签是整句中文（你对她的爱…），.tc-bv 默认的 18px 标签列只够一个汉字，会被挤成竖排单字。
+   这一组单独放宽：标签列自适应、不换行，条占满整行。 */
+.tc-nb-you .tc-bgrid{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+.tc-nb-you .tc-bv{grid-template-columns:1fr auto;gap:2px 6px}
+.tc-nb-you .tc-bv>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
+.tc-nb-you .tc-bv>.tc-bbar{grid-column:1 / -1}
+.tc-you-hd{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.tc-you-hd b{font-size:11.5px;letter-spacing:.14em;color:#fcd34d}
+.tc-you-hd em{font-style:normal;font-size:9px;letter-spacing:.22em;color:#8a7340}
+.tc-bbar i.n-you{background:linear-gradient(90deg,#78350f,#fbbf24)}
+.tc-bv.tc-you-empty b{color:#6b7280;font-weight:400;font-size:10.5px}
+.tc-nb-mini{margin-top:7px;padding-top:6px;border-top:1px dashed rgba(251,191,36,.2);
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;color:#93a0b4;letter-spacing:.02em}
+.tc-nb-mini b{color:#a98b3d;font-size:9.5px;letter-spacing:.16em}
+.tc-nb-mini span{opacity:.85}
+.tc-nb-mini i{font-style:normal;color:#4b5563}
+/* 位=夺取：主体是防线逐道。紫色、边框向内收（主动、压迫感） */
+.tc-nb.role-s{border-color:rgba(124,58,237,.55);background:linear-gradient(140deg,rgba(46,26,84,.3),rgba(24,14,46,.16));
+  box-shadow:inset 0 0 26px rgba(124,58,237,.22)}
+.tc-nb.role-s::after{background:radial-gradient(ellipse at 50% 118%,rgba(124,58,237,.24),transparent 62%)}
+.tc-nb.role-s .tc-bhead b{color:#c4b5fd}
+.tc-nb.role-s .tc-nb-wm{color:rgba(124,58,237,.12)}
+.tc-nb-defs{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:4px 8px}  /* 96→76：五道防线排成等宽一行，不出现 3+2 那种「后两块变宽」的主次错觉；第 6 道起才换行，换行后每块仍与第一行同宽 */
+.tc-def-row{position:relative;display:flex;align-items:baseline;gap:6px;border-radius:5px;padding:3px 7px;font-size:11px;
+  border:1px solid transparent;background:rgba(255,255,255,.04)}
+.tc-def-row b{font-weight:700;color:#cbbcf7;font-size:11.5px;letter-spacing:.04em}
+.tc-def-idx{position:absolute;top:2px;right:4px;font-style:normal;font-size:8px;font-weight:700;
+  letter-spacing:0;color:rgba(203,188,247,.42);line-height:1}
+.tc-def-row em{font-style:normal;margin-left:auto;font-size:10.5px;font-weight:700}
+.tc-def-row.lost{border-color:rgba(244,63,94,.45);background:rgba(244,63,94,.12)}
+.tc-def-row.lost em{color:#fb7185}
+.tc-def-row.hold{border-color:rgba(124,58,237,.35);background:rgba(124,58,237,.1)}
+.tc-def-row.hold em{color:#a78bfa}
+.tc-nb-side{margin-top:7px;padding-top:6px;border-top:1px dashed rgba(124,58,237,.22);
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;color:#93a0b4;letter-spacing:.02em}
+.tc-nb-side b{color:#8b7bc0;font-size:9.5px;letter-spacing:.16em}
+.tc-nb-side span{opacity:.85}
+.tc-nb-side i{font-style:normal;color:#4b5563}
+
+
+.tc-nb-kink{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:7px;border-top:1px dashed rgba(251,191,36,.22);font-size:11px;color:#9a8a63;letter-spacing:.04em}
+.tc-nb-kink span{color:#fbbf24;font-weight:700;letter-spacing:.16em}
+.tc-nb-kink b{color:#fcd34d;font-size:13px;font-weight:700;min-width:24px;text-align:right}
+.tc-nb-kink em{font-style:normal;font-size:10px;color:#6b5f45;letter-spacing:.1em}
 .tc-nb-def{margin-top:7px;font-size:11px;color:#fca5a5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tc-nb-locks{display:inline-flex;gap:2px;font-size:11px;filter:saturate(.85)}
 .tc-nb-locks i{font-style:normal;opacity:.62}
