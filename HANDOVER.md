@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.13.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.14.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,13 +64,13 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.13.0**（tag 已推） | 渲染器唯一源文件，1658 行 |
+| `panel.js` | **v3.14.0**（tag 未推） | 渲染器唯一源文件，≈1.7k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版** | 三个版本演进见 §7.3 |
 | 无限恐怖 v2 / 跑团用 v4 | 不变 | content/worldbook/ |
 
-**v3.8.0 → v3.13.0 的增量能力**（AGENTS.md 写作时还没有的）：
+**v3.8.0 → v3.14.0 的增量能力**（AGENTS.md 写作时还没有的）：
 
 - **v3.9.1** NPC 渲染：NPC ≠ 敌人（敌人是 mob），左栏 CONTACTS 紫金情报卡，键制/位置制双口径解析
 - **v3.10.0** NTR 夺走体系五字段 `nb/nf/nh/nd/nl` + 绯红主题（沦陷环/阶段水印/定局印章/双面镜心声/雾化暗流事件轴）
@@ -79,6 +79,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.12.0** 尺寸切换：面板右上角 －/＋ 按钮切紧凑/完整，`localStorage['tw-card:size']` 全局持久
 - **boot v2.1**：玩家包一行 `import` 钉不可变 tag 的 boot（`@vX.Y.Z/boot.mjs`，不走 `@main`）；fetch 快速通道并行探测全镜像 version.json 取最大版本，失败即降级 `import()` 兜底；带设置面板（显示 `BOOT_VERSION` 可自检，开关存 `tw-card:opts`，支持立即检查/强制重拉/清缓存）
 - **v3.13.0** 引导升级配套：面板无功能变更，仅为让 `dist/loader-script.json` 指向钉 tag 的新 boot 而 bump
+- **v3.14.0** 拓展键前缀：`kbnpc[<N>]`/`ntrnpc[<N>]` 独立前缀并登记进 `KEYS`（缺登记会截断其后状态行）；删除 `.github/workflows/` 恒红叉模板，不再新建 CI
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）；长期解法是 `version.json` 加独立 `boot` 字段，让引导版本可独立分发（backlog）
 
 ## 5. 发版 SOP（命令级，照抄即可）
@@ -148,7 +149,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 
 ## 8. 已知问题与未了事项
 
-1. **CI 恒红叉**：远端 `python-package.yml` 是网页误建的模板，因令牌无 workflow 权限删不掉。**管理层决定不管**。备选流水线在 `ci/tests.yml.example`（启用需 workflow scope）。
+1. **CI**：仓库无 CI workflow（`.github/workflows/` 已删除）。改动靠本地 `node tests/run_all.js` 六组全绿把关；备选配置在 `ci/tests.yml.example`，启用前须先确认能绿。
 2. **旧版引导用户**（v1.0 loader 三件套时代的）：需手动重导一次导入包才获得 boot v2.1 双通道，否则在 CSP 拦截环境下面板可能永不更新。发布渠道上要把这句带到。
 3. **`@main` 可变别名 + 多镜像缓存不同步**：曾出现 `@main/version.json` 报 3.10.1 而 `@main/panel.js` 已是 3.12.0 的自相矛盾；玩家导入行走的是 gcore，新玩家可能拿到无「面板设置」的旧 boot。处置：引导与面板拉取一律钉不可变 tag `@vX.Y.Z`，唯一例外：设置面板「强制重拉最新」按钮走 `@main`；急发版走 tag。
 4. **`work/panel_content.js`**：仓库外工作副本（`C:\Users\Administrator\WorkBuddy\2026-10-31-05-01-50\work\`），发版时同步一份，防仓库目录意外损毁。

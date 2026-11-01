@@ -1,6 +1,6 @@
 {
-  "version": "3.13.0",
+  "version": "3.14.0",
   "file": "panel.js",
-  "notes": "NTR 夺走体系 + next 修复；引导 v2.1：导入行钉 tag、探测源拆显式数组、设置面板显示引导版本",
+  "notes": "拓展键前缀（kbnpc / ntrnpc 独立登记与主题）+ 版本一致性回归；引导 v2.1 不变",
   "updated": "2026-11-01"
 }

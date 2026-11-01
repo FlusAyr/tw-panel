@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.13.0';
+  const VERSION = '3.14.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,8 +49,17 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
+  /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
+     （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
+     （实测 'kbnpc2'.slice(3) = 'pc2' → NaN）。漏主题 class 则与基础 NPC 同色，需求静默未实现。 */
+  const EXT_KEYS = [
+    { key: 'kbnpc', base: 'npc', field: 'kbnpcs', render: renderNpc, theme: 'tc-kb' },
+    { key: 'ntrnpc', base: 'npc', field: 'ntrnpcs', render: renderNpc, theme: 'tc-ntr' },
+  ];
+  /* 拓展键分发：只认「登记过的键前缀 + 纯数字后缀」；编号 = 键前缀长度之后的部分，无后缀即 1 */
+  const extHit = (k) => { const e = EXT_KEYS.find(x => k.startsWith(x.key) && (k.length === x.key.length || /^[0-9]+$/.test(k.slice(x.key.length)))); return e ? { e: e, num: k.length === e.key.length ? 1 : +k.slice(e.key.length) } : null; };
 
   /* 无键名 mob 裸文本识别（「变异体甲 精英 80/80」式——AI 抄面板/联机同步丢格式时兜底） */
   const MOB_GRADE_SRC = 'BOSS[^\\s|｜]*|Boss[^\\s|｜]*|头目|首领|精英|小兵|杂兵';
@@ -555,7 +564,7 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -563,6 +572,7 @@
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
     const mmap = new Map();
+    const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
     const rec = recoverMobLines(String(text).split(/\r?\n/));
 
@@ -590,6 +600,7 @@
       else if (/^nd\d*$/.test(k)) ndmap.set(k === 'nd' ? 1 : +k.slice(2), parseNtrFalls(v));
       else if (/^nl\d*$/.test(k)) nlmap.set(k === 'nl' ? 1 : +k.slice(2), parseNtrLog(v));
       else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
+      else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
       else if (/^ti\d+$/.test(k)) tim.set(+k.slice(2), parseTi(v));
@@ -620,6 +631,7 @@
     st.ntrFalls = [...ndmap.keys()].sort((a, b) => a - b).map(k => ndmap.get(k));
     st.ntrLogs = [...nlmap.keys()].sort((a, b) => a - b).map(k => nlmap.get(k));
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
+    EXT_KEYS.forEach(e => { st[e.field] = [...xmap[e.field].keys()].sort((a, b) => a - b).map(i => xmap[e.field].get(i)); });
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -988,6 +1000,10 @@
       colL.push(sect('在场人物', 'CONTACTS'));
       colL.push(`<div class="tc-npcs">${st.npcs.map(renderNpc).join('')}</div>`);
     }
+    for (const e of EXT_KEYS) if (st[e.field].length) {
+      colL.push(sect('在场人物 · ' + e.key.toUpperCase(), 'CONTACTS'));
+      colL.push(`<div class="tc-npcs ${e.theme}">${st[e.field].map(e.render).join('')}</div>`);
+    }
     if (st.mobs.length) {
       colR.push(sect('敌方威胁', 'THREAT'));
       colR.push(`<div class="tc-mobs">${st.mobs.map(renderMob).join('')}</div>`);
@@ -1300,6 +1316,10 @@
 .tc-npc::after{content:'◈';position:absolute;right:9px;top:6px;font-size:11px;color:#a78bfa;opacity:.4;pointer-events:none}
 .tc-npc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
   background:linear-gradient(90deg,#a78bfa 0%,rgba(167,139,250,.2) 50%,transparent 85%);opacity:.55}
+.tc-npcs.tc-kb .tc-npc{border-color:#1e3a5f;border-left-color:#38bdf8}
+.tc-npcs.tc-kb .tc-npc::before{background:linear-gradient(90deg,#38bdf8,rgba(56,189,248,.2) 50%,transparent 85%)}
+.tc-npcs.tc-ntr .tc-npc{border-color:#4a1d2c;border-left-color:#f43f5e}
+.tc-npcs.tc-ntr .tc-npc::before{background:linear-gradient(90deg,#f43f5e,rgba(244,63,94,.2) 50%,transparent 85%)}
 .tc-npc-hd{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .tc-npc-name{font-weight:700;font-size:13.5px;color:#e4dbf7;letter-spacing:.5px}
 .tc-npc-role{font-size:10px;padding:1px 7px;border-radius:4px;background:#2b2144;color:#c4b5fd;
@@ -1653,6 +1673,7 @@
     if (chat) new MutationObserver(() => setTimeout(sweep, 60)).observe(chat, { childList: true, subtree: true });
   } catch (e) { /* 忽略 */ }
 
-  window.__twCard = { version: VERSION, parseState, render, sweep };
+  /* 仅供测试，非公开 API，可随实现变动 */
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();

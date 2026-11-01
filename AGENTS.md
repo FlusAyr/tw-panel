@@ -2,7 +2,7 @@
 
 > 你正在接手一个已上线的 SillyTavern（酒馆）跑团系统：**「主神空间」**。
 > 本文件是操作手册，读完即可独立维护，不需要原始对话记录。
-> 最后更新：2026-11-01　｜　面板 v3.13.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.14.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -23,14 +23,14 @@
 
 ```
 tw-panel/
-├── panel.js                ★ 唯一源文件：状态块 → HUD 卡片渲染器（1658 行）
+├── panel.js                ★ 唯一源文件：状态块 → HUD 卡片渲染器（≈1.7k 行）
 ├── boot.mjs                自动更新引导（玩家只导入这一支）
 ├── build.py                打包：读 panel.js 的 VERSION → 写 version.json + dist/
 ├── deploy.py               一键部署脚本：装 ST + 扩展 + 放世界书 + 备好导入包（给外部用户/agent 用）
 ├── AGENT_DEPLOY.md         给外部 AI 助手的部署执行手册（从装 SillyTavern 开始）
 ├── version.json            版本清单，boot 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
-├── tests/  run_all.js 聚合（loader11/npc14/next_sweep4/boot56，node，无依赖）
+├── tests/  run_all.js 聚合（loader11/npc14/next_sweep4/boot56/keys20/version28，node，无依赖）
 ├── ci/release.yml.example  可选自动 Release（启用需 token 带 workflow 权限）
 ├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
@@ -104,10 +104,12 @@ cr<数字> p<数字> sk<数字> eq<数字>  ← 自定义资源 / 玩家 / 技�
 5. `pts` 允许省略空档位；无称号不写 `ti` 行。
 6. **v3.10.0 NTR 夺走体系（附属扩展册字段）**：`nb`（伴侣，字段同 bond）／`nf`（加害者，兼容 foe 位置制，支持 `身份`/`次用手段` 扩展键）／`nh`（心声：`对你`/`对他`/`心`/`白`）／`nd`（防线档案：`防线名 失守|回填|在守 日期 经过`）／`nl`（暗流事件：`日期 | 标题 | 经过 | 她 | 你 知情|不知情`）。与无限恐怖共用基础状态块，仅关系层换字段；无编号同键行后者覆盖前者，多实例必须编号（nb2/nf3…）。渲染为绯红「沦陷」主题（沦陷环/阶段水印/定局印章/双面镜心声/雾化暗流），与紫金 NPC、蓝 bond、红 foe 完全区分。规则文本见 NTR 卡条目 3，可视化预览页 `tests/preview-ntr.html`。
 
-7. **拓展键纪律**：拓展世界书的自有键必须独占前缀，不得借用基础键；新键须登记到下表并同时加专属渲染分支，未登记的键视为基础键的私有编号，不得复用。多套拓展共享同一角色时，资源段合并进同一个 `cr` 行（段间 ` ｜ `），不新增键、不改渲染。
+7. **拓展键纪律**：拓展世界书的自有键必须独占前缀，不得借用基础键——同类定位用「前缀+基础键名」（如 `npc` → `kbnpc`/`ntrnpc`）；新键须登记到下表、加专属渲染分支，并同时登记进 `panel.js` 的 `KEYS`（未登记则整行不解析，并截断其后所有状态行——`extractBlock` 遇非状态行即停），未登记的键视为基础键的私有编号，不得复用。多套拓展共享同一角色时，资源段合并进同一个 `cr` 行（段间 ` ｜ `），不新增键、不改渲染。既有键不追溯。
 
 | 键 | 出处拓展 | 渲染 |
 |---|---|---|
+| `kbnpc[<N>]` | 无限恐怖 | NPC 卡片 + `tc-kb` 主题 |
+| `ntrnpc[<N>]` | NTR 伴侣夺走 | NPC 卡片 + `tc-ntr` 主题 |
 | `nb` `nf` `nh` `nd` `nl` | NTR 伴侣夺走 v3 | 绯红沦陷主题 |
 | `cr<N>` + `p<N>` | 基础机制；**现由「超高校级幸运」与「魔药体系」共用**（两套均为血统，同角色可并存） | 青色胶囊 |
 | `sk` `eq` `lock` `ti` `mob` `bond` `foe` `npc` | 基础机制 | 基础卡片 |
@@ -145,7 +147,7 @@ cr<数字> p<数字> sk<数字> eq<数字>  ← 自定义资源 / 玩家 / 技�
 # 2. 顶部的 VERSION 加一位：'3.8' → '3.9'
 python build.py                  # 写 version.json + dist/panel-script-v3.9.json
 node --check panel.js            # 语法
-node tests/run_all.js   # 四套回归（见 §6）
+node tests/run_all.js   # 六套回归（见 §6）
 git add -A && git commit -m "v3.9 描述"
 git tag v3.9.0 && git push && git push --tags
 ```
@@ -211,7 +213,7 @@ boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新�
 | 检查 | 命令 / 方法 | 通过标准 |
 |---|---|---|
 | 面板语法 | `node --check panel.js` | 无输出 |
-| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 56，任一失败即非零退出 |
+| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 56 / keys 20 / version 28，任一失败即非零退出 |
 | 面板渲染 | `node gen_preview.js`（在 `F:\酒馆卡\07_脚本`） | 生成 preview_*.html 无报错 |
 | 状态块解析 | `F:\酒馆卡\07_脚本\test_*.js` | 各断言全过 |
 | 线上可用 | curl 上节两个地址 | HTTP 200，`panel.js` ≥ 60KB |
@@ -239,7 +241,7 @@ boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新�
 
 - [ ] 读完本文件 + `content/docs/酒馆状态面板系统_维护手册.md`
 - [ ] 能说清 `cr<N>` 与 `p<N>` 的配对关系，以及为什么资源不能写进 p 行
-- [ ] 跑通四套回归测试（见 §6）
+- [ ] 跑通六套回归测试（见 §6）
 - [ ] curl 两个线上地址都是 200，且 raw 带 CORS 头
 - [ ] 知道纪要表为什么不能动，以及属性快照写在哪里
 - [ ] 知道发版必须打新 tag、必须 `python build.py`

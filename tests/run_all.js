@@ -33,6 +33,8 @@ const FILES = [
   'loader.test.js',
   'next_sweep.test.js',
   'boot.test.js',
+  'keys.test.js',
+  'version.test.js',
 ];
 
 function main() {

@@ -19,7 +19,7 @@ DIST = ROOT / "dist"
 LOADER_ID = "8f3c1d92-6b47-4a10-9c55-1d2e7f8a0b31"   # 引导脚本固定 id，勿改
 PANEL_ID = "1604cbb8-ce4d-4974-8efb-1b6d186e37fb"    # 与 v3.8 手动版同 id
 
-NOTES = ("NTR 夺走体系 + next 修复；引导 v2.1：导入行钉 tag、探测源拆显式数组、设置面板显示引导版本")
+NOTES = ("拓展键前缀（kbnpc / ntrnpc 独立登记与主题）+ 版本一致性回归；引导 v2.1 不变")
 
 # 玩家导入的那一行 import —— 全仓唯一出处，改托管/CDN 只动这个字面量。
 # 两个 %s 依次是 REPO_SLUG（用户名/仓库名）与 semver（= tag 去掉 v）。
