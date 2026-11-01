@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.17.0';
+  const VERSION = '3.18.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -112,21 +112,35 @@
 
   function parseMecha(v) {
     const p = seg(v);
-    const o = { name: '', type: '', typeRaw: '', hp: null, en: null, sp: null, attrs: [], equip: [] };
+    const o = { name: '', type: '', typeRaw: '', hp: null, en: null, sp: null, attrs: [], equip: [], extra: [], tags: [] };
     let inEquip = false;
+    let inTag = false;
     for (let i = 0; i < p.length; i++) {
       const x = p[i].trim();
       if (!x) continue;
       if (!o.name && i === 0) { o.name = x; continue; }
 
       let m;
-      if ((m = x.match(/^型[:：]?\s*(.+)$/))) { o.typeRaw = m[1].trim(); o.type = MECHA_TYPES[o.typeRaw] || ''; inEquip = false; continue; }
-      if ((m = x.match(/^HP\s*(.+)$/i))) { o.hp = mechaPair('HP', m[1]); inEquip = false; continue; }
-      if ((m = x.match(/^能\s*(.+)$/))) { o.en = mechaPair('能', m[1]); inEquip = false; continue; }
-      if ((m = x.match(/^SP\s*(.+)$/i))) { o.sp = mechaPair('SP', m[1]); inEquip = false; continue; }
-      if ((m = x.match(/^装[:：]?\s*(.*)$/))) { inEquip = true; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
-      if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inEquip = false; continue; }
-      if (inEquip) o.equip.push(x);
+      if ((m = x.match(/^型(?:\s*[:：]\s*|\s+|$)(.+)$/))) { inTag = false; o.typeRaw = m[1].trim(); o.type = MECHA_TYPES[o.typeRaw] || ''; inEquip = false; continue; }
+      if ((m = x.match(/^HP\s*(.+)$/i))) { inTag = false; o.hp = mechaPair('HP', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^能(?:\s*[:：]\s*|\s+|$)(.+)$/))) { inTag = false; o.en = mechaPair('能', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^SP\s*(.+)$/i))) { inTag = false; o.sp = mechaPair('SP', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^装(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inEquip = true; inTag = false; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
+      if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inEquip = false; inTag = false; continue; }
+      if ((m = x.match(/^自(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inTag = true; inEquip = false; if (m[1].trim()) o.tags.push(m[1].trim()); continue; }
+
+      /* 自定数值：不认识 `名字 数字` / `名字 数字/数字` 就当拓展字段收下，不丢。
+         与 nb 的 o.extra 同一套规矩（同一件事不写第二遍）—— 唯一区别：这里单值也画条，
+         按 100 制估，因为机甲的自定刻度（核熔炉 / 装甲 / 散热）没有"上限"这个概念。 */
+      if ((m = x.match(/^([^\s：:\/]{1,12})\s*(-?\d+)(?:\s*\/\s*(-?\d+))?$/))) {
+        o.extra.push({ label: m[1], a: +m[2], b: m[3] == null ? null : +m[3] });
+        inEquip = false; inTag = false; continue;
+      }
+
+      if (inEquip) { o.equip.push(x); continue; }
+      /* 文本型自定：`自` 段之后的裸词，或任何进不了数值的形状（含 `90/100/次` 这种坏格）。
+         原文照收、只当标签，不猜数值 —— 猜错会画出一根看起来正常的条。 */
+      o.tags.push(x);
     }
     return o;
   }
@@ -716,45 +730,64 @@
 
   /* 机甲卡：跟在同号 p 卡后面；无对应 p 时单独成卡。
      HP 归零 → dead 类 + 「已失效」（规则上此刻该弹出驾驶者）。 */
-  function renderMecha(m) {
+  function renderMecha(m, paired) {
     const dead = !!(m.hp && m.hp.max > 0 && m.hp.cur <= 0);
     const cls = ['tc-kbm'];
     if (m.type) cls.push('t-' + m.type);
     if (dead) cls.push('dead');
+    /* paired = 存在同号 p<N>。只有 paired 才画「谁在谁里面」的那条竖线与驾驶中带子：
+       没主就没有归属关系，画了就是假信息。 */
+    if (paired) cls.push('paired');
 
-    const hp = m.hp ? `
-      <div class="tc-kbm-hp">
-        <span>HP <b>${m.hp.cur}</b>${m.hp.max == null ? '' : '/' + m.hp.max}</span>
-        ${dead ? '<em>已失效</em>' : ''}
-      </div>
-      ${bar(m.hp.cur, m.hp.max, dead ? 'kbm-dead' : 'kbm')}` : '';
-
-    /* 能 / SP：并排细条。能归零＝没电（灰，不是红，别和"被打烂"混）；
-       SP 归零＝耗尽（沿用玩家 SP 的橙调）；两者与 p 行的 SP 各算各的，互不扣。 */
-    const il = (lab, v, cls) => {
-      if (!v) return '';
-      const dry = v.max > 0 && v.cur <= 0;
-      return `<div class="tc-kbm-il${dry ? ' dry' : ''}">
-        <span>${lab}</span><b>${v.cur}</b><em>${v.max == null ? '' : '/' + v.max}</em>
-        ${bar(v.cur, v.max, dry ? cls + '-dry' : cls)}
+    /* 一根读数：标签列等宽 + 等宽数字（三位对齐）+ 条内分段刻度。
+       三根主读数走同一个函数、同一列宽，所以它们**必然等宽**——不是对齐调出来的。 */
+    const num = (v) => String(v == null ? '—' : v).padStart(3, '\u2007');
+    const gauge = (lab, cur, max, cls, dry, extraCls) => {
+      const pct = max == null ? Math.max(0, Math.min(100, cur)) : Math.max(0, Math.min(100, Math.round(cur / max * 100)));
+      return `<div class="tc-kbm-g ${cls}${dry ? ' dry' : ''}${extraCls || ''}">
+        <span class="tc-kbm-gl">${lab}</span>
+        <b class="tc-kbm-gv">${num(cur)}</b>
+        <em class="tc-kbm-gm">${max == null ? '' : '/' + max}</em>
+        <div class="tc-bar ticks"><i class="${dry ? cls + '-dry' : cls}" style="width:${pct}%"></i></div>
       </div>`;
     };
-    const sub = (m.en || m.sp) ? `
-      <div class="tc-kbm-sub">${il('能', m.en, 'kbm-en')}${il('SP', m.sp, 'kbm-sp')}</div>` : '';
+
+    const dryOf = (v) => !!(v && v.max > 0 && v.cur <= 0);
+    const gauges = (m.hp || m.en || m.sp) ? `
+      <div class="tc-kbm-gauges">
+        ${m.hp ? gauge('HP', m.hp.cur, m.hp.max, 'kbm', false) : ''}
+        ${m.en ? gauge('能', m.en.cur, m.en.max, 'kbm-en', dryOf(m.en)) : ''}
+        ${m.sp ? gauge('SP', m.sp.cur, m.sp.max, 'kbm-sp', dryOf(m.sp)) : ''}
+      </div>` : '';
+
+    /* 自定数值：与五维条同形（条），但配色走中性青，跟固定字段区分开 */
+    const cus = (m.extra || []).length ? `
+      <div class="tc-kbm-cus">${(m.extra || []).map(e => gauge(esc(e.label), e.a, e.b, 'kbm-x', false, ' x')).join('')}</div>` : '';
+
+    /* 自定文本：只有标签，**没有条也没有数值格**——两者混在一起会让人以为"破甲"也有数字 */
+    const tags = (m.tags || []).length ? `
+      <div class="tc-kbm-tags">${(m.tags || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
 
     const attrs = m.attrs.length ? `
       <div class="tc-kbm-attrs">${m.attrs.map(a => `<span><i>${esc(a.k)}</i><b>${a.v}</b></span>`).join('')}</div>` : '';
 
+    /* 装备：方角内凹插槽，和伴侣卡的圆 pill 区分 */
     const equip = m.equip.length ? `
-      <div class="tc-kbm-eq">${m.equip.map(e => `<span>${esc(e)}</span>`).join('')}</div>` : '';
+      <div class="tc-kbm-eq">${m.equip.map(e => `<span class="slot">${esc(e)}</span>`).join('')}</div>` : '';
 
+    /* 外层 .tc-kbm 不裁切（挂竖线 ::before 用），切角与描边都在 .tc-kbm-in 上：
+       clip-path 会连子元素一起裁，竖线要伸到卡片外面就必须长在未被裁的那一层。 */
     return `
       <div class="${cls.join(' ')}">
-        <div class="tc-kbm-hd">
-          <b>${esc(m.name || '机体')}</b>
-          ${m.typeRaw ? `<span class="tc-kbm-type">${esc(m.typeRaw)}</span>` : ''}
+        <div class="tc-kbm-in">
+          <div class="tc-kbm-hd">
+            ${paired ? '<i class="tc-kbm-drive">◤ 驾驶中</i>' : ''}
+            <b>${esc(m.name || '机体')}</b>
+            ${m.typeRaw ? `<span class="tc-kbm-type ty-${m.type || 'x'}">${esc(m.typeRaw)}</span>` : ''}
+          </div>
+          ${gauges}${attrs}${cus}${tags}${equip}
+          ${dead ? '<em class="tc-kbm-stamp">已失效</em>' : ''}
         </div>
-        ${hp}${sub}${attrs}${equip}
       </div>`;
   }
 
@@ -1162,10 +1195,10 @@
       const kUsed = new Set();
       const cards = st.players.map(p => {
         const m = kmBy.get(p.idx);
-        if (m) { kUsed.add(m.idx); return renderPlayer(p) + renderMecha(m); }
+        if (m) { kUsed.add(m.idx); return renderPlayer(p) + renderMecha(m, true); }
         return renderPlayer(p);
       });
-      st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m)); });
+      st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m, false)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
     }
     if (st.bonds.length) {
@@ -1755,25 +1788,71 @@
 .tc-nb-kink span{color:#fbbf24;font-weight:700;letter-spacing:.16em}
 .tc-nb-kink b{color:#fcd34d;font-size:13px;font-weight:700;min-width:24px;text-align:right}
 .tc-nb-kink em{font-style:normal;font-size:10px;color:#6b5f45;letter-spacing:.1em}
-/* ── 机甲（kbm）：独立血/装/属性 ── */
-.tc-kbm{margin-top:6px;border:1px solid #26424f;border-left:3px solid #22d3ee;border-radius:8px;background:rgba(8,24,32,.55);padding:8px 10px}
-.tc-kbm.t-heavy{border-left-color:#f59e0b}
-.tc-kbm.t-full{border-left-color:#a78bfa}
-.tc-kbm-hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.tc-kbm-hd b{font-size:13px;color:#a5f3fc;letter-spacing:.04em}
-.tc-kbm-type{font-size:10px;font-weight:700;color:#67e8f9;border:1px solid #155e75;border-radius:5px;padding:1px 5px}
-.tc-kbm.t-heavy .tc-kbm-type{color:#fcd34d;border-color:#92400e}
-.tc-kbm.t-full .tc-kbm-type{color:#ddd6fe;border-color:#5b21b6}
-.tc-kbm-hp{display:flex;align-items:baseline;gap:8px;font-size:11px;color:#7c9aa8}
-.tc-kbm-hp b{font-size:13px;color:#a5f3fc}
-.tc-kbm-hp em{font-style:normal;font-size:10px;font-weight:700;color:#fca5a5}
-.tc-kbm-attrs{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:11px}
-.tc-kbm-attrs i{font-style:normal;color:#6b8b99;margin-right:3px}
-.tc-kbm-attrs b{color:#c7e6ef;font-weight:700}
-.tc-kbm-eq{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-.tc-kbm-eq span{font-size:10px;color:#99c9d6;background:rgba(34,211,238,.09);border:1px solid rgba(34,211,238,.24);border-radius:4px;padding:1px 6px}
-.tc-kbm.dead{border-color:#3f1d1d;border-left-color:#7f1d1d;background:rgba(24,8,8,.6)}
-.tc-kbm.dead .tc-kbm-hd b,.tc-kbm.dead .tc-kbm-hp b{color:#b98a8a}
+/* ── 机甲卡（kbm）：切角外框 + 等宽读数 + 插槽，刻意与玩家卡/伴侣卡不同骨架 ── */
+.tc-kbm{position:relative;margin-top:6px}
+.tc-kbm-in{position:relative;padding:9px 12px 10px;background:#0a1218;border-radius:0;
+  border:1px solid #26424f;border-left:3px solid #22d3ee;
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.tc-kbm-in::before{content:'';position:absolute;left:4px;top:4px;width:9px;height:9px;
+  border:1px solid #22d3ee;border-right:0;border-bottom:0;opacity:.55}
+.tc-kbm::after{content:'';position:absolute;right:5px;bottom:5px;width:9px;height:9px;
+  border:1px solid #22d3ee;border-left:0;border-top:0;opacity:.55}
+.tc-kbm.t-heavy .tc-kbm-in{border-color:#4a3410;border-left-color:#f59e0b}
+.tc-kbm.t-heavy .tc-kbm-in::before,.tc-kbm.t-heavy::after{border-color:#f59e0b}
+.tc-kbm.t-full .tc-kbm-in{border-color:#2e2450;border-left-color:#a78bfa}
+.tc-kbm.t-full .tc-kbm-in::before,.tc-kbm.t-full::after{border-color:#a78bfa}
+/* 归属竖线：驾驶中带子的 ::before 长在外层（未被 clip-path 裁），从卡片顶向上 7px 与玩家卡左缘接上。
+   左侧 0 对齐的就是玩家卡 .tc-card 的 border-left:3px，所以两卡看起来是同一根线。 */
+.tc-kbm.paired::before{content:'';position:absolute;left:-1px;top:-12px;width:5px;height:18px;
+  background:linear-gradient(180deg,#22d3ee 0 9px,var(--tie,#22d3ee) 9px 100%)}
+.tc-kbm.t-heavy{--tie:#f59e0b}
+.tc-kbm.t-full{--tie:#a78bfa}
+.tc-kbm-hd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.tc-kbm-hd>b{font-size:13.5px;color:#a5f3fc;letter-spacing:.04em}
+.tc-kbm-drive{font-style:normal;font-size:9.5px;letter-spacing:.14em;color:#5f8fa0;
+  border-bottom:1px solid rgba(34,211,238,.28);padding-bottom:1px}
+.tc-kbm-type{margin-left:6px;font-size:12px;font-weight:700;letter-spacing:.1em;padding:4px 10px;color:#a5f3fc}
+.tc-kbm-type.ty-human{border:1px solid #22d3ee;border-radius:5px}
+.tc-kbm-type.ty-heavy{border:2px double #f59e0b;color:#fcd34d;padding:4px 12px;
+  clip-path:polygon(13% 0,100% 0,87% 100%,0 100%)}
+.tc-kbm-type.ty-full{border:2px solid #a78bfa;color:#ddd6fe;background:rgba(124,58,237,.16);
+  padding:4px 14px;clip-path:polygon(20% 0,80% 0,100% 50%,80% 100%,20% 100%,0 50%)}
+.tc-kbm-gauges,.tc-kbm-cus{display:flex;flex-direction:column;gap:3px}
+.tc-kbm-g{display:grid;grid-template-columns:42px 34px 1fr;align-items:center;gap:0 6px}
+.tc-kbm-gl{font-size:10px;color:#5f7b8a;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-kbm-gv{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;
+  font-size:12px;color:#c8f1fb;text-align:right;white-space:pre}
+.tc-kbm-gm{font-family:ui-monospace,Consolas,monospace;font-size:9.5px;color:#47606d}
+.tc-kbm-g .tc-bar{grid-column:1 / -1;height:5px;background:#0f1e26}
+.tc-kbm-g .tc-bar{position:relative;overflow:hidden}
+/* 刻度画在填充之上：放在 .tc-bar 自己的背景里会被 <i> 的填充色盖掉（只剩未填充那一截有格线） */
+.tc-kbm-g .tc-bar.ticks::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(90deg,
+    transparent 0 calc(10% - 1px),rgba(6,12,16,.62) calc(10% - 1px) 10%)}
+.tc-kbm-g.dry .tc-kbm-gv,.tc-kbm-g.dry .tc-kbm-gm{color:#6b7280}
+.tc-kbm-attrs{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:7px}
+.tc-kbm-attrs span{font-size:10.5px;color:#7c98a8}
+.tc-kbm-attrs i{font-style:normal;color:#4f6b7a;margin-right:2px}
+.tc-kbm-attrs b{font-family:ui-monospace,Consolas,monospace;color:#b8dbe8;font-weight:600}
+.tc-kbm-cus{margin-top:7px;padding-top:6px;border-top:1px dashed rgba(34,211,238,.14)}
+.tc-kbm-g.x .tc-kbm-gl{color:#67a3b8}
+.tc-kbm-g.x .tc-kbm-gv{color:#9fd8e8}
+.tc-bar i.kbm-x{background:linear-gradient(90deg,#0e7490,#67e8f9)}
+.tc-kbm-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.tc-kbm-tags span{font-size:10px;padding:1px 7px;color:#8fb6c4;
+  border:1px dashed rgba(34,211,238,.3);border-radius:2px;background:rgba(34,211,238,.05)}
+.tc-kbm-eq{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.tc-kbm-eq .slot{font-size:10.5px;padding:2px 9px;color:#b6cfda;background:#0b1720;
+  border:1px solid #2b4a58;border-radius:1px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 1px 0 rgba(120,200,220,.12)}
+.tc-kbm.dead{filter:saturate(.32)}
+.tc-kbm.dead .tc-kbm-hd>b{color:#94a3b8}
+.tc-kbm.dead .tc-kbm-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.34) 0 7px,rgba(10,18,24,0) 7px 14px)}
+/* 整卡 filter:saturate(.32) 会把盖章一起削灰，这里反向补回来——失效是重点，不能糊 */
+.tc-kbm-stamp{position:absolute;right:10px;bottom:8px;transform:rotate(-8deg);filter:saturate(2.6) brightness(1.25);
+  font-size:11px;font-weight:800;letter-spacing:.18em;color:#fecdd3;
+  border:2px solid #e11d48;border-radius:3px;padding:1px 8px;background:rgba(76,5,25,.55)}
+/* v3.17 的旧 .tc-kbm 定义已并入上面的 v3.18 骨架：重复声明会把切角、徽章字号与失效斜纹覆盖回去，
+   这里只保留不会被新规则覆盖的条色。 */
 .tc-bar i.kbm-dead{background:linear-gradient(90deg,#7f1d1d,#b91c1c)}
 .tc-bar i.kbm{background:linear-gradient(90deg,#b91c1c,#f43f5e)}
 .tc-bar i.kbm-en{background:linear-gradient(90deg,#0369a1,#38bdf8)}

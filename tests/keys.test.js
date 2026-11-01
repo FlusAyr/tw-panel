@@ -41,7 +41,7 @@ function makeApi(source) {
 }
 
 const api = makeApi(SRC);
-const BASELINE = 'v3.16.0';   // 跨版本锁的基线 tag：必须是不再变的东西
+const BASELINE = 'v3.17.0';   // 跨版本锁的基线 tag：必须是不再变的东西
 
 /* KEYS 字符串从源码现取（不手抄：手抄的副本会随 panel.js 漂移而变成假绿） */
 function readKeysString() {
@@ -304,8 +304,10 @@ setTimeout(() => {
   T('机甲卡被渲染（含 tc-kbm）', hK.indexOf('class="tc-kbm') >= 0);
   T('机甲卡挂在同号 p1 卡之后', hK.indexOf(m1.name) > hK.indexOf('92/100'),
     'p1 卡片指纹 idx=' + hK.indexOf('92/100') + ' / 机甲 idx=' + hK.indexOf(m1.name));
-  T('三根条都在：HP / 能 / SP', (hK.match(/class="tc-bar"/g) || []).length >= 3,
-    'tc-bar 数量 ' + (hK.match(/class="tc-bar"/g) || []).length);
+  /* 三根读数改成分段刻度的等宽读数条（class 里多了 ticks），判据从「有几个 tc-bar」
+     改成「三根读数各自在不在」——数个数会被任何一次加条改动带着跑。 */
+  const gCount = ['kbm', 'kbm-en', 'kbm-sp'].filter((c) => hK.indexOf('tc-kbm-g ' + c) >= 0).length;
+  T('三根读数都在：HP / 能 / SP', gCount === 3, '命中 ' + gCount + ' / 3');
 
   /* 无对应 p：单独成卡、不许丢 */
   const stOrphan = api.parseState(['scene: x', 'p1: 你 | HP 1/1', 'kbm3: 孤机 | HP 10/20', 'next: 继续'].join('\n'));
@@ -315,8 +317,69 @@ setTimeout(() => {
   /* HP 归零：已失效 + dead 类；能归零：灰，不许用红（没电≠被打烂） */
   const hDead = api.render(api.parseState(['scene: x', 'p1: 你', 'kbm1: 残骸 | HP 0/100 | 能 0/80', 'next: 继'].join('\n')));
   T('HP 归零 → dead 类 + 已失效', hDead.indexOf('tc-kbm dead') >= 0 && hDead.indexOf('已失效') >= 0);
-  T('HP 归零的条用 kbm-dead（暗红）', hDead.indexOf('kbm-dead') >= 0);
-  T('能归零 → 灰条 + dry 类，不用红', hDead.indexOf('kbm-en-dry') >= 0 && hDead.indexOf('tc-kbm-il dry') >= 0);
+  /* 原判据是「血条变暗红」；v3.18 把失效做成整卡降饱和 + 斜纹 + 盖章，比单根条更狠，
+     所以这里改判那三件在不在（不是放宽：原来只查一根条的 class，现在查整个失效态）。 */
+  T('HP 归零 → 整卡降饱和（dead）+ 斜纹 + 盖章样式',
+    hDead.indexOf('tc-kbm dead') >= 0 && hDead.indexOf('tc-kbm-stamp') >= 0,
+    'dead=' + (hDead.indexOf('tc-kbm dead') >= 0) + ' stamp=' + (hDead.indexOf('tc-kbm-stamp') >= 0));
+  T('能归零 → 灰条 + dry 类，不用红',
+    hDead.indexOf('kbm-en-dry') >= 0 && hDead.indexOf('tc-kbm-g kbm-en dry') >= 0,
+    '灰条=' + (hDead.indexOf('kbm-en-dry') >= 0) + ' dry=' + (hDead.indexOf('tc-kbm-g kbm-en dry') >= 0));
+
+  /* ── 自定字段接口：照 nb 的 o.extra 那套（同一件事不写第二遍）＋ 显式 `自` 文本段 ── */
+  const stCus = api.parseState([
+    'scene: x',
+    'p1: 你',
+    'kbm1: 猎隼 | 型 全包 | HP 120/150 | 力 62 | 核熔炉 90 | 装甲 7/10 | 装 链锯剑 ｜ 护盾发生器 ｜ 推进器 | 自 破甲 ｜ 悬浮 ｜ 夜视',
+    'next: 继续',
+  ].join('\n'));
+  const mc = (stCus.mechas || [])[0] || {};
+  T('未知 `名字 数字` 自动进自定区（核熔炉 / 装甲）',
+    (mc.extra || []).length === 2 && mc.extra[0].label === '核熔炉' && mc.extra[1].label === '装甲',
+    JSON.stringify(mc.extra));
+  T('自定数值解析：单值 → a 有值、b 为 null；双值 → 两个都有',
+    mc.extra[0].a === 90 && mc.extra[0].b === null && mc.extra[1].a === 7 && mc.extra[1].b === 10,
+    JSON.stringify(mc.extra));
+  T('`自` 段按全角 ｜ 切出 3 个标签', (mc.tags || []).length === 3 && mc.tags[2] === '夜视',
+    JSON.stringify(mc.tags));
+  const hC = api.render(stCus);
+  T('自定数值渲染成条（在 tc-kbm-cus 容器里，带刻度）',
+    (hC.match(/class="tc-kbm-g kbm-x x"/g) || []).length === 2 && hC.indexOf('tc-kbm-cus') >= 0,
+    '条数 ' + (hC.match(/class="tc-kbm-g kbm-x x"/g) || []).length);
+  T('自定文本渲染成标签（tc-kbm-tags，条不混进去）', hC.indexOf('tc-kbm-tags') >= 0 &&
+    hC.indexOf('<span>破甲</span>') >= 0 && hC.indexOf('<span>夜视</span>') >= 0);
+  /* 两者必须视觉可分：标签不许出现在数值容器里，反之亦然 */
+  const cusBox = (hC.match(/<div class="tc-kbm-cus">[\s\S]*?<\/div>\s*(?=<div class="tc-kbm-tags">|<div class="tc-kbm-eq">|<em class="tc-kbm-stamp">|$)/) || [''])[0];
+  T('数值自定与文本自定在两个容器里（标签不出现在 tc-kbm-cus 内）',
+    cusBox.indexOf('tc-kbm-tags') < 0 && cusBox.indexOf('破甲') < 0,
+    'cus 片段长度 ' + cusBox.length);
+  /* 坏格不许猜数值：`散热 90/100/次` 进文本标签、原文保留、不画条 */
+  const stBadCus = api.parseState(['scene: x', 'p1: 你', 'kbm1: 试验机 | 散热 90/100/次', 'next: 继'].join('\n'));
+  const mbc = (stBadCus.mechas || [])[0] || {};
+  T('坏格 `90/100/次` 不猜数值，原文进文本标签',
+    (mbc.extra || []).length === 0 && (mbc.tags || []).indexOf('散热 90/100/次') >= 0,
+    'extra=' + JSON.stringify(mbc.extra) + ' tags=' + JSON.stringify(mbc.tags));
+
+  /* ── 前缀吃字段（真 bug，v3.18 现场抓到）──
+     `装` 的关键字正则原本是 `^装[:：]?\s*(.*)$`，冒号可选 → `装甲 7/10` 被当成装备槽，
+     equip 里躺一个「甲 7/10」，数值条永远画不出来。同型的还有 `能`（能力）、`型`（型号）、
+     `自`（自由）。修法是关键字后必须跟「冒号 / 空白 / 行尾」。下面三条把它们钉住。 */
+  const stPfx = api.parseState([
+    'scene: x', 'p1: 你',
+    'kbm1: 试制 | 装甲 7/10 | 能力 30 | 自由 20 | 型号 甲',
+    'next: 继',
+  ].join('\n'));
+  const mp = (stPfx.mechas || [])[0] || {};
+  T('`装甲 7/10` 不被 `装` 吃掉（进自定数值，不进装备槽）',
+    (mp.equip || []).indexOf('甲 7/10') < 0 && (mp.extra || []).some((e) => e.label === '装甲' && e.a === 7 && e.b === 10),
+    'equip=' + JSON.stringify(mp.equip) + ' extra=' + JSON.stringify(mp.extra));
+  T('`能力 30` / `自由 20` 不被 `能` / `自` 吃掉（都进自定数值）',
+    (mp.extra || []).some((e) => e.label === '能力' && e.a === 30) &&
+    (mp.extra || []).some((e) => e.label === '自由' && e.a === 20),
+    JSON.stringify(mp.extra));
+  T('`型号 甲` 不被 `型` 吃掉（进文本标签，不当机型）',
+    mp.typeRaw === '' && (mp.tags || []).indexOf('型号 甲') >= 0,
+    'typeRaw=' + JSON.stringify(mp.typeRaw) + ' tags=' + JSON.stringify(mp.tags));
 
   /* 数值格严格：第二段非纯数字就整格丢，不取前半截（显示错值比不显示危险） */
   const stBad = api.parseState([
@@ -356,6 +419,37 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   /* 无 kbm 行：不许留空壳 */
   T('无 kbm 行 → 没有 tc-kbm 节点',
     api.render(api.parseState('scene: x\np1: 你 | HP 92/100')).indexOf('tc-kbm') < 0);
+
+  /* ── 归属关系（v3.18.1）：有同号 p 才有「驾驶中」与竖线，没主不画 ── */
+  const pairedHtml = api.render(api.parseState(
+    'scene: x\np1: 你 | HP 92/100\nkbm1: 猎隼 | 型 全包 | HP 120/150'));
+  T('有同号 p → 机甲卡带 paired 类', /class="tc-kbm[^"]*\bpaired\b/.test(pairedHtml),
+    '渲染里没有 paired：' + (pairedHtml.match(/class="tc-kbm[^"]*"/) || ['<无>'])[0]);
+  T('有同号 p → 出现「◤ 驾驶中」带子', pairedHtml.indexOf('tc-kbm-drive') > 0 && pairedHtml.indexOf('驾驶中') > 0);
+  /* 几何也要断言：向上 12px 才盖得住玩家卡被 clip-path 切掉的左下角缺口，
+     宽度 5px 才吃得下两卡边框之间那 1~2px 的错位。 */
+  const tieRule = (SRC.replace(/\r/g, '').match(/\.tc-kbm\.paired::before\{[^}]*\}/) || [''])[0];
+  T('竖线规则存在且长在未裁切的外层（.tc-kbm.paired::before）',
+    /position:absolute/.test(tieRule), '实际：' + tieRule);
+  T('竖线向上 ≥12px（盖住玩家卡左下切角缺口）',
+    /top:-1[2-9]px|top:-[2-9]\dpx/.test(tieRule), '实际：' + tieRule);
+  T('竖线宽度 ≥5px（容忍两卡边框的亚像素错位）',
+    /width:[5-9]px|width:\d{2}px/.test(tieRule), '实际：' + tieRule);
+  const orphanHtml = api.render(api.parseState(
+    'scene: x\np1: 你 | HP 92/100\nkbm2: 孤儿机 | 型 重装 | HP 90/100'));
+  T('无同号 p → 机甲卡照样渲染', orphanHtml.indexOf('tc-kbm') > 0);
+  T('无同号 p → 不画 paired、不画驾驶中带子（没主就没有归属关系）',
+    !/\bpaired\b/.test((orphanHtml.match(/class="tc-kbm[^"]*"/) || [''])[0]) &&
+    orphanHtml.indexOf('tc-kbm-drive') < 0 && orphanHtml.indexOf('驾驶中') < 0,
+    '孤儿机甲被错误标成有主');
+
+  /* ── 型徽章（v3.18.1）：跟名字一起被读，字号 ≥12、padding ≥4px 10px ── */
+  const typeRule = (SRC.replace(/\r/g, '').match(/\n\.tc-kbm-type\{([^}]*)\}/) || [])[1] || '';
+  T('型徽章字号 ≥ 12px', /font-size:1[2-9]px|font-size:[2-9]\dpx/.test(typeRule), '实际：' + typeRule.trim());
+  T('型徽章 padding ≥ 4px 10px', /padding:([4-9]|\d{2,})px ([1-9]\d{1,}|1[0-9])px/.test(typeRule), '实际：' + typeRule.trim());
+  T('型徽章不再靠 margin-left:auto 飘到角落', typeRule.indexOf('margin-left:auto') < 0, '实际：' + typeRule.trim());
+  T('徽章在 DOM 里紧邻机甲名（同一行 header 内、名字之后）',
+    /<b>[^<]*<\/b>\s*<span class="tc-kbm-type/.test(pairedHtml));
 
   console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
