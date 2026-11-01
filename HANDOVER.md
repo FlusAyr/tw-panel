@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.12.0　｜　引导 boot v2.0　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.13.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -39,9 +39,9 @@ git clone https://github.com/FlusAyr/tw-panel && cd tw-panel
 node tests/npc.test.js        # 期望：14 通过 / 0 失败
 node tests/loader.test.js     # 期望：11 通过 / 0 失败
 node tests/next_sweep.test.js # 期望：全部通过
-python build.py               # 期望：✓ 版本 v3.12.0，无报错（会刷新 dist/）
+python build.py               # 期望：✓ 版本 v<当前版本>，无报错（会刷新 dist/）
 curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
-# 期望 "version": "3.12.0"
+# 期望 version 与 `const VERSION` 一致
 ```
 
 然后按顺序读：本文件 → `AGENTS.md`（维护手册，红线和键行契约在那）→
@@ -58,25 +58,28 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 | `CHANGELOG.md` | 所有人 | 版本谱系与改动原因 |
 | `llms.txt` | 检索工具/AI | 机器可读索引。**增删文件必须同步它** |
 | `content/README.md` | 玩家 | 下载区文件的安装顺序 |
+| `content/docs/…维护手册.md` | 玩家 | 规范/排障；正文停 v3.3，v3.9+ 见 AGENTS §3.1 |
 
 ## 4. 当前版本状态（2026-11-01）
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.12.0**（tag 已推） | 渲染器唯一源文件，约 1700 行 |
-| `boot.mjs` | **v2.0**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
+| `panel.js` | **v3.13.0**（tag 已推） | 渲染器唯一源文件，1658 行 |
+| `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版** | 三个版本演进见 §7.3 |
 | 无限恐怖 v2 / 跑团用 v4 | 不变 | content/worldbook/ |
 
-**v3.8.0 → v3.12.0 的增量能力**（AGENTS.md 写作时还没有的）：
+**v3.8.0 → v3.13.0 的增量能力**（AGENTS.md 写作时还没有的）：
 
 - **v3.9.1** NPC 渲染：NPC ≠ 敌人（敌人是 mob），左栏 CONTACTS 紫金情报卡，键制/位置制双口径解析
 - **v3.10.0** NTR 夺走体系五字段 `nb/nf/nh/nd/nl` + 绯红主题（沦陷环/阶段水印/定局印章/双面镜心声/雾化暗流事件轴）
 - **v3.10.1** 修复：`next:` 等孤段被 sweep 守卫静默丢弃（守卫已扩展为全状态键判定）
 - **v3.11.x** 手机端：≤760px 双栏变**无吸附连续横滑画布**（430px 列排开，右滑内容左移），桌面端零改动
 - **v3.12.0** 尺寸切换：面板右上角 －/＋ 按钮切紧凑/完整，`localStorage['tw-card:size']` 全局持久
-- **boot v2.0**：玩家包改为一行 `import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'`；boot 内部 fetch 快速通道（raw 优先探测 version.json，四源轮询）失败即降级 `import('@main/panel.js')`；带设置面板（脚本按钮「面板设置」，开关存 `tw-card:opts`，支持立即检查/强制重拉/清缓存）
+- **boot v2.1**：玩家包一行 `import` 钉不可变 tag 的 boot（`@vX.Y.Z/boot.mjs`，不走 `@main`）；fetch 快速通道并行探测全镜像 version.json 取最大版本，失败即降级 `import()` 兜底；带设置面板（显示 `BOOT_VERSION` 可自检，开关存 `tw-card:opts`，支持立即检查/强制重拉/清缓存）
+- **v3.13.0** 引导升级配套：面板无功能变更，仅为让 `dist/loader-script.json` 指向钉 tag 的新 boot 而 bump
+- **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）；长期解法是 `version.json` 加独立 `boot` 字段，让引导版本可独立分发（backlog）
 
 ## 5. 发版 SOP（命令级，照抄即可）
 
@@ -94,7 +97,7 @@ git push https://<TOKEN>@github.com/FlusAyr/tw-panel.git main:main
 git push https://<TOKEN>@github.com/FlusAyr/tw-panel.git vX.Y.Z
 # 6. 尝试刷新 CDN（jsDelivr purge，传播可能慢，见 §6）
 curl -s "https://purge.jsdelivr.net/gh/FlusAyr/tw-panel@main/panel.js,gh/FlusAyr/tw-panel@main/version.json"
-# 7. 核验（raw 有 ~5min 缓存，必须走 API）
+# 7. 核验（raw 有 ~5min 缓存，必须走 API；核验 host 必须与玩家导入行的 host 同域，否则核验全绿、玩家仍旧）
 curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref=vX.Y.Z" \
   | python -c "import json,sys,base64;print(base64.b64decode(json.load(sys.stdin)['content']).decode())"
 # 8. 同步 F:\酒馆卡\（手动导入版/源码/CHANGELOG/00_索引.md 版本号）
@@ -114,7 +117,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 ```
 
 - **为什么放弃旧 loader.js 三件套**：它全靠 `fetch`，走 `connect-src`，在酒馆助手沙箱里可能整链路被拦且无报错。别人家插件用一行 import 就能更新，我们不能——根因是 CSP 通道不同，不是逻辑 bug。
-- **jsDelivr `@main` 分支缓存 ≤12h**，`purge.jsdelivr.net` 传播慢（实测数十分钟到数小时）。所以：**急发布就打 tag**（tag 永久缓存反而是优点）；`@main` 上的改动到达玩家有延迟，会自愈。
+- **jsDelivr `@main` 分支缓存 ≤12h**，`purge.jsdelivr.net` 只清 `CF`/`FY`、**不覆盖 gcore**（实测 purge 后 cdn 已新、gcore 仍停在旧 8393B，5 分钟未清），gcore 只能等自然回源（s-maxage 12h）。**purge 只能当加速，不能当保证。**急发布就打 tag（tag 永久缓存反而是优点）。
 - **tag 永不覆盖**：覆盖后 jsDelivr 不刷新，玩家会永远拿到旧代码。
 - 核验远端内容一律走 `api.github.com/repos/…/contents/<path>?ref=<ref>`（base64），raw 有约 5 分钟 CDN 缓存会骗人。
 - **引导脚本自身无法自更新**（鸡生蛋）：改 boot.mjs 后，旧版引导用户需重新导入一次导入包。发布说明里要写清楚。
@@ -146,10 +149,11 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 ## 8. 已知问题与未了事项
 
 1. **CI 恒红叉**：远端 `python-package.yml` 是网页误建的模板，因令牌无 workflow 权限删不掉。**管理层决定不管**。备选流水线在 `ci/tests.yml.example`（启用需 workflow scope）。
-2. **旧版引导用户**（v1.0 loader 三件套时代的）：需手动重导一次导入包才获得 boot v2.0 双通道，否则在 CSP 拦截环境下面板可能永不更新。发布渠道上要把这句带到。
-3. **jsDelivr @main 延迟**：发布后部分玩家数小时内拿不到新版，属 CDN 特性，会自愈；急发版走 tag。
+2. **旧版引导用户**（v1.0 loader 三件套时代的）：需手动重导一次导入包才获得 boot v2.1 双通道，否则在 CSP 拦截环境下面板可能永不更新。发布渠道上要把这句带到。
+3. **`@main` 可变别名 + 多镜像缓存不同步**：曾出现 `@main/version.json` 报 3.10.1 而 `@main/panel.js` 已是 3.12.0 的自相矛盾；玩家导入行走的是 gcore，新玩家可能拿到无「面板设置」的旧 boot。处置：引导与面板拉取一律钉不可变 tag `@vX.Y.Z`，唯一例外：设置面板「强制重拉最新」按钮走 `@main`；急发版走 tag。
 4. **`work/panel_content.js`**：仓库外工作副本（`C:\Users\Administrator\WorkBuddy\2026-10-31-05-01-50\work\`），发版时同步一份，防仓库目录意外损毁。
 5. NTR 卡 v3 的**输出纪律**条款是治「AI 漏生成数值」的第一版方案；如果实际跑团仍漏，下一步方向是把纪律句复制到条目 1（五维数值核心）的头部，双保险。
+6. **字节断言一律落盘后 `wc -c`**。`size_download` 本身准，错在用法：URL 形态错（`repo/@v1.2.3/f`，`@` 前多一个 `/`）→ jsDelivr 回 404 错误体（69~72 B），看着像文件只有几十字节；`-I`(HEAD) 恒 0；`--compressed` 给压缩字节（`llms.txt` 2952 vs 5884）。异常小值先核对 URL。
 
 ## 9. 红线（AGENTS.md §2 的摘要，全文去读原文）
 

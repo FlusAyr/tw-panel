@@ -18,10 +18,10 @@
 
 ## 渲染器
 
-- [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。boot v2.0 引导包（一行 import boot.mjs），装一次后自动更新。
-- [dist/panel-script-v3.12.0.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.12.0.json)：离线手动版 v3.12.0，不自动更新。
-- [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，约 1700 行。改这个文件，然后跑 `python build.py`。
-- [boot.mjs](https://github.com/FlusAyr/tw-panel/blob/main/boot.mjs)：ESM 双通道自动更新引导（fetch 快速通道 + import 兜底），含设置面板；改动后玩家需重导一次导入包（引导自身无法自更新）。
+- [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。boot v2.1 引导包（一行 import `@vX.Y.Z` 的 boot.mjs），装一次后自动更新。
+- [dist/panel-script-v3.13.0.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.13.0.json)：离线手动版 v3.13.0，不自动更新。
+- [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，1658 行。改这个文件，然后跑 `python build.py`。
+- [boot.mjs](https://github.com/FlusAyr/tw-panel/blob/main/boot.mjs)：ESM 双通道自动更新引导（fetch 快速通道 + import 兜底），含设置面板（显示 BOOT_VERSION，玩家可自检）；改动后玩家需重导一次导入包（引导自身无法自更新）；拉取一律钉不可变 tag，不用 `@main`。
 - [version.json](https://github.com/FlusAyr/tw-panel/blob/main/version.json)：版本清单，boot 据此判断是否更新。
 - [build.py](https://github.com/FlusAyr/tw-panel/blob/main/build.py)：打包脚本，读 `panel.js` 的 `VERSION` → 写 `version.json` 与 `dist/`。
 
@@ -46,5 +46,5 @@
 ## 可选
 
 - [ci/release.yml.example](https://github.com/FlusAyr/tw-panel/blob/main/ci/release.yml.example)：可选 GitHub Actions 发布模板，启用需 token 带 `workflow` 权限。
-- [tests/](https://github.com/FlusAyr/tw-panel/tree/main/tests)：回归测试（`npc.test.js` 14 断言 / `loader.test.js` 11 断言 / `next_sweep.test.js` 孤段仿真）与可视化预览页（`preview-ntr.html`、`preview_mobile.html`、`preview_mini.html`、`boot_e2e.html`，浏览器直接打开）。
+- [tests/](https://github.com/FlusAyr/tw-panel/tree/main/tests)：回归测试（`run_all.js` 聚合入口，显式清单 + 真实退出码；`npc.test.js` 14 断言 / `loader.test.js` 11 断言 / `next_sweep.test.js` 孤段仿真 / `boot.test.js` 56 断言）与可视化预览页（`preview-ntr.html`、`preview_mobile.html`、`preview_mini.html`、`boot_e2e.html`，浏览器直接打开）。
 - [tools/](https://github.com/FlusAyr/tw-panel/tree/main/tools)：内容转换脚本（NTR 卡 v2 适配、v3 纯净框架生成）。

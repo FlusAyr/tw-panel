@@ -12,14 +12,24 @@ import json, re, sys, pathlib, datetime
 
 ROOT = pathlib.Path(__file__).resolve().parent
 PANEL = ROOT / "panel.js"
-LOADER = ROOT / "boot.mjs"     # v2.0：玩家导入包内容是一行 import，入口为 ESM boot
+LOADER = ROOT / "boot.mjs"     # v2.1：玩家导入包内容是一行 import，入口为 ESM boot
 VERSION_JSON = ROOT / "version.json"
 DIST = ROOT / "dist"
 
 LOADER_ID = "8f3c1d92-6b47-4a10-9c55-1d2e7f8a0b31"   # 引导脚本固定 id，勿改
 PANEL_ID = "1604cbb8-ce4d-4974-8efb-1b6d186e37fb"    # 与 v3.8 手动版同 id
 
-NOTES = "NTR 夺走体系 + next 修复；引导 v2.0：一行 import 双通道（fetch 快速通道 + import 兜底）"
+NOTES = ("NTR 夺走体系 + next 修复；引导 v2.1：导入行钉 tag、探测源拆显式数组、设置面板显示引导版本")
+
+# 玩家导入的那一行 import —— 全仓唯一出处，改托管/CDN 只动这个字面量。
+# 两个 %s 依次是 REPO_SLUG（用户名/仓库名）与 semver（= tag 去掉 v）。
+# 为什么钉 tag 而不是 @main：
+#   jsDelivr 的 purge 只覆盖 Cloudflare(cdn) 与 Fastly，gcore 是独立镜像层、清不掉，
+#   实测 purge 后 cdn 已是新版而 gcore 仍在发旧件（最长扛满 s-maxage=12h）。
+#   分支引用的 URL 会被镜像各自缓存；钉 tag 的 URL 是全新条目，任何镜像都是缓存 MISS，
+#   必须回源拿同一份字节 —— 同时解决「@main 可变」和「gcore 陈旧」两个问题。
+IMPORT_URL = "https://gcore.jsdelivr.net/gh/%s@v%s/boot.mjs"
+REPO_SLUG = "FlusAyr/tw-panel"
 
 
 def read(p):
@@ -27,6 +37,14 @@ def read(p):
 
 
 def main():
+    # Windows 控制台默认 cp936，编不出 '✓' 会 UnicodeEncodeError 崩在 print 之前。
+    # 这里把 stdout / stderr 都强制成 utf-8；errors="replace" 保证非 utf-8 终端
+    # 降级成 '?' 也不会再崩。stderr 同样必须处理：sys.exit("✗ ...") 走 stderr，
+    # 不重定向就会出现「报错信息自己报错」，真实原因被 UnicodeEncodeError 吞掉。
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+
     panel = read(PANEL)
     m = re.search(r"const\s+VERSION\s*=\s*['\"]([0-9.]+)['\"]", panel)
     if not m:
@@ -43,13 +61,17 @@ def main():
     }
     VERSION_JSON.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    # 2) dist/loader：玩家导入一次（v2.0 一行 import，与数据库插件同机制）
+    # 2) dist/loader：玩家导入一次（v2.1 一行 import，与数据库插件同机制）
+    #    URL 钉 tag（@v<semver>）而不是 @main：@main 是分支引用，jsDelivr 缓存最长
+    #    12 小时，发版后新导入的玩家可能仍装到旧引导；tag 不可变、发布即刻生效。
+    #    所以这里必须排在 tag 推送之后才能换包（见 CHANGELOG / 发版 SOP）。
+    #    版本号从 panel.js 的 VERSION 抓（上面 semver），不另写硬编码。
     loader = {
         "type": "script",
         "enabled": True,
-        "name": "tw-card 自动更新引导 v2.0",
+        "name": "tw-card 自动更新引导 v2.1",
         "id": LOADER_ID,
-        "content": "import 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@main/boot.mjs'",
+        "content": "import '%s'" % (IMPORT_URL % (REPO_SLUG, semver)),
         "info": "只装这一支。ESM 一行 import 引导：能 fetch 走快速通道（分钟级更新），"
                 "被沙箱 CSP 拦截时自动降级 import 直连面板。更新后刷新页面即生效。"
                 "快速回复栏的「面板设置」按钮可调整更新选项。",

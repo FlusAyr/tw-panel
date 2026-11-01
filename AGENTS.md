@@ -2,7 +2,7 @@
 
 > 你正在接手一个已上线的 SillyTavern（酒馆）跑团系统：**「主神空间」**。
 > 本文件是操作手册，读完即可独立维护，不需要原始对话记录。
-> 最后更新：2026-11-01　｜　面板 v3.12.0（引导 boot v2.0）　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.13.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -11,7 +11,7 @@
 | 问题 | 答案 |
 |---|---|
 | 这是什么 | 一套跑团规则 + 状态渲染器 + 数据库模板，跑在 SillyTavern + 酒馆助手（TavernHelper）上 |
-| 仓库里有什么 | 渲染器源码 `panel.js` + 自动更新器 `loader.js` + 打包脚本 + 玩家要下载的成品 `content/` |
+| 仓库里有什么 | 渲染器源码 `panel.js` + 自动更新器 `boot.mjs` + 打包脚本 + 玩家要下载的成品 `content/` |
 | 谁在用 | 1 个主持人（GM）+ 若干玩家，各自本地酒馆，靠世界书 + 脚本同步规则 |
 | 唯一的"服务器" | GitHub 仓库 + jsDelivr CDN（只托管静态 js/json，无后端） |
 | 最常见的维护动作 | 改 `panel.js` → 加版本号 → `python build.py` → 打 tag 推送 |
@@ -23,14 +23,14 @@
 
 ```
 tw-panel/
-├── panel.js                ★ 唯一源文件：状态块 → HUD 卡片渲染器（约 1450 行）
-├── loader.js               自动更新引导器（玩家只导入这一支）
+├── panel.js                ★ 唯一源文件：状态块 → HUD 卡片渲染器（1658 行）
+├── boot.mjs                自动更新引导（玩家只导入这一支）
 ├── build.py                打包：读 panel.js 的 VERSION → 写 version.json + dist/
 ├── deploy.py               一键部署脚本：装 ST + 扩展 + 放世界书 + 备好导入包（给外部用户/agent 用）
 ├── AGENT_DEPLOY.md         给外部 AI 助手的部署执行手册（从装 SillyTavern 开始）
-├── version.json            版本清单，loader 据此判断是否更新
+├── version.json            版本清单，boot 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
-├── tests/loader.test.js    loader 的 11 条断言（node 跑，无需依赖）
+├── tests/  run_all.js 聚合（loader11/npc14/next_sweep4/boot56，node，无依赖）
 ├── ci/release.yml.example  可选自动 Release（启用需 token 带 workflow 权限）
 ├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
@@ -43,7 +43,7 @@ tw-panel/
 └── README.md               仓库首页：只讲玩家怎么装（维护内容不写在这里）
 ```
 
-**文档分工（别混）**：`llms.txt` 是所有文档的机器可读索引——新增/改名/删除文件时**必须同步它**，否则 AI 会按旧路径找文件；`README.md` 只回答"玩家怎么装"；`AGENT_DEPLOY.md` 是给**外部** AI 装环境用的执行手册（不是给你维护仓库用的，别照着它改仓库）；本文件回答"怎么改、怎么发"；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。
+**文档分工（别混）**：`llms.txt` 是所有文档的机器可读索引——新增/改名/删除文件时**必须同步它**，否则 AI 会按旧路径找文件；`README.md` 只回答"玩家怎么装"；`AGENT_DEPLOY.md` 是给**外部** AI 装环境用的执行手册（不是给你维护仓库用的，别照着它改仓库）；本文件回答"怎么改、怎么发"；`CHANGELOG.md` 只记版本谱系。新增文档先想清楚属于哪一类，不要往首页堆。**指向代码别写死行号与版本值**——两者都会漂移；写 grep 锚点（如 `grep -n "const VERSION" panel.js`）+ 可查当前行号。
 
 **单一出处**：面板成品只在 `dist/`（`build.py` 生成），**不要往 `content/` 复制一份**——两份副本必然漂移，之前已经出现过。
 
@@ -84,7 +84,7 @@ jsDelivr 对 `@vX.Y.Z` 做永久缓存，同 tag 重新推送不会刷新 CDN。
 | 渲染 | `render` / `CSS` / `injectCss` | 生成 HUD 卡片：指令栏、双栏主区、日志、选项键 |
 | 生命周期 | `sweep` / `loop` / `MutationObserver` | 每 700ms 扫 400 次 + 监听 `#chat` 变化，重渲染新楼层 |
 
-版本号位置：`panel.js` 第 10 行左右 `const VERSION = '3.8';` —— 这是 `build.py` 唯一读取的版本源。
+版本号位置：`panel.js` 里的 `const VERSION = '…';`（`grep -n "const VERSION" panel.js` 可查当前行号）—— `build.py` 唯一读取的版本源。
 
 ### 3.1 状态块键行契约（会被 `KEYS` 正则捕获）
 
@@ -103,6 +103,14 @@ cr<数字> p<数字> sk<数字> eq<数字>  ← 自定义资源 / 玩家 / 技�
 4. 键名后冒号可全角可半角；`mob` 允许无键裸文本兜底（`变异体甲 精英 80/80`）。
 5. `pts` 允许省略空档位；无称号不写 `ti` 行。
 6. **v3.10.0 NTR 夺走体系（附属扩展册字段）**：`nb`（伴侣，字段同 bond）／`nf`（加害者，兼容 foe 位置制，支持 `身份`/`次用手段` 扩展键）／`nh`（心声：`对你`/`对他`/`心`/`白`）／`nd`（防线档案：`防线名 失守|回填|在守 日期 经过`）／`nl`（暗流事件：`日期 | 标题 | 经过 | 她 | 你 知情|不知情`）。与无限恐怖共用基础状态块，仅关系层换字段；无编号同键行后者覆盖前者，多实例必须编号（nb2/nf3…）。渲染为绯红「沦陷」主题（沦陷环/阶段水印/定局印章/双面镜心声/雾化暗流），与紫金 NPC、蓝 bond、红 foe 完全区分。规则文本见 NTR 卡条目 3，可视化预览页 `tests/preview-ntr.html`。
+
+7. **拓展键纪律**：拓展世界书的自有键必须独占前缀，不得借用基础键；新键须登记到下表并同时加专属渲染分支，未登记的键视为基础键的私有编号，不得复用。多套拓展共享同一角色时，资源段合并进同一个 `cr` 行（段间 ` ｜ `），不新增键、不改渲染。
+
+| 键 | 出处拓展 | 渲染 |
+|---|---|---|
+| `nb` `nf` `nh` `nd` `nl` | NTR 伴侣夺走 v3 | 绯红沦陷主题 |
+| `cr<N>` + `p<N>` | 基础机制；**现由「超高校级幸运」与「魔药体系」共用**（两套均为血统，同角色可并存） | 青色胶囊 |
+| `sk` `eq` `lock` `ti` `mob` `bond` `foe` `npc` | 基础机制 | 基础卡片 |
 
 ### 3.2 渲染约定
 
@@ -124,7 +132,7 @@ cr<数字> p<数字> sk<数字> eq<数字>  ← 自定义资源 / 玩家 / 技�
 5. **条目 Token 纪律**：条目成品会被注入每一次回复，字数×楼层数全程计费。血统 B≤3 技 / A≤4 / S≤5，内功 主动≤4 + 被动≤1；总字数 ≤3000（机制需要可超，但每句必须有用）；电报体。
 6. **代价五不变量**：可感知、可累积且恶化路径写死、有主动管理手段、有防刷净上限（≤5 点当量/场）、以叙事层代价为主。
 7. **禁止幸运换皮**：LP / 因果债 / 借运 / 认账 / 因祸得福 / 气运擦边只属于「超高校级幸运」。新条目结构近似可以，循环必须重设计。
-8. **数据库模板 10 表**：主神空间全局 / 轮回者名册 / 强化台账 / 结算台账 / 敌情档案 / NPC 与势力 / 物资仓库 / 任务与支线 / 纪要 / 选项。表头列数与 `content[0]` 必须逐表一致（改表后跑一遍列数校验）。
+8. **数据库模板 10 表**：主神空间全局 / 轮回者名册 / 强化台账 / 结算台账 / 敌情档案 / NPC 与势力 / 物资仓库 / 任务与支线 / 纪要 / 选项。列数口径（含 `row_id` 系统列）见 §5.2，改表后逐表核一遍。
 
 ---
 
@@ -137,7 +145,7 @@ cr<数字> p<数字> sk<数字> eq<数字>  ← 自定义资源 / 玩家 / 技�
 # 2. 顶部的 VERSION 加一位：'3.8' → '3.9'
 python build.py                  # 写 version.json + dist/panel-script-v3.9.json
 node --check panel.js            # 语法
-node tests/loader.test.js        # 引导器回归，应 11 通过
+node tests/run_all.js   # 四套回归（见 §6）
 git add -A && git commit -m "v3.9 描述"
 git tag v3.9.0 && git push && git push --tags
 ```
@@ -157,9 +165,9 @@ git tag v3.9.0 && git push && git push --tags
 
 ### 5.2 改内容（世界书 / 模板 / 条目）
 
-1. 新文件放 `content/` 对应目录，**同目录只保留一个"最新"版本**，旧版挪到 `F:\主神空间\09_归档\`。
+1. 新文件放 `content/` 对应目录，**同目录只保留一个"最新"版本**，旧版挪到 `F:\酒馆卡\09_归档\`。
 2. 同步更新 `content/README.md` 的说明表和版本号。
-3. 数据库模板改完必须逐表核对：表头列数 == `sourceData.ddl` 列数 == `content[0]` 长度；uid 不重复；纪要表保持原版。
+3. 数据库模板改完必须逐表核对：`content[0]` 长度 == `sourceData.ddl` 字段数 == note 列定义数 + 1；uid 不重复；纪要表保持原版。**+1 是插件加的 `row_id` 系统列，note 的「列0/列1…」从用户列数起、不含它——三者直接比会得到「每表都恰好差 1」的假警报。**
 4. 提交信息写清"改了什么 + 影响哪张表/哪个条目"。
 
 ### 5.3 新增自定义条目（血统/内功）
@@ -172,7 +180,7 @@ git tag v3.9.0 && git push && git push --tags
 
 ```bash
 # 1. 建一个 public 仓库，假定 用户名/tw-panel
-# 2. loader.js 顶部改地址
+# 2. boot.mjs 改 REPO
 const REPO = '用户名/tw-panel';
 # 3. 重新打包（dist 里的引导包会带上新地址）
 python build.py
@@ -190,10 +198,10 @@ git tag v3.8.0 && git push -u origin main && git push --tags
 
 ### 5.5 国内网络 / CDN 打不开
 
-loader 的取源顺序是 **GitHub Raw（版本清单）→ jsDelivr（代码）**，两者任一可用就能更新。若两条都慢：
+boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新。若都慢：
 
 1. **优先用 jsDelivr 兜底**——它是全球 CDN，国内通常可达，代码按 tag 取所以永不过期。
-2. **自建静态托管**：把 `panel.js` + `version.json` 放 Cloudflare Pages / Vercel，改 `loader.js` 的 `SOURCES` 指向自己的域名。缓存策略自控，也能挂自定义域名防污染。
+2. **自建静态托管**：把 `panel.js` + `version.json` 放 Cloudflare Pages / Vercel，改 `boot.mjs` 的取源数组指向自己域名。缓存自控，可挂自定义域名防污染。
 3. **不要改用 Gitee 做源**——raw 无 CORS，浏览器 fetch 必被拦，原因见 7.1。Gitee 最多作为人工下载的镜像。
 
 ---
@@ -203,12 +211,14 @@ loader 的取源顺序是 **GitHub Raw（版本清单）→ jsDelivr（代码）
 | 检查 | 命令 / 方法 | 通过标准 |
 |---|---|---|
 | 面板语法 | `node --check panel.js` | 无输出 |
-| 引导器 | `node tests/loader.test.js` | `11 通过 / 0 失败` |
-| 面板渲染 | `node gen_preview.js`（在 `F:\主神空间\07_脚本`） | 生成 preview_*.html 无报错 |
-| 状态块解析 | `F:\主神空间\07_脚本\test_*.js` | 各断言全过 |
+| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 56，任一失败即非零退出 |
+| 面板渲染 | `node gen_preview.js`（在 `F:\酒馆卡\07_脚本`） | 生成 preview_*.html 无报错 |
+| 状态块解析 | `F:\酒馆卡\07_脚本\test_*.js` | 各断言全过 |
 | 线上可用 | curl 上节两个地址 | HTTP 200，`panel.js` ≥ 60KB |
 | CORS | `curl -sI <raw 地址>` | 含 `access-control-allow-origin: *` |
-| 模板完整性 | python 校验表头/列数 | 10 表全一致 |
+| 模板完整性 | 手动 python 校验（无脚本），口径见 §5.2 | 8 + 10 表全部一致 |
+
+> 不要用 `node tests/*.js` —— node 只执行第一个文件，其余当参数丢弃，**仍会 exit 0**（假绿）。新增测试须手动登记进 `tests/run_all.js` 的 `FILES` 数组。
 
 ---
 
@@ -217,8 +227,8 @@ loader 的取源顺序是 **GitHub Raw（版本清单）→ jsDelivr（代码）
 1. **Gitee 不能当更新源**：raw 会 302 到 `raw.giteeusercontent.com` 的签名地址，两者都**没有 CORS 头**，浏览器 `fetch` 直接被拦；`raw.gitmirror.com` 已停服。要国内加速就用 jsDelivr，或自建 Cloudflare 代理。
 2. **fine-grained PAT 建不了仓库**（`403 Resource not accessible`），也推不了 `.github/workflows/*`；classic PAT 需要 `repo` + `workflow` 两个 scope 才能推 CI。所以 CI 模板放在 `ci/release.yml.example`。
 3. **jsDelivr 对 tag 永久缓存**：宁可多发一个 patch 版本，也不要覆盖旧 tag。
-4. **版本清单有延迟**：`version.json` 走 raw 约 5 分钟、jsDelivr 最长 12 小时。玩家反馈"没更新"先等一会再刷。
-5. **旧手动脚本冲突**：玩家如果同时装着 v3.8 手动版和 loader，两者都抢 `window.__twCardLoaded`，先加载的赢。loader 会弹黄字提醒，处理方式是让玩家停用旧脚本。
+4. **版本清单延迟 + 镜像不同步**：`version.json` 走 raw 约 5 分钟、jsDelivr 最长 12 小时；purge 只覆盖 cdn/fastly、**不覆盖 gcore**，gcore 上 `@main` 的旧 URL 残留数小时到 12h，只核验 `cdn.jsdelivr.net` 会骗自己。玩家反馈"没更新"先等一会再刷；根治是拉取 URL 钉 tag。
+5. **旧手动脚本冲突**：玩家如果同时装着 v3.8 手动版和 boot，两者都抢 `window.__twCardLoaded`，先加载的赢。boot 会弹黄字提醒，处理方式是让玩家停用旧脚本。
 6. **缓存键**：`localStorage['tw-card:cache']` 存代码、`['tw-card:meta']` 存版本。排查"版本没变"先看这两个键。
 7. **CRLF 警告**：仓库在 Windows 上提交会提示 LF→CRLF，不影响运行，可忽略；若要消除设 `git config core.autocrlf false`。
 8. **测试里的模板字符串**：往 `test_*.js` 里写状态块样例时，`\n` 必须写 `\\n`，否则被 JS 烤成真换行导致解析失败（连续踩过三次）。
@@ -229,11 +239,11 @@ loader 的取源顺序是 **GitHub Raw（版本清单）→ jsDelivr（代码）
 
 - [ ] 读完本文件 + `content/docs/酒馆状态面板系统_维护手册.md`
 - [ ] 能说清 `cr<N>` 与 `p<N>` 的配对关系，以及为什么资源不能写进 p 行
-- [ ] 跑通 `node tests/loader.test.js`（11 通过）
+- [ ] 跑通四套回归测试（见 §6）
 - [ ] curl 两个线上地址都是 200，且 raw 带 CORS 头
 - [ ] 知道纪要表为什么不能动，以及属性快照写在哪里
 - [ ] 知道发版必须打新 tag、必须 `python build.py`
-- [ ] 改动前先在 `F:\主神空间\09_归档` 找历史版本对照
+- [ ] 改动前先在 `F:\酒馆卡\09_归档` 找历史版本对照
 
 ---
 
