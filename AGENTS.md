@@ -2,7 +2,7 @@
 
 > 你正在接手一个已上线的 SillyTavern（酒馆）跑团系统：**「主神空间」**。
 > 本文件是操作手册，读完即可独立维护，不需要原始对话记录。
-> 最后更新：2026-11-01　｜　面板 v3.16.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.17.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -30,7 +30,7 @@ tw-panel/
 ├── AGENT_DEPLOY.md         给外部 AI 助手的部署执行手册（从装 SillyTavern 开始）
 ├── version.json            版本清单，boot 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
-├── tests/  run_all.js 聚合入口（npc/loader/next_sweep/boot/keys/version），逐组断言数见 §6
+├── tests/  run_all.js 聚合入口（npc/loader/next_sweep/boot/keys/version），逐组断言数以当次输出为准
 ├── ci/release.yml.example  可选自动 Release（启用需 token 带 workflow 权限）
 ├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
@@ -215,7 +215,7 @@ boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新�
 | 检查 | 命令 / 方法 | 通过标准 |
 |---|---|---|
 | 面板语法 | `node --check panel.js` | 无输出 |
-| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 57 / keys 48 / version 36，任一失败即非零退出；新增或删减断言须同步本行 |
+| 回归 | `node tests/run_all.js` | 任一失败即非零退出，逐组断言数以当次输出为准；新增或删减断言不需改文档 |
 | 面板渲染 | `node gen_preview.js`（在 `F:\酒馆卡\07_脚本`） | 生成 preview_*.html 无报错 |
 | 状态块解析 | `F:\酒馆卡\07_脚本\test_*.js` | 各断言全过 |
 | 线上可用 | curl 上节两个地址 | HTTP 200，`panel.js` ≥ 60KB |

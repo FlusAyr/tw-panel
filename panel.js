@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.16.0';
+  const VERSION = '3.17.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -90,6 +90,47 @@
   const HEALTH = /^(健康|正常|完好|轻伤|中伤|重伤|濒死)$/;
 
   /* 玩家行：名字 | 徽章 | HP | SP | 负重 | MOV/DB | 属性… | 惩罚 | 状态… | 点数 | 支线 | 已兑换 | 基因锁 | 称号 */
+  /* 机甲（kbm）：independent 血/装/属性。字段全部可缺，缺则不画。
+     装 段被 seg() 按 ｜ 切开，故 '装 链锯剑' 之后的裸段一律续作装备名，直到遇到已知字段。 */
+  const MECHA_ATTRS = ['力', '敏', '体', '智', '感', '魅'];
+
+  /* 机甲血/能/SP 的数值格：只认 `N` 或 `N/M` 两种。第二段不是纯数字（`80/100/次`、`80/abc`）
+     就**整格丢掉**，不取前半截 —— 显示一个"看起来正常"的错值，比不显示危险：
+     不显示有人会问，显示错了没人问。丢的时候在 stderr 留一行，让它在控制台可见。
+
+     ★ 全文件唯一允许的 console.warn（白名单见 tests/keys.test.js 的 WARN_WHITELIST）。
+       禁令原本针对「未登记键」：给它加 warn 会让它看起来已被处理，把可见变静默。
+       这里方向相反——把静默变可见。判据：这条 warn 出现时玩家看到的是「少了一块」
+       还是「正常画面」？少一块 → 允许。 */
+  function mechaPair(field, rest) {
+    const m = String(rest).match(/^(\d+)(?:\s*\/\s*(\d+))?$/);
+    if (m) return { cur: +m[1], max: m[2] == null ? null : +m[2] };
+    console.warn('[tw-card] kbm 的 ' + field + ' 数值格不合法、已丢弃：', JSON.stringify(String(rest)));
+    return null;
+  }
+  const MECHA_TYPES = { '人型': 'human', '重装': 'heavy', '全包': 'full' };
+
+  function parseMecha(v) {
+    const p = seg(v);
+    const o = { name: '', type: '', typeRaw: '', hp: null, en: null, sp: null, attrs: [], equip: [] };
+    let inEquip = false;
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+
+      let m;
+      if ((m = x.match(/^型[:：]?\s*(.+)$/))) { o.typeRaw = m[1].trim(); o.type = MECHA_TYPES[o.typeRaw] || ''; inEquip = false; continue; }
+      if ((m = x.match(/^HP\s*(.+)$/i))) { o.hp = mechaPair('HP', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^能\s*(.+)$/))) { o.en = mechaPair('能', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^SP\s*(.+)$/i))) { o.sp = mechaPair('SP', m[1]); inEquip = false; continue; }
+      if ((m = x.match(/^装[:：]?\s*(.*)$/))) { inEquip = true; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
+      if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inEquip = false; continue; }
+      if (inEquip) o.equip.push(x);
+    }
+    return o;
+  }
+
   function parsePlayer(v) {
     const p = seg(v);
     const o = {
@@ -578,14 +619,14 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
-    const mmap = new Map();
+    const mmap = new Map(), kmmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
     const rec = recoverMobLines(String(text).split(/\r?\n/));
@@ -614,6 +655,7 @@
       else if (/^nd\d*$/.test(k)) ndmap.set(k === 'nd' ? 1 : +k.slice(2), parseNtrFalls(v));
       else if (/^nl\d*$/.test(k)) nlmap.set(k === 'nl' ? 1 : +k.slice(2), parseNtrLog(v));
       else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
+      else if (/^kbm\d*$/.test(k)) kmmap.set(k === 'kbm' ? 1 : +k.slice(3), parseMecha(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -646,6 +688,7 @@
     st.ntrLogs = [...nlmap.keys()].sort((a, b) => a - b).map(k => nlmap.get(k));
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
     EXT_KEYS.forEach(e => { st[e.field] = [...xmap[e.field].keys()].sort((a, b) => a - b).map(i => xmap[e.field].get(i)); });
+    st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; return m; });
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -669,6 +712,50 @@
         <span class="tc-av">${a.base}${a.add ? `<small>+${a.add}</small>` : ''}</span>
         <b class="tc-at">${a.total}</b>
       </div>`).join('')}</div>`;
+  }
+
+  /* 机甲卡：跟在同号 p 卡后面；无对应 p 时单独成卡。
+     HP 归零 → dead 类 + 「已失效」（规则上此刻该弹出驾驶者）。 */
+  function renderMecha(m) {
+    const dead = !!(m.hp && m.hp.max > 0 && m.hp.cur <= 0);
+    const cls = ['tc-kbm'];
+    if (m.type) cls.push('t-' + m.type);
+    if (dead) cls.push('dead');
+
+    const hp = m.hp ? `
+      <div class="tc-kbm-hp">
+        <span>HP <b>${m.hp.cur}</b>${m.hp.max == null ? '' : '/' + m.hp.max}</span>
+        ${dead ? '<em>已失效</em>' : ''}
+      </div>
+      ${bar(m.hp.cur, m.hp.max, dead ? 'kbm-dead' : 'kbm')}` : '';
+
+    /* 能 / SP：并排细条。能归零＝没电（灰，不是红，别和"被打烂"混）；
+       SP 归零＝耗尽（沿用玩家 SP 的橙调）；两者与 p 行的 SP 各算各的，互不扣。 */
+    const il = (lab, v, cls) => {
+      if (!v) return '';
+      const dry = v.max > 0 && v.cur <= 0;
+      return `<div class="tc-kbm-il${dry ? ' dry' : ''}">
+        <span>${lab}</span><b>${v.cur}</b><em>${v.max == null ? '' : '/' + v.max}</em>
+        ${bar(v.cur, v.max, dry ? cls + '-dry' : cls)}
+      </div>`;
+    };
+    const sub = (m.en || m.sp) ? `
+      <div class="tc-kbm-sub">${il('能', m.en, 'kbm-en')}${il('SP', m.sp, 'kbm-sp')}</div>` : '';
+
+    const attrs = m.attrs.length ? `
+      <div class="tc-kbm-attrs">${m.attrs.map(a => `<span><i>${esc(a.k)}</i><b>${a.v}</b></span>`).join('')}</div>` : '';
+
+    const equip = m.equip.length ? `
+      <div class="tc-kbm-eq">${m.equip.map(e => `<span>${esc(e)}</span>`).join('')}</div>` : '';
+
+    return `
+      <div class="${cls.join(' ')}">
+        <div class="tc-kbm-hd">
+          <b>${esc(m.name || '机体')}</b>
+          ${m.typeRaw ? `<span class="tc-kbm-type">${esc(m.typeRaw)}</span>` : ''}
+        </div>
+        ${hp}${sub}${attrs}${equip}
+      </div>`;
   }
 
   function renderPlayer(p) {
@@ -1068,9 +1155,18 @@
 
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
-    if (st.players.length) {
+    if (st.players.length || st.mechas.length) {
       colL.push(sect('我方小队', 'SQUAD'));
-      colL.push(`<div class="tc-grid tc-stack">${st.players.map(renderPlayer).join('')}</div>`);
+      /* 同号 kbm 紧跟 p 卡；找不到 p 的 kbm 排在玩家之后单独成卡（不许丢） */
+      const kmBy = new Map(st.mechas.map(m => [m.idx, m]));
+      const kUsed = new Set();
+      const cards = st.players.map(p => {
+        const m = kmBy.get(p.idx);
+        if (m) { kUsed.add(m.idx); return renderPlayer(p) + renderMecha(m); }
+        return renderPlayer(p);
+      });
+      st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m)); });
+      colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
     }
     if (st.bonds.length) {
       colL.push(sect('羁绊', 'BONDS'));
@@ -1215,7 +1311,7 @@
           /* 守卫：完全没有已定义状态键的段才跳过。
              孤立的 next: / check: / bond: 等附属段（被正文与主状态块隔开）也必须渲染，
              否则主块渲染完、后续孤段会被静默丢弃（v3.10.0 真实故障：next: 丢失）。 */
-          const meaningful = st.players.length || st.scene || st.mobs.length ||
+          const meaningful = st.players.length || st.mechas.length || st.scene || st.mobs.length ||
             st.bonds.length || st.foes.length || st.npcs.length ||
             st.ntrBonds.length || st.ntrFoes.length || st.ntrHearts.length || st.ntrFalls.length || st.ntrLogs.length ||
             st.checks.length || st.quest || st.next || st.result || st.world || st.team;
@@ -1659,6 +1755,37 @@
 .tc-nb-kink span{color:#fbbf24;font-weight:700;letter-spacing:.16em}
 .tc-nb-kink b{color:#fcd34d;font-size:13px;font-weight:700;min-width:24px;text-align:right}
 .tc-nb-kink em{font-style:normal;font-size:10px;color:#6b5f45;letter-spacing:.1em}
+/* ── 机甲（kbm）：独立血/装/属性 ── */
+.tc-kbm{margin-top:6px;border:1px solid #26424f;border-left:3px solid #22d3ee;border-radius:8px;background:rgba(8,24,32,.55);padding:8px 10px}
+.tc-kbm.t-heavy{border-left-color:#f59e0b}
+.tc-kbm.t-full{border-left-color:#a78bfa}
+.tc-kbm-hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tc-kbm-hd b{font-size:13px;color:#a5f3fc;letter-spacing:.04em}
+.tc-kbm-type{font-size:10px;font-weight:700;color:#67e8f9;border:1px solid #155e75;border-radius:5px;padding:1px 5px}
+.tc-kbm.t-heavy .tc-kbm-type{color:#fcd34d;border-color:#92400e}
+.tc-kbm.t-full .tc-kbm-type{color:#ddd6fe;border-color:#5b21b6}
+.tc-kbm-hp{display:flex;align-items:baseline;gap:8px;font-size:11px;color:#7c9aa8}
+.tc-kbm-hp b{font-size:13px;color:#a5f3fc}
+.tc-kbm-hp em{font-style:normal;font-size:10px;font-weight:700;color:#fca5a5}
+.tc-kbm-attrs{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:11px}
+.tc-kbm-attrs i{font-style:normal;color:#6b8b99;margin-right:3px}
+.tc-kbm-attrs b{color:#c7e6ef;font-weight:700}
+.tc-kbm-eq{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.tc-kbm-eq span{font-size:10px;color:#99c9d6;background:rgba(34,211,238,.09);border:1px solid rgba(34,211,238,.24);border-radius:4px;padding:1px 6px}
+.tc-kbm.dead{border-color:#3f1d1d;border-left-color:#7f1d1d;background:rgba(24,8,8,.6)}
+.tc-kbm.dead .tc-kbm-hd b,.tc-kbm.dead .tc-kbm-hp b{color:#b98a8a}
+.tc-bar i.kbm-dead{background:linear-gradient(90deg,#7f1d1d,#b91c1c)}
+.tc-bar i.kbm{background:linear-gradient(90deg,#b91c1c,#f43f5e)}
+.tc-bar i.kbm-en{background:linear-gradient(90deg,#0369a1,#38bdf8)}
+.tc-bar i.kbm-sp{background:linear-gradient(90deg,#6d28d9,#c084fc)}
+.tc-bar i.kbm-en-dry,.tc-bar i.kbm-sp-dry{background:linear-gradient(90deg,#3f3f46,#71717a)}
+.tc-kbm-sub{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:7px}
+.tc-kbm-il{display:flex;align-items:baseline;gap:4px;font-size:10px;color:#7c9aa8}
+.tc-kbm-il>span{letter-spacing:.1em;color:#94a3b8;min-width:15px}
+.tc-kbm-il>b{font-size:11px;font-weight:700;color:#a5f3fc;min-width:22px;text-align:right}
+.tc-kbm-il>em{font-style:normal;font-size:9px;color:#5c7381}
+.tc-kbm-il .tc-bar{flex:1;height:4px;margin-left:2px}
+.tc-kbm-il.dry>b,.tc-kbm-il.dry>span{color:#6b7280}
 .tc-nb-def{margin-top:7px;font-size:11px;color:#fca5a5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tc-nb-locks{display:inline-flex;gap:2px;font-size:11px;filter:saturate(.85)}
 .tc-nb-locks i{font-style:normal;opacity:.62}

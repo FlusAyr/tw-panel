@@ -17,7 +17,8 @@ const vm = require('vm');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'panel.js'), 'utf8');
 
 /* 建一个隔离的 window，把某份 panel.js 源码跑进去，拿它的 __twCard。
-   要建两份：本版（工作区）+ v3.14.0（git tag），用来做真跨版本逐字节比对。 */
+   要建两份：本版（工作区）+ 基线 tag，用来做真跨版本逐字节比对。
+   基线钉 tag 不钉 HEAD：提交后 HEAD 就等于本版，比对会退化成自指（v3.16 定下的规则）。 */
 function makeApi(source) {
   const sb = {
     window: {},
@@ -40,6 +41,7 @@ function makeApi(source) {
 }
 
 const api = makeApi(SRC);
+const BASELINE = 'v3.16.0';   // 跨版本锁的基线 tag：必须是不再变的东西
 
 /* KEYS 字符串从源码现取（不手抄：手抄的副本会随 panel.js 漂移而变成假绿） */
 function readKeysString() {
@@ -243,11 +245,11 @@ setTimeout(() => {
      不设跳过开关：拿不到 tag 就是失败 —— 这条是本项目最硬的回归判据，能被静默跳过就等于没有。 */
   let base = null, baseErr = '';
   try {
-    base = require('child_process').execFileSync('git', ['show', 'v3.14.0:panel.js'], {
+    base = require('child_process').execFileSync('git', ['show', BASELINE + ':panel.js'], {
       cwd: path.join(__dirname, '..'), encoding: 'utf8', maxBuffer: 1 << 26
     });
   } catch (e) { baseErr = String((e && e.stderr) || (e && e.message) || e).slice(0, 200); }
-  T('能取到基线源码（git show v3.14.0:panel.js）', typeof base === 'string' && base.length > 1000,
+  T('能取到基线源码（git show ' + BASELINE + ':panel.js）', typeof base === 'string' && base.length > 1000,
     '取不到：' + baseErr + '　← 浅克隆（git clone --depth=1）里没有 tag，'
       + '先跑 git fetch --tags 再重试；这不是可以跳过的项，取不到基线就是失败。');
   if (typeof base === 'string' && base.length > 1000) {
@@ -257,25 +259,103 @@ setTimeout(() => {
       /* v3.15.0 起两个环多了一行「↑ 沦陷 / ↓ 回撤」标签（用户要求看得出涨/回）。
          这是本版唯一被允许的旧卡渲染差异，所以把它归一掉再比 —— 剩下的必须一个字节都不差。
          归一规则写死在这里，不引用任何仓库外脚本：删掉/改动环标签以外的任何东西，这条就会红。 */
-      const NORM_RING = (h) => h.replace(/<text[^>]*>(?:[↑↓]\s*)?(沦陷|回撤)<\/text>/g, '<RING>');
+      /* 基线是 v3.16.0：它的环标签已经带 ↑/↓ 箭头，与本版同形，所以**不需要任何归一**。
+         只归一版本号字符串（版本号本来就该变）。归一越多，锁越松 —— 能逐字节就别归一。 */
       const cards = Object.keys(GOLD);
-      const hardDiff = [], rawDiff = [], ringCards = [];
+      const hardDiff = [];
       for (const card of cards) {
-        const cur = api.render(api.parseState(card));
-        const old = oldApi.render(oldApi.parseState(card));
-        if (NORM_VER(cur) !== NORM_VER(old)) rawDiff.push(card.slice(3, 12));
-        if (NORM_RING(cur) !== cur) ringCards.push(card.slice(3, 12));
-        const a = NORM_RING(NORM_VER(cur));
-        const b = NORM_RING(NORM_VER(old));
-        if (a !== b) hardDiff.push(card.slice(3, 12) + '（本版 ' + a.length + 'B / v3.14.0 ' + b.length + 'B）');
+        const cur = NORM_VER(api.render(api.parseState(card)));
+        const old = NORM_VER(oldApi.render(oldApi.parseState(card)));
+        if (cur !== old) hardDiff.push(card.slice(3, 12) + '（本版 ' + cur.length + 'B / ' + BASELINE + ' ' + old.length + 'B）');
       }
-      T('旧卡渲染与 v3.14.0 逐字节相同（归一掉环标签后，' + cards.length + ' 张）', hardDiff.length === 0,
-        '归一后仍不同的：' + hardDiff.join('；'));
-      T('旧卡与 v3.14.0 的 raw 差异只出现在带环的卡上（' + ringCards.length + ' 张）',
-        rawDiff.length === ringCards.length && rawDiff.every((n) => ringCards.indexOf(n) >= 0),
-        'raw 有差异：' + JSON.stringify(rawDiff) + ' / 带环：' + JSON.stringify(ringCards));
+      T('旧卡渲染与 ' + BASELINE + ' 逐字节相同（仅归一版本号，' + cards.length + ' 张）', hardDiff.length === 0,
+        '不同的：' + hardDiff.join('；'));
     }
   }
+
+  /* ══════════════ 组 7 · 机甲 kbm ══════════════ */
+  console.log('\n── 组 7 · 机甲 kbm ──');
+
+  const KBM_FULL = [
+    'scene: 深夜·机库',
+    'p1: 你 | HP 92/100 | SP 30/50',
+    'kbm1: 猎隼 | 型 全包 | HP 120/150 | 能 80/100 | SP 45/60 | 力 62 | 敏 45 | 体 58 | 装 链锯剑 ｜ 护盾发生器 ｜ 推进器',
+    'next: 继续',
+  ].join('\n');
+
+  const stK = api.parseState(KBM_FULL);
+  const mk = stK.mechas || [];          // KEYS 里没登记 kbm 时这里是 undefined：要判红，不是崩
+  T('kbm 行被解析出 1 台机甲', mk.length === 1, '实际 ' + mk.length + '（undefined=KEYS 没登记 kbm）');
+  const m1 = mk[0] || {};
+  T('名称取第一个位置值（无字段名）', m1.name === '猎隼', '实际 ' + JSON.stringify(m1.name));
+  T('型 解析出原文与主题类', m1.typeRaw === '全包' && m1.type === 'full',
+    'typeRaw=' + JSON.stringify(m1.typeRaw) + ' type=' + JSON.stringify(m1.type));
+  T('HP 当前/上限', m1.hp && m1.hp.cur === 120 && m1.hp.max === 150, JSON.stringify(m1.hp));
+  T('能 当前/上限', m1.en && m1.en.cur === 80 && m1.en.max === 100, JSON.stringify(m1.en));
+  T('SP 当前/上限（机甲自己的槽）', m1.sp && m1.sp.cur === 45 && m1.sp.max === 60, JSON.stringify(m1.sp));
+  const at1 = m1.attrs || [];
+  T('六项属性任写几项都能取到（本例 3 项）', at1.length === 3 &&
+    at1.map((a) => a.k).join('') === '力敏体' && at1[0].v === 62, JSON.stringify(at1));
+  const eq1 = m1.equip || [];
+  T('装 按全角 ｜ 切出 3 段', eq1.length === 3 && eq1[0] === '链锯剑' && eq1[2] === '推进器',
+    JSON.stringify(eq1));
+
+  const hK = api.render(stK);
+  T('机甲卡被渲染（含 tc-kbm）', hK.indexOf('class="tc-kbm') >= 0);
+  T('机甲卡挂在同号 p1 卡之后', hK.indexOf(m1.name) > hK.indexOf('92/100'),
+    'p1 卡片指纹 idx=' + hK.indexOf('92/100') + ' / 机甲 idx=' + hK.indexOf(m1.name));
+  T('三根条都在：HP / 能 / SP', (hK.match(/class="tc-bar"/g) || []).length >= 3,
+    'tc-bar 数量 ' + (hK.match(/class="tc-bar"/g) || []).length);
+
+  /* 无对应 p：单独成卡、不许丢 */
+  const stOrphan = api.parseState(['scene: x', 'p1: 你 | HP 1/1', 'kbm3: 孤机 | HP 10/20', 'next: 继续'].join('\n'));
+  const hO = api.render(stOrphan);
+  T('找不到 p3 的 kbm3 单独成卡、不丢', hO.indexOf('孤机') >= 0 && (stOrphan.mechas || []).length === 1);
+
+  /* HP 归零：已失效 + dead 类；能归零：灰，不许用红（没电≠被打烂） */
+  const hDead = api.render(api.parseState(['scene: x', 'p1: 你', 'kbm1: 残骸 | HP 0/100 | 能 0/80', 'next: 继'].join('\n')));
+  T('HP 归零 → dead 类 + 已失效', hDead.indexOf('tc-kbm dead') >= 0 && hDead.indexOf('已失效') >= 0);
+  T('HP 归零的条用 kbm-dead（暗红）', hDead.indexOf('kbm-dead') >= 0);
+  T('能归零 → 灰条 + dry 类，不用红', hDead.indexOf('kbm-en-dry') >= 0 && hDead.indexOf('tc-kbm-il dry') >= 0);
+
+  /* 数值格严格：第二段非纯数字就整格丢，不取前半截（显示错值比不显示危险） */
+  const stBad = api.parseState([
+    'scene: x', 'p1: 你',
+    'kbm1: 坏格机 | HP 120/150 | 能 80/100/次 | SP 80/abc',
+    'next: 继',
+  ].join('\n'));
+  const mBad = (stBad.mechas || [])[0] || {};
+  T('能 80/100/次 → 整格丢（不是取 80）', mBad.en === null, JSON.stringify(mBad.en));
+  T('SP 80/abc → 整格丢（不是取 80）', mBad.sp === null, JSON.stringify(mBad.sp));
+  T('同一行的合法格不受影响（HP 120/150 仍解析）', mBad.hp && mBad.hp.cur === 120 && mBad.hp.max === 150,
+    JSON.stringify(mBad.hp));
+  const hBad = api.render(stBad);
+  T('坏格不画条、也不显示 80 这个数', !/能<\/span><b>80/.test(hBad.replace(/\s/g, '')),
+    '渲染里出现了 "能 80"');
+  const stHalf = api.parseState(['scene: x', 'p1: 你', 'kbm1: 半格机 | 能 80', 'next: 继'].join('\n'));
+  const mHalf = (stHalf.mechas || [])[0] || {};
+  T('能 80（只给当前值）→ 上限为空、当前值保留', mHalf.en && mHalf.en.cur === 80 && mHalf.en.max === null,
+    JSON.stringify(mHalf.en));
+
+  /* ── console.warn 白名单 ──
+     门禁从「计数为 0」放宽成「白名单外为 0」。放宽只针对「坏数据被静默丢弃」这一类：
+     原禁令针对「未登记键」——给它加 warn 会让它看起来已被处理，把可见变静默。
+     两者方向相反：一个把静默变可见，一个把可见变静默。
+     判据：这条 warn 出现时，玩家看到的是「少了一块」还是「正常画面」？少一块 → 允许。
+     白名单必须带 [tw-card] kbm 前缀，且格式固定的 console.warn('字符串', …)。 */
+const WARN_WHITELIST = [/^\s*console\.warn\('\[tw-card\] kbm /];
+T('console.warn/error 白名单长度恰为 1（改名单要一起改这条）', WARN_WHITELIST.length === 1);
+const warnLines = SRC.split('\n')
+  .filter((ln) => /console\.(warn|error)\s*\(/.test(ln))
+  .map((ln) => ln.trim());
+T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处）',
+  warnLines.length === WARN_WHITELIST.length &&
+  warnLines.every((ln) => WARN_WHITELIST.some((re) => re.test(ln))),
+  '白名单外的：' + JSON.stringify(warnLines.filter((ln) => !WARN_WHITELIST.some((re) => re.test(ln)))));
+
+  /* 无 kbm 行：不许留空壳 */
+  T('无 kbm 行 → 没有 tc-kbm 节点',
+    api.render(api.parseState('scene: x\np1: 你 | HP 92/100')).indexOf('tc-kbm') < 0);
 
   console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
