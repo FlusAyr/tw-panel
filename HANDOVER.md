@@ -67,7 +67,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 | `panel.js` | **v3.14.0**（tag 未推） | 渲染器唯一源文件，≈1.7k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
-| NTR 卡 | **v3 纯净框架版** | 三个版本演进见 §7.3 |
+| NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
 | 无限恐怖 v2 / 跑团用 v4 | 不变 | content/worldbook/ |
 
 **v3.8.0 → v3.14.0 的增量能力**（AGENTS.md 写作时还没有的）：
@@ -126,7 +126,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 ## 7. 内容资产与工具
 
 ### 7.1 仓库 `content/`（玩家下载区）
-- `worldbook/`：无限恐怖 v2、跑团用 v4、**NTR_伴侣夺走_v3_纯净框架版**（新增）
+- `worldbook/`：无限恐怖 v2、跑团用 v4（NTR 册不入公开仓库，见 §7.3）
 - `database/`：10 表深度版模板 + 原版备份（**不含第三方插件**，玩家去作者原贴下载）
 - `entries/`、`docs/`：条目与提示词
 
@@ -134,7 +134,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 00_索引（改任何东西后要更新版本号行）/ 01_世界书 / 03_面板（手动导入版+源码）/ 06_文档 / 07_脚本（panel_content.js + 预览页）/ 09_归档（旧版与勿分发件）。
 **改动面板后同步五处**：仓库 dist、F 盘 03_面板 手动版与源码、07_脚本 panel_content.js、00_索引 版本行。
 
-### 7.3 NTR 卡三版本（在 Downloads 与 F 盘，v3 已入仓）
+### 7.3 NTR 卡三版本（在 Downloads 与 F 盘，v3 已移出公开仓库）
 - v1 原版：40 条目裸世界书，bond/foe 雏形 + 预设剧情（苏乐/沈栀/靳渊剧本）+ TavernDB 纪要
 - v2 渲染器适配：bond/foe→nb/nf，写入五字段规则（`tools/adapt_ntr_card.py`）
 - **v3 纯净框架（当前）**：预设剧情全部清空（纪要/索引/快照/防线/加害者档案→空表+列序说明；条目 20 → 伴侣角色条目模板含 `{{user}}`；示例人名泛化为莉娅/季临），并新增**输出纪律**条款强制每轮输出五维 0-100 全值——沦陷轮盘 =（恋+调+屈+淫)/4，缺值不显示，这是「AI 不生成数值」故障的修复。**TavernDB 结构件（条目 21/29/32/33/34/36/38）字节级未动**（`tools/make_ntr_v3_clean.py` 有断言）。
@@ -155,6 +155,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 4. **`work/panel_content.js`**：仓库外工作副本（`C:\Users\Administrator\WorkBuddy\2026-10-31-05-01-50\work\`），发版时同步一份，防仓库目录意外损毁。
 5. NTR 卡 v3 的**输出纪律**条款是治「AI 漏生成数值」的第一版方案；如果实际跑团仍漏，下一步方向是把纪律句复制到条目 1（五维数值核心）的头部，双保险。
 6. **字节断言一律落盘后 `wc -c`**。`size_download` 本身准，错在用法：URL 形态错（`repo/@v1.2.3/f`，`@` 前多一个 `/`）→ jsDelivr 回 404 错误体（69~72 B），看着像文件只有几十字节；`-I`(HEAD) 恒 0；`--compressed` 给压缩字节（`llms.txt` 2952 vs 5884）。异常小值先核对 URL。
+7. **R18 扩展册仍在 git 历史中**：`content/worldbook/NTR_伴侣夺走_v3_纯净框架版.json` 已于 2026-11-01 从 HEAD 移除（仓库无版本变更、未打 tag），但引入它的提交 `24802fe` 仍在历史里（`git log --all -- <该路径>` 可取回）。管理层已知并接受：仓库保持公开，重写历史会改变全部 tag 指向的 commit，与「tag 永不覆盖」冲突。新增 R18 册一律不入公开仓库。
 
 ## 9. 红线（AGENTS.md §2 的摘要，全文去读原文）
 
