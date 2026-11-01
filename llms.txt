@@ -6,6 +6,7 @@
 
 ## 按诉求跳转
 
+- [HANDOVER.md](https://github.com/FlusAyr/tw-panel/blob/main/HANDOVER.md)：**接手第一天读这份**。系统全景、当前版本状态、发版 SOP 命令级实录、CDN/更新链路原理、内容资产地图、已知问题。是 AGENTS.md 的导览与增量补充。
 - [AGENT_DEPLOY.md](https://github.com/FlusAyr/tw-panel/blob/main/AGENT_DEPLOY.md)：**装环境**。从安装 SillyTavern 起到渲染器可用，含可自动/必须人工的步骤划分、总验收清单、失败处理表、五条红线。
 - [AGENTS.md](https://github.com/FlusAyr/tw-panel/blob/main/AGENTS.md)：**维护仓库**。目录职责、四条绝对不能做的事、面板架构与状态块键行契约、内容不变量、发版流程、已知陷阱、交接自查。
 - [CHANGELOG.md](https://github.com/FlusAyr/tw-panel/blob/main/CHANGELOG.md)：**版本谱系**。版本号规则、每次改动的原因与影响面。
@@ -17,17 +18,18 @@
 
 ## 渲染器
 
-- [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。自动更新引导器，装一次后从 CDN 拉最新面板。
-- [dist/panel-script-v3.8.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.8.json)：离线手动版，不自动更新。
-- [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，约 1450 行。改这个文件，然后跑 `python build.py`。
-- [loader.js](https://github.com/FlusAyr/tw-panel/blob/main/loader.js)：引导器源码，含 `REPO` 常量与双源顺序。
-- [version.json](https://github.com/FlusAyr/tw-panel/blob/main/version.json)：版本清单，loader 据此判断是否更新。
+- [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。boot v2.0 引导包（一行 import boot.mjs），装一次后自动更新。
+- [dist/panel-script-v3.12.0.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.12.0.json)：离线手动版 v3.12.0，不自动更新。
+- [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，约 1700 行。改这个文件，然后跑 `python build.py`。
+- [boot.mjs](https://github.com/FlusAyr/tw-panel/blob/main/boot.mjs)：ESM 双通道自动更新引导（fetch 快速通道 + import 兜底），含设置面板；改动后玩家需重导一次导入包（引导自身无法自更新）。
+- [version.json](https://github.com/FlusAyr/tw-panel/blob/main/version.json)：版本清单，boot 据此判断是否更新。
 - [build.py](https://github.com/FlusAyr/tw-panel/blob/main/build.py)：打包脚本，读 `panel.js` 的 `VERSION` → 写 `version.json` 与 `dist/`。
 
 ## 规则内容
 
 - [content/worldbook/无限恐怖_v2_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/无限恐怖_v2_联机版_AI精简.json)：主世界书，24 条目，含实时结算三级触发器。
 - [content/worldbook/跑团用世界书_v4_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/跑团用世界书_v4_联机版_AI精简.json)：通用规则层，18 条目，含 cr 行规范。
+- [content/worldbook/NTR_伴侣夺走_v3_纯净框架版.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/NTR_伴侣夺走_v3_纯净框架版.json)：NTR 附属扩展册（40 条目）。nb/nf/nh/nd/nl 五字段规则 + 五维/防线/攻势数值体系；预设剧情已清空为纯净框架（纪要/索引/快照为空表，条目 20 为伴侣角色模板）。与基础册共用状态块，启动本册时无限恐怖册不启用。
 - [content/database/无限恐怖数据库模板_主神空间深度版.json](https://github.com/FlusAyr/tw-panel/blob/main/content/database/无限恐怖数据库模板_主神空间深度版.json)：10 表模板（全局/名册/强化台账/结算台账/敌情/势力/物资/任务/纪要/选项）。
 - [content/entries/](https://github.com/FlusAyr/tw-panel/tree/main/content/entries)：自定义条目（超高校级幸运、魔药体系 v1.0）。
 - [content/docs/提示词_自定义血统内功创作系统.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/提示词_自定义血统内功创作系统.md)：交给创作 AI 的规范（三准则、八项功能契约、代价五不变量、七步指引、自检清单）。
@@ -44,4 +46,5 @@
 ## 可选
 
 - [ci/release.yml.example](https://github.com/FlusAyr/tw-panel/blob/main/ci/release.yml.example)：可选 GitHub Actions 发布模板，启用需 token 带 `workflow` 权限。
-- [tests/loader.test.js](https://github.com/FlusAyr/tw-panel/blob/main/tests/loader.test.js)：引导器回归测试，`node tests/loader.test.js`，应 11 条全过。
+- [tests/](https://github.com/FlusAyr/tw-panel/tree/main/tests)：回归测试（`npc.test.js` 14 断言 / `loader.test.js` 11 断言 / `next_sweep.test.js` 孤段仿真）与可视化预览页（`preview-ntr.html`、`preview_mobile.html`、`preview_mini.html`、`boot_e2e.html`，浏览器直接打开）。
+- [tools/](https://github.com/FlusAyr/tw-panel/tree/main/tools)：内容转换脚本（NTR 卡 v2 适配、v3 纯净框架生成）。
