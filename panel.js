@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.18.0';
+  const VERSION = '3.19.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -766,10 +766,10 @@
 
     /* 自定文本：只有标签，**没有条也没有数值格**——两者混在一起会让人以为"破甲"也有数字 */
     const tags = (m.tags || []).length ? `
-      <div class="tc-kbm-tags">${(m.tags || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
+      <div class="tc-kbm-tags"><em class="tc-kbm-tagl">其他</em>${(m.tags || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
 
     const attrs = m.attrs.length ? `
-      <div class="tc-kbm-attrs">${m.attrs.map(a => `<span><i>${esc(a.k)}</i><b>${a.v}</b></span>`).join('')}</div>` : '';
+      <div class="tc-kbm-attrs">${m.attrs.map(a => `<span><i>${esc(a.k)}</i> <b>${a.v}</b></span>`).join('')}</div>` : '';
 
     /* 装备：方角内凹插槽，和伴侣卡的圆 pill 区分 */
     const equip = m.equip.length ? `
@@ -1832,15 +1832,16 @@
 .tc-kbm-g.dry .tc-kbm-gv,.tc-kbm-g.dry .tc-kbm-gm{color:#6b7280}
 .tc-kbm-attrs{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:7px}
 .tc-kbm-attrs span{font-size:10.5px;color:#7c98a8}
-.tc-kbm-attrs i{font-style:normal;color:#4f6b7a;margin-right:2px}
+.tc-kbm-attrs i{font-style:normal;color:#4f6b7a;margin-right:3px}
 .tc-kbm-attrs b{font-family:ui-monospace,Consolas,monospace;color:#b8dbe8;font-weight:600}
 .tc-kbm-cus{margin-top:7px;padding-top:6px;border-top:1px dashed rgba(34,211,238,.14)}
 .tc-kbm-g.x .tc-kbm-gl{color:#67a3b8}
 .tc-kbm-g.x .tc-kbm-gv{color:#9fd8e8}
 .tc-bar i.kbm-x{background:linear-gradient(90deg,#0e7490,#67e8f9)}
-.tc-kbm-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
-.tc-kbm-tags span{font-size:10px;padding:1px 7px;color:#8fb6c4;
-  border:1px dashed rgba(34,211,238,.3);border-radius:2px;background:rgba(34,211,238,.05)}
+.tc-kbm-tags{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:7px}
+.tc-kbm-tagl{font-style:normal;font-size:9.5px;letter-spacing:.14em;color:#456b7a;margin-right:1px}
+.tc-kbm-tags span{font-size:10.5px;padding:1px 8px;color:#a8cbd8;
+  border:1px dashed rgba(34,211,238,.42);border-radius:2px;background:rgba(34,211,238,.09)}
 .tc-kbm-eq{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .tc-kbm-eq .slot{font-size:10.5px;padding:2px 9px;color:#b6cfda;background:#0b1720;
   border:1px solid #2b4a58;border-radius:1px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 1px 0 rgba(120,200,220,.12)}

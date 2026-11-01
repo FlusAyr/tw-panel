@@ -348,6 +348,51 @@ setTimeout(() => {
     '条数 ' + (hC.match(/class="tc-kbm-g kbm-x x"/g) || []).length);
   T('自定文本渲染成标签（tc-kbm-tags，条不混进去）', hC.indexOf('tc-kbm-tags') >= 0 &&
     hC.indexOf('<span>破甲</span>') >= 0 && hC.indexOf('<span>夜视</span>') >= 0);
+  /* 真实的一行（用户贴的原始输出）：六维只写了 `敏 82`，装备全是裸段没写 `装`。
+     这一行是常态，不是边角——断言直接钉它。 */
+  const stReal = api.parseState([
+    'scene: x', 'p1: 你',
+    'kbm1: 隐士概念机 | 型 全包 | HP 300/300 | 敏 82 | 原型折叠维生舱 | 破损空间引擎 | 纳米抢修模块',
+    'next: 继',
+  ].join('\n'));
+  const mReal = (stReal.mechas || [])[0] || {};
+  const hReal = api.render(stReal);
+
+  T('真实行：`敏 82` 解析成 {k:敏, v:82}',
+    (mReal.attrs || []).length === 1 && mReal.attrs[0].k === '敏' && mReal.attrs[0].v === 82,
+    JSON.stringify(mReal.attrs));
+  T('真实行：三个裸段全进 tags（不丢）',
+    (mReal.tags || []).length === 3 && mReal.tags[2] === '纳米抢修模块',
+    JSON.stringify(mReal.tags));
+
+  /* ① `敏82` 粘在一起会被读成字段名。标签与数值之间必须有空白字符——
+     只靠 CSS margin 不够：视觉分开了，textContent、复制、朗读仍是粘的。 */
+  const attrBox = (hReal.match(/<div class="tc-kbm-attrs">[\s\S]*?<\/div>/) || [''])[0];
+  const attrTexts = (attrBox.match(/<span>[\s\S]*?<\/span>/g) || [])
+    .map((x) => x.replace(/<[^>]*>/g, ''));
+  T('六维读数形态必须是「名字 + 空白 + 数字」（不许出现 敏82 无空格形态）',
+    attrTexts.length === 1 && /^[力敏体智感魅]\s+\d+$/.test(attrTexts[0]),
+    '实际：' + JSON.stringify(attrTexts));
+  T('六维：符号弱化色 + 数值等宽加粗（间距 ≥3px，另有空白字符）',
+    /\.tc-kbm-attrs i\{[^}]*margin-right:3px/.test(SRC.replace(/\r/g, '')) &&
+    /\.tc-kbm-attrs b\{[^}]*ui-monospace/.test(SRC.replace(/\r/g, '')));
+
+  /* ② 裸段是「AI 没写装前缀」的常态，必须有读得出的容器与弱标题，且绝不进插槽 */
+  const tagBox = (hReal.match(/<div class="tc-kbm-tags">[\s\S]*?<\/div>/) || [''])[0];
+  T('裸段渲染在 tc-kbm-tags 内（三个都在）',
+    tagBox.indexOf('原型折叠维生舱') >= 0 && tagBox.indexOf('破损空间引擎') >= 0 &&
+    tagBox.indexOf('纳米抢修模块') >= 0,
+    '片段长度 ' + tagBox.length);
+  T('裸段绝不出现在 tc-kbm-eq 内（进了插槽会被读成可拆卸武器）',
+    (hReal.match(/<div class="tc-kbm-eq">[\s\S]*?<\/div>/) || [''])[0].indexOf('维生舱') < 0);
+  T('裸段有独立弱标题「其他」（不只当脚注）',
+    /<em class="tc-kbm-tagl">其他<\/em>/.test(tagBox), tagBox.slice(0, 80));
+
+  /* ③ `en`/`sp` 缺失就不画：画一根 0 的条会读成「有电但没电」，比不画更误导 */
+  T('en/sp 为 null 时不画那两根条（真实行里只有 HP 一根）',
+    mReal.en === null && mReal.sp === null &&
+    hReal.indexOf('class="tc-kbm-g kbm-en') < 0 && hReal.indexOf('class="tc-kbm-g kbm-sp') < 0);
+
   /* 两者必须视觉可分：标签不许出现在数值容器里，反之亦然 */
   const cusBox = (hC.match(/<div class="tc-kbm-cus">[\s\S]*?<\/div>\s*(?=<div class="tc-kbm-tags">|<div class="tc-kbm-eq">|<em class="tc-kbm-stamp">|$)/) || [''])[0];
   T('数值自定与文本自定在两个容器里（标签不出现在 tc-kbm-cus 内）',
