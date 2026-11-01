@@ -315,8 +315,14 @@ const PANEL_GCODE_TAG = 'https://gcore.jsdelivr.net/gh/FlusAyr/tw-panel@v3.13.0/
       let parsed = null;
       try { parsed = new URL(url); } catch (e) { parsed = null; }
       ok(!!parsed, '导入 URL 能被 new URL() 解析（实际 ' + url + '）');
-      ok(url.indexOf('@v' + ver.version + '/boot.mjs') >= 0,
-        '导入 URL 钉当前 tag @v' + ver.version + '/boot.mjs');
+      /* v3.16 起导入行钉的是 BOOT_TAG（boot.mjs 最后变更所在 tag），不是面板 VERSION。
+         钉面板版本会让一份**没变**的引导脚本每版都显示"变了"，那正是这版要消掉的 churn。
+         BOOT_TAG 从 build.py 现解析 —— 测试里不再写第二份字面量。 */
+      const buildSrc = fs.readFileSync(path.join(__dirname, '..', 'build.py'), 'utf8');
+      const mtTag = buildSrc.match(/^BOOT_TAG\s*=\s*["'](v[0-9.]+)["']/m);
+      ok(!!mtTag, '能从 build.py 解析出 BOOT_TAG');
+      ok(!!mtTag && url.indexOf('@' + mtTag[1] + '/boot.mjs') >= 0,
+        '导入 URL 钉 BOOT_TAG ' + (mtTag ? mtTag[1] : '(未解析到)') + '/boot.mjs（实际 ' + url + '）');
       ok(url.indexOf('@main') < 0, '导入 URL 不再指向 @main');
       ok(String(dist.name || '').indexOf('v2.1') >= 0, '导入包名称标 v2.1（实际 ' + dist.name + '）');
     }

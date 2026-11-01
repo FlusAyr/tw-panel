@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.15.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.16.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.15.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.16.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -81,7 +81,8 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.13.0** 引导升级配套：面板无功能变更，仅为让 `dist/loader-script.json` 指向钉 tag 的新 boot 而 bump
 - **v3.14.0** 拓展键前缀：`kbnpc[<N>]`/`ntrnpc[<N>]` 独立前缀并登记进 `KEYS`（缺登记会截断其后状态行）；删除 `.github/workflows/` 恒红叉模板，不再新建 CI
 - **v3.15.0** 行内 A/B 双值：任何 `名字 30/70` 自动出两根条、`名字 15` 仍单值（面板不认识具体是哪本书，纯通用解析）；旧面板会把 `调 34/12` 静默截成 `34`，带双值的书须面板 v3.15+
-- **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）；长期解法是 `version.json` 加独立 `boot` 字段，让引导版本可独立分发（backlog）
+- **v3.16.0** 版本源收敛：`version.json` 删 `notes`、加 `boot`（从 `boot.mjs` 现读，不硬编码）；导入行改用 `build.py` 的 `BOOT_TAG`，面板发版不再改导入行——只有 `boot.mjs` 真改过时才动；`version.test.js` 加三条断言（`notes` 不存在 / `boot` 与 `boot.mjs` 一致 / `BOOT_TAG` 到 `HEAD` 之间 `boot.mjs` 无变更）；`panel.js` 仅 `VERSION` bump；`boot.mjs` 未改动（v2.1 / 19897 B）
+- **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）
 
@@ -107,6 +108,9 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 
 **令牌**：push 用管理员提供的 classic PAT（需 repo 权限）。**令牌绝不写进任何会提交的文件**。
 教训：fine-grained 令牌不能建仓、不能推 workflow；classic 缺 `workflow` scope 时推不动 `.github/workflows/`。
+
+索引最后更新：它的数据来自别人的产物（03_面板 由值守同步）。
+面板发版不改导入行；只有改 `boot.mjs` 时才动 `build.py` 的 `BOOT_TAG`，并在发版说明里写清。
 
 ## 6. 更新链路与 CDN 的脾气（最重要的一节）
 

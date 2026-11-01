@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.15.0';
+  const VERSION = '3.16.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';

@@ -19,16 +19,26 @@ DIST = ROOT / "dist"
 LOADER_ID = "8f3c1d92-6b47-4a10-9c55-1d2e7f8a0b31"   # 引导脚本固定 id，勿改
 PANEL_ID = "1604cbb8-ce4d-4974-8efb-1b6d186e37fb"    # 与 v3.8 手动版同 id
 
-NOTES = ("拓展键前缀（kbnpc / ntrnpc 独立登记与主题）+ 版本一致性回归；引导 v2.1 不变")
+# 这里原先有一个 NOTES 常量，写进 version.json 的 notes 字段给玩家看。v3.16 删掉：
+# 同一份人读文案有两个来源（CHANGELOG.md 与这个常量），只有前者在维护白名单里，
+# 结果必然分叉 —— v3.15.0 发出去时 notes 还写着 v3.14.0 的话，而且没人会去比。
+# 人读的版本说明只留在 CHANGELOG.md；机器读的只留 version.json 的 version/boot。
+
+# boot.mjs 最后一次变更所在的 tag。玩家导入行指向这里 —— 用 BOOT_TAG 而不是面板 semver，
+# 是因为 boot 不变时导入行就不该变：v3.13.0 之后 boot.mjs 一个字节没动，
+# 但 v3.14.0 / v3.15.0 每次发版都让 dist/loader-script.json 显示「变了」，玩家侧等于噪声。
+# 改 boot.mjs 时**必须同步改这一行**，否则导入行还钉在老 tag，玩家永远拿不到新 boot。
+# tests/version.test.js 的 C 条断言就是防这个：git diff --name-only BOOT_TAG..HEAD -- boot.mjs 必须为空。
+BOOT_TAG = "v3.13.0"
 
 # 玩家导入的那一行 import —— 全仓唯一出处，改托管/CDN 只动这个字面量。
-# 两个 %s 依次是 REPO_SLUG（用户名/仓库名）与 semver（= tag 去掉 v）。
+# 两个 %s 依次是 REPO_SLUG（用户名/仓库名）与 BOOT_TAG（含 v，如 v3.13.0）。
 # 为什么钉 tag 而不是 @main：
 #   jsDelivr 的 purge 只覆盖 Cloudflare(cdn) 与 Fastly，gcore 是独立镜像层、清不掉，
 #   实测 purge 后 cdn 已是新版而 gcore 仍在发旧件（最长扛满 s-maxage=12h）。
 #   分支引用的 URL 会被镜像各自缓存；钉 tag 的 URL 是全新条目，任何镜像都是缓存 MISS，
 #   必须回源拿同一份字节 —— 同时解决「@main 可变」和「gcore 陈旧」两个问题。
-IMPORT_URL = "https://gcore.jsdelivr.net/gh/%s@v%s/boot.mjs"
+IMPORT_URL = "https://gcore.jsdelivr.net/gh/%s@%s/boot.mjs"
 REPO_SLUG = "FlusAyr/tw-panel"
 
 
@@ -52,11 +62,19 @@ def main():
     ver = m.group(1)
     semver = ver if ver.count(".") >= 2 else ver + ".0"
 
+    # 引导自身的版本也会写进 version.json，所以同样从源码现读，不另存一份字面量。
+    boot = read(LOADER)
+    mb = re.search(r"const\s+BOOT_VERSION\s*=\s*['\"]([0-9.]+)['\"]", boot)
+    if not mb:
+        sys.exit("✗ boot.mjs 里找不到 BOOT_VERSION 常量")
+    boot_ver = mb.group(1)
+
     # 1) version.json —— 引导脚本检查更新的入口
+    #    只有机器读的字段：version（面板）+ boot（引导）。人读文案在 CHANGELOG.md，不在这里。
     meta = {
         "version": semver,
+        "boot": boot_ver,
         "file": "panel.js",
-        "notes": NOTES,
         "updated": datetime.date.today().isoformat(),
     }
     VERSION_JSON.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -71,7 +89,7 @@ def main():
         "enabled": True,
         "name": "tw-card 自动更新引导 v2.1",
         "id": LOADER_ID,
-        "content": "import '%s'" % (IMPORT_URL % (REPO_SLUG, semver)),
+        "content": "import '%s'" % (IMPORT_URL % (REPO_SLUG, BOOT_TAG)),
         "info": "只装这一支。ESM 一行 import 引导：能 fetch 走快速通道（分钟级更新），"
                 "被沙箱 CSP 拦截时自动降级 import 直连面板。更新后刷新页面即生效。"
                 "快速回复栏的「面板设置」按钮可调整更新选项。",

@@ -70,10 +70,35 @@ T('panel.js 的 VERSION 是三段式 semver', SEMVER.test(VERSION), '实际 ' + 
 T('version.json:version === panel.js VERSION', verJson.version === VERSION,
   'version.json=' + JSON.stringify(verJson.version) + ' / panel.js=' + JSON.stringify(VERSION));
 
-/* ─────────── 组 A→B · 与 dist 导入行的 tag 联动 ─────────── */
-console.log('\n── 组 A→B · 导入行 @vX.Y.Z 与 VERSION 联动 ──');
-T('dist/loader-script.json 里 @vX.Y.Z 的 X.Y.Z === VERSION', TAG_IN_IMPORT === VERSION,
-  '导入行 tag=' + JSON.stringify(TAG_IN_IMPORT) + ' / VERSION=' + JSON.stringify(VERSION));
+/* ─────────── 组 A→B · 导入行的 tag 归属（v3.16 起与面板 VERSION 解耦） ─────────── */
+console.log('\n── 组 A→B · 导入行 tag 归属 ──');
+/* v3.15 及以前：导入行钉的是面板版本，于是每次面板发版，一份**没变**的引导脚本都显示"变了"。
+   v3.16 起导入行钉 BOOT_TAG（boot.mjs 最后变更所在 tag）。所以「=== VERSION」是**过时的契约**，
+   继续钉它会逼着每版都去 bump BOOT_TAG —— 那正是这次要消掉的 churn。
+   现在这里只验 tag 的**形状**（合法的 vX.Y.Z），归属由组 G 的 C-1/C-2 锁死。 */
+T('导入行钉的 tag 形如 vX.Y.Z', /^\d+\.\d+\.\d+$/.test(String(TAG_IN_IMPORT)),
+  '导入行 tag=' + JSON.stringify(TAG_IN_IMPORT));
+/* 导入行钉的那个 tag 里，boot.mjs 的 blob 必须与 HEAD:boot.mjs 的 blob 相同。一次锁三件事：
+     1. tag 存在（rev-parse 失败即红）—— 堵住打错 tag 名（玩家导入行 404）
+     2. 玩家拿到的 boot 就是我们发的这一份（内容相同，比"版本号相等"更实）
+     3. BOOT_TAG 没落后（boot 改过却没 bump，两边 blob 就不同）
+   「同时改了 boot.mjs 和面板、BOOT_TAG 恰好等于本版 tag」这种正常发版照样绿 —— 所以没有用
+   `TAG_IN_IMPORT !== VERSION`：那是不变量错觉，正常演进会被判成故障，然后逼下一个人放宽它。 */
+(function () {
+  const gitBlob = (spec) => {
+    try {
+      return require('child_process').execFileSync('git', ['rev-parse', spec],
+        { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 24 }).trim();
+    } catch (e) { return null; }
+  };
+  const inTag = gitBlob('v' + TAG_IN_IMPORT + ':boot.mjs');
+  const atHead = gitBlob('HEAD:boot.mjs');
+  T('导入行 tag 里的 boot.mjs blob === HEAD:boot.mjs 的 blob（tag 存在、内容对得上、BOOT_TAG 没落后）',
+    !!inTag && !!atHead && inTag === atHead,
+    'v' + TAG_IN_IMPORT + ':boot.mjs=' + JSON.stringify(inTag) + ' / HEAD:boot.mjs=' + JSON.stringify(atHead)
+      + (inTag === null ? '　← 该 tag 不存在，玩家导入行会 404' : '')
+      + (inTag && atHead && inTag !== atHead ? '　← BOOT_TAG 落后：boot.mjs 改过却没 bump' : ''));
+})();
 T('导入行是合法一行 import 且 URL 可被 new URL() 解析',
   /^import\s+'[^']+'$/.test(String(loaderJson.content || '')) && (() => {
     try { new URL(String(loaderJson.content).match(/'([^']+)'/)[1]); return true; } catch (e) { return false; }
@@ -160,6 +185,51 @@ T('BOOT_VERSION 与 VERSION 字面不相等', BOOT_VERSION !== VERSION,
 const bootTriple = BOOT_VERSION.split('.').length === 2 ? BOOT_VERSION + '.0' : BOOT_VERSION;
 T('BOOT_VERSION 补零成三段后仍 != VERSION', bootTriple !== VERSION,
   'BOOT_VERSION 补零=' + JSON.stringify(bootTriple) + ' 撞上了面板版本');
+
+/* ─────────── 组 G · version.json 只留机器读的字段 + 导入行 tag 与 boot.mjs 真相一致 ─────────── */
+console.log('\n── 组 G · version.json 字段与导入行 tag ──');
+
+/* A. notes 必须消失。它当年是「人读文案的第二个来源」：同一段话 CHANGELOG 一份、build.py NOTES 一份，
+      只有前者在维护白名单里，于是必然分叉 —— v3.15.0 发出去时 notes 还写着 v3.14.0 的话。 */
+const meta = JSON.parse(fs.readFileSync(abs('version.json'), 'utf8'));
+T('version.json 里不存在 notes 字段（人读文案只留在 CHANGELOG.md）',
+  !Object.prototype.hasOwnProperty.call(meta, 'notes'),
+  '仍有 notes=' + JSON.stringify(meta.notes) + ' —— 那是人读文案的第二个来源，删掉它，不要同步它');
+
+/* B. boot 必须等于 boot.mjs 里现读的 BOOT_VERSION，不许另存一份字面量。 */
+T('version.json.boot === boot.mjs 的 BOOT_VERSION（现读，非硬编码）',
+  meta.boot === BOOT_VERSION,
+  'version.json.boot=' + JSON.stringify(meta.boot) + ' / boot.mjs=' + JSON.stringify(BOOT_VERSION));
+
+/* C. 导入行钉的 tag 必须就是 boot.mjs 最后一次变更所在的 tag。
+      这条是「解耦之后不会静默失效」的唯一保险：改了 boot.mjs 却没 bump BOOT_TAG，
+      导入行仍指旧 tag、玩家永远拿不到新 boot，而没有这条时所有测试照样全绿。
+      BOOT_TAG 从 build.py 现解析，不在本文件里再写一份字面量（两份字面量＝两个来源，同 NOTES 那个病）。 */
+const BUILD_SRC = fs.readFileSync(abs('build.py'), 'utf8');
+const mt = BUILD_SRC.match(/^BOOT_TAG\s*=\s*["'](v[0-9.]+)["']/m);
+T('能从 build.py 解析出 BOOT_TAG', !!mt, 'build.py 里找不到 `BOOT_TAG = "vX.Y.Z"`');
+if (mt) {
+  const BOOT_TAG = mt[1];
+
+  /* C-1 导入行必须钉这个 tag（防 build.py 里改了一处漏了另一处） */
+  const loader = JSON.parse(fs.readFileSync(abs('dist/loader-script.json'), 'utf8'));
+  T('dist 导入行钉的 tag === build.py 的 BOOT_TAG（' + BOOT_TAG + '）',
+    String(loader.content).indexOf('@' + BOOT_TAG + '/boot.mjs') > 0,
+    '导入行实际内容：' + String(loader.content).slice(0, 120));
+
+  /* C-2 真锁：BOOT_TAG..HEAD 之间 boot.mjs 必须没有变更 */
+  let changed = null, gitErr = '';
+  try {
+    changed = require('child_process').execFileSync('git',
+      ['diff', '--name-only', BOOT_TAG + '..HEAD', '--', 'boot.mjs'],
+      { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 24 }).trim();
+  } catch (e) { gitErr = String((e && e.stderr) || (e && e.message) || e).slice(0, 200); }
+  T('git diff --name-only ' + BOOT_TAG + '..HEAD -- boot.mjs 为空（BOOT_TAG 跟得上 boot.mjs）',
+    changed === '',
+    'boot.mjs 在 ' + BOOT_TAG + ' 之后改过、却没 bump BOOT_TAG —— 导入行还钉在老 tag，玩家永远拿不到新 boot。'
+      + (gitErr ? ' git 报错：' + gitErr + '　← 浅克隆请先 git fetch --tags'
+                : ' 实际输出=' + JSON.stringify(changed)));
+}
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

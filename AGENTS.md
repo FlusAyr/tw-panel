@@ -2,7 +2,7 @@
 
 > 你正在接手一个已上线的 SillyTavern（酒馆）跑团系统：**「主神空间」**。
 > 本文件是操作手册，读完即可独立维护，不需要原始对话记录。
-> 最后更新：2026-11-01　｜　面板 v3.15.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.16.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -30,7 +30,7 @@ tw-panel/
 ├── AGENT_DEPLOY.md         给外部 AI 助手的部署执行手册（从装 SillyTavern 开始）
 ├── version.json            版本清单，boot 据此判断是否更新
 ├── dist/                   生成物：loader-script.json、panel-script-vX.json
-├── tests/  run_all.js 聚合（loader11/npc14/next_sweep4/boot56/keys20/version28，node，无依赖）
+├── tests/  run_all.js 聚合入口（npc/loader/next_sweep/boot/keys/version），逐组断言数见 §6
 ├── ci/release.yml.example  可选自动 Release（启用需 token 带 workflow 权限）
 ├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
@@ -215,7 +215,7 @@ boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新�
 | 检查 | 命令 / 方法 | 通过标准 |
 |---|---|---|
 | 面板语法 | `node --check panel.js` | 无输出 |
-| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 56 / keys 20 / version 28，任一失败即非零退出 |
+| 回归 | `node tests/run_all.js` | npc 14 / loader 11 / next_sweep 全部通过 / boot 57 / keys 48 / version 36，任一失败即非零退出；新增或删减断言须同步本行 |
 | 面板渲染 | `node gen_preview.js`（在 `F:\酒馆卡\07_脚本`） | 生成 preview_*.html 无报错 |
 | 状态块解析 | `F:\酒馆卡\07_脚本\test_*.js` | 各断言全过 |
 | 线上可用 | curl 上节两个地址 | HTTP 200，`panel.js` ≥ 60KB |
@@ -237,6 +237,8 @@ boot 取源：jsDelivr 三域轮询 + GitHub Raw 兜底，任一可用即更新�
 7. **CRLF 警告**：仓库在 Windows 上提交会提示 LF→CRLF，不影响运行，可忽略；若要消除设 `git config core.autocrlf false`。
 8. **测试里的模板字符串**：往 `test_*.js` 里写状态块样例时，`\n` 必须写 `\\n`，否则被 JS 烤成真换行导致解析失败（连续踩过三次）。
 9. **改 Markdown 表格行只删文字、不动空格**：竖线两侧各留一个空格，删完必看该行还能切出原列数。删「（tag 未推）」「（当前）」这类括注时最容易连带吃掉相邻空格，已经坏过两次。
+10. **基线锁要钉「不会跟着你走」的东西**：跨版本回归比 `v3.14.0` tag，不比 `HEAD`——提交后 `HEAD` 就等于本版，比对退化成自指，失效方式与它要修的假锁同型，只是期限推后。钉 tag 的测试在浅克隆（`--depth=1`）里会失败，那是**正确失败**，写清「先 `git fetch --tags`」，不要改成跳过。
+11. **`BOOT_TAG` 忘了 bump = 静默失效**：导入行的 tag 由 `build.py` 的 `BOOT_TAG` 决定，面板发版不动它；改了 `boot.mjs` 却没改 `BOOT_TAG`，导入行仍指旧 tag，玩家永远拿不到新 boot，而测试本来会全绿。`BOOT_TAG` 必须与 `boot.mjs` 最后一次变更一致——`tests/version.test.js` 有断言锁这条。
 
 ---
 
