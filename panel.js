@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.19.0';
+  const VERSION = '3.19.1';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -128,6 +128,14 @@
       if ((m = x.match(/^装(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inEquip = true; inTag = false; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
       if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inEquip = false; inTag = false; continue; }
       if ((m = x.match(/^自(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inTag = true; inEquip = false; if (m[1].trim()) o.tags.push(m[1].trim()); continue; }
+
+      /* 型 关键字被省略时的容错：裸段整段恰好是三种型之一、且当前还没有型 → 当作型。
+         AI 省关键字是常态，世界书只能请求它、不能保证它；能在下游容错的地方不要只靠上游守规矩。
+         但 `装` 之后的裸段是装备名（`装 全包护盾` 可能被切成 `全包` + `护盾` 式写法），
+         那里不许改判成型号，否则一件装备会被读成整台机器的型。 */
+      if (!o.type && !inEquip && MECHA_TYPES[x]) {
+        inTag = false; o.typeRaw = x; o.type = MECHA_TYPES[x]; continue;
+      }
 
       /* 自定数值：不认识 `名字 数字` / `名字 数字/数字` 就当拓展字段收下，不丢。
          与 nb 的 o.extra 同一套规矩（同一件事不写第二遍）—— 唯一区别：这里单值也画条，
@@ -728,6 +736,35 @@
       </div>`).join('')}</div>`;
   }
 
+  /* 读数组件：机甲与使魔共用一只（同一件事不写第二遍）。
+     标签列等宽 + 等宽数字三位对齐 + 条内每 10% 一格刻度；三根读数必然等宽，
+     因为宽度是 grid 列定义给的，不是逐根调出来的。 */
+  const gaugeHtml = (lab, cur, max, cls, dry, extraCls) => {
+    const num = (v) => String(v == null ? '—' : v).padStart(3, '\u2007');
+    
+      const pct = max == null ? Math.max(0, Math.min(100, cur)) : Math.max(0, Math.min(100, Math.round(cur / max * 100)));
+      return `<div class="tc-kbm-g ${cls}${dry ? ' dry' : ''}${extraCls || ''}">
+        <span class="tc-kbm-gl">${lab}</span>
+        <b class="tc-kbm-gv">${num(cur)}</b>
+        <em class="tc-kbm-gm">${max == null ? '' : '/' + max}</em>
+        <div class="tc-bar ticks"><i class="${dry ? cls + '-dry' : cls}" style="width:${pct}%"></i></div>
+      </div>`;
+  };
+
+  /* 力/敏/体 固定三项：有值写值、无值写灰色 —。
+     「没有」和「丢了」在画面上必须能分开——少一行字是静默降级的另一种形态。
+     智/感/魅 不占位：机甲与使魔这两项本来就用玩家值，缺是正常。 */
+  function attrsHtml(attrs) {
+    const list = attrs || [];
+    const got = new Map(list.map(a => [a.k, a.v]));
+    const core = ['力', '敏', '体'].map(k => got.has(k)
+      ? `<span><i>${k}</i> <b>${got.get(k)}</b></span>`
+      : `<span class="miss"><i>${k}</i> <b>—</b></span>`);
+    const rest = list.filter(a => ['力', '敏', '体'].indexOf(a.k) < 0)
+      .map(a => `<span><i>${esc(a.k)}</i> <b>${a.v}</b></span>`);
+    return core.concat(rest).join('');
+  }
+
   /* 机甲卡：跟在同号 p 卡后面；无对应 p 时单独成卡。
      HP 归零 → dead 类 + 「已失效」（规则上此刻该弹出驾驶者）。 */
   function renderMecha(m, paired) {
@@ -741,35 +778,24 @@
 
     /* 一根读数：标签列等宽 + 等宽数字（三位对齐）+ 条内分段刻度。
        三根主读数走同一个函数、同一列宽，所以它们**必然等宽**——不是对齐调出来的。 */
-    const num = (v) => String(v == null ? '—' : v).padStart(3, '\u2007');
-    const gauge = (lab, cur, max, cls, dry, extraCls) => {
-      const pct = max == null ? Math.max(0, Math.min(100, cur)) : Math.max(0, Math.min(100, Math.round(cur / max * 100)));
-      return `<div class="tc-kbm-g ${cls}${dry ? ' dry' : ''}${extraCls || ''}">
-        <span class="tc-kbm-gl">${lab}</span>
-        <b class="tc-kbm-gv">${num(cur)}</b>
-        <em class="tc-kbm-gm">${max == null ? '' : '/' + max}</em>
-        <div class="tc-bar ticks"><i class="${dry ? cls + '-dry' : cls}" style="width:${pct}%"></i></div>
-      </div>`;
-    };
-
     const dryOf = (v) => !!(v && v.max > 0 && v.cur <= 0);
     const gauges = (m.hp || m.en || m.sp) ? `
       <div class="tc-kbm-gauges">
-        ${m.hp ? gauge('HP', m.hp.cur, m.hp.max, 'kbm', false) : ''}
-        ${m.en ? gauge('能', m.en.cur, m.en.max, 'kbm-en', dryOf(m.en)) : ''}
-        ${m.sp ? gauge('SP', m.sp.cur, m.sp.max, 'kbm-sp', dryOf(m.sp)) : ''}
+        ${m.hp ? gaugeHtml('HP', m.hp.cur, m.hp.max, 'kbm', false) : ''}
+        ${m.en ? gaugeHtml('能', m.en.cur, m.en.max, 'kbm-en', dryOf(m.en)) : ''}
+        ${m.sp ? gaugeHtml('SP', m.sp.cur, m.sp.max, 'kbm-sp', dryOf(m.sp)) : ''}
       </div>` : '';
 
     /* 自定数值：与五维条同形（条），但配色走中性青，跟固定字段区分开 */
     const cus = (m.extra || []).length ? `
-      <div class="tc-kbm-cus">${(m.extra || []).map(e => gauge(esc(e.label), e.a, e.b, 'kbm-x', false, ' x')).join('')}</div>` : '';
+      <div class="tc-kbm-cus">${(m.extra || []).map(e => gaugeHtml(esc(e.label), e.a, e.b, 'kbm-x', false, ' x')).join('')}</div>` : '';
 
     /* 自定文本：只有标签，**没有条也没有数值格**——两者混在一起会让人以为"破甲"也有数字 */
     const tags = (m.tags || []).length ? `
       <div class="tc-kbm-tags"><em class="tc-kbm-tagl">其他</em>${(m.tags || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
 
     const attrs = m.attrs.length ? `
-      <div class="tc-kbm-attrs">${m.attrs.map(a => `<span><i>${esc(a.k)}</i> <b>${a.v}</b></span>`).join('')}</div>` : '';
+      <div class="tc-kbm-attrs">${attrsHtml(m.attrs)}</div>` : '';
 
     /* 装备：方角内凹插槽，和伴侣卡的圆 pill 区分 */
     const equip = m.equip.length ? `
@@ -1834,6 +1860,9 @@
 .tc-kbm-attrs span{font-size:10.5px;color:#7c98a8}
 .tc-kbm-attrs i{font-style:normal;color:#4f6b7a;margin-right:3px}
 .tc-kbm-attrs b{font-family:ui-monospace,Consolas,monospace;color:#b8dbe8;font-weight:600}
+/* 缺项占位：比数值暗一档、不加粗 —— 一眼看出是"没写"而不是"值是横杠" */
+.tc-kbm-attrs .miss i{color:#3c5563}
+.tc-kbm-attrs .miss b{color:#415a68;font-weight:400}
 .tc-kbm-cus{margin-top:7px;padding-top:6px;border-top:1px dashed rgba(34,211,238,.14)}
 .tc-kbm-g.x .tc-kbm-gl{color:#67a3b8}
 .tc-kbm-g.x .tc-kbm-gv{color:#9fd8e8}

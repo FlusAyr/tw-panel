@@ -368,11 +368,58 @@ setTimeout(() => {
   /* ① `敏82` 粘在一起会被读成字段名。标签与数值之间必须有空白字符——
      只靠 CSS margin 不够：视觉分开了，textContent、复制、朗读仍是粘的。 */
   const attrBox = (hReal.match(/<div class="tc-kbm-attrs">[\s\S]*?<\/div>/) || [''])[0];
-  const attrTexts = (attrBox.match(/<span>[\s\S]*?<\/span>/g) || [])
+  const attrTexts = (attrBox.match(/<span[^>]*>[\s\S]*?<\/span>/g) || [])
     .map((x) => x.replace(/<[^>]*>/g, ''));
-  T('六维读数形态必须是「名字 + 空白 + 数字」（不许出现 敏82 无空格形态）',
-    attrTexts.length === 1 && /^[力敏体智感魅]\s+\d+$/.test(attrTexts[0]),
+  const valTexts = attrTexts.filter((x) => !/—/.test(x));
+  T('读数形态是「名字 + 空白 + 数字」（不许出现 敏82 无空格形态）',
+    valTexts.length === 1 && /^[力敏体智感魅]\s+\d+$/.test(valTexts[0]),
     '实际：' + JSON.stringify(attrTexts));
+  /* ② 缺项必须显示成缺：力/敏/体 三项固定顺序，缺的写 `—`。
+     「没有」和「丢了」在画面上必须能分开——否则读者只能靠肉眼怀疑"属性是不是掉了"。 */
+  T('② 只有 `敏 82` 时：力/敏/体 三项按固定顺序出现，缺的两项是 `—`',
+    attrTexts.length === 3 && attrTexts[0] === '力 —' && attrTexts[1] === '敏 82' && attrTexts[2] === '体 —',
+    '实际：' + JSON.stringify(attrTexts));
+  T('② 占位项在 DOM 里带 .miss（与真数值区分，样式上更暗）',
+    (attrBox.match(/<span class="miss">/g) || []).length === 2 &&
+    /\.tc-kbm-attrs \.miss b\{/.test(SRC.replace(/\r/g, '')));
+  const stFull3 = api.parseState(['scene: x', 'p1: 你',
+    'kbm1: 甲 | 力 62 | 敏 45 | 体 58', 'next: 继'].join('\n'));
+  const hFull3 = api.render(stFull3);
+  const full3Texts = ((hFull3.match(/<div class="tc-kbm-attrs">[\s\S]*?<\/div>/) || [''])[0]
+    .match(/<span[^>]*>[\s\S]*?<\/span>/g) || []).map((x) => x.replace(/<[^>]*>/g, ''));
+  T('② 三项齐全时不出现占位符（力 62 / 敏 45 / 体 58 原样）',
+    full3Texts.length === 3 && full3Texts.join('|') === '力 62|敏 45|体 58',
+    '实际：' + JSON.stringify(full3Texts));
+  T('② 智/感/魅 不占位：没写就不出现，写了才追加在后面',
+    api.parseState(['scene: x', 'p1: 你', 'kbm1: 甲 | 敏 45', 'next: 继'].join('\n')).mechas[0].attrs.length === 1 &&
+    ((hFull3.match(/智/g) || []).length === 0));
+
+  /* `型` 关键字被省略 = 常态（AI 写了「全包」不写「型 全包」）。认不出来的后果是徽章不显示、
+     型相关样式全退化，但它不会报错——所以必须由断言盯着。 */
+  const stNoType = api.parseState(['scene: x', 'p1: 你',
+    'kbm1: 隐士概念机 | 全包 | HP 300/300 | 敏 82 | 装 原型折叠维生舱 ｜ 破损空间引擎', 'next: 继'].join('\n'));
+  const mNoType = (stNoType.mechas || [])[0] || {};
+  T('① 裸段 `全包`（无「型」关键字）→ type=full、tags 里没有「全包」',
+    mNoType.type === 'full' && mNoType.typeRaw === '全包' && (mNoType.tags || []).indexOf('全包') < 0,
+    'type=' + JSON.stringify(mNoType.type) + ' tags=' + JSON.stringify(mNoType.tags));
+  const stTyped = api.parseState(['scene: x', 'p1: 你',
+    'kbm1: 隐士概念机 | 型 全包 | HP 300/300 | 敏 82', 'next: 继'].join('\n'));
+  const mTyped = (stTyped.mechas || [])[0] || {};
+  T('① `型 全包`（有关键字）行为不变：type=full、tags 空',
+    mTyped.type === 'full' && mTyped.typeRaw === '全包' && (mTyped.tags || []).length === 0,
+    'type=' + JSON.stringify(mTyped.type) + ' tags=' + JSON.stringify(mTyped.tags));
+  const stBoth = api.parseState(['scene: x', 'p1: 你',
+    'kbm1: 隐士概念机 | 型 重装 | 全包 | HP 300/300', 'next: 继'].join('\n'));
+  const mBoth = (stBoth.mechas || [])[0] || {};
+  T('① 两个都写 → 关键字优先 type=heavy，「全包」留在 tags 不覆盖',
+    mBoth.type === 'heavy' && (mBoth.tags || []).indexOf('全包') >= 0,
+    'type=' + JSON.stringify(mBoth.type) + ' tags=' + JSON.stringify(mBoth.tags));
+  const stInEq = api.parseState(['scene: x', 'p1: 你',
+    'kbm1: 甲 | 装 链锯剑 ｜ 全包', 'next: 继'].join('\n'));
+  const mInEq = (stInEq.mechas || [])[0] || {};
+  T('① `装` 之后的裸段 `全包` 仍是装备，不被改判成型',
+    mInEq.type === '' && (mInEq.equip || []).indexOf('全包') >= 0,
+    'type=' + JSON.stringify(mInEq.type) + ' equip=' + JSON.stringify(mInEq.equip));
   T('六维：符号弱化色 + 数值等宽加粗（间距 ≥3px，另有空白字符）',
     /\.tc-kbm-attrs i\{[^}]*margin-right:3px/.test(SRC.replace(/\r/g, '')) &&
     /\.tc-kbm-attrs b\{[^}]*ui-monospace/.test(SRC.replace(/\r/g, '')));
@@ -495,6 +542,27 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('型徽章不再靠 margin-left:auto 飘到角落', typeRule.indexOf('margin-left:auto') < 0, '实际：' + typeRule.trim());
   T('徽章在 DOM 里紧邻机甲名（同一行 header 内、名字之后）',
     /<b>[^<]*<\/b>\s*<span class="tc-kbm-type/.test(pairedHtml));
+
+
+  /* 测试口径备注（v3.20 立）：
+      测「状态块被截断」这件事必须走 extractBlock，不能用 render(parseState(t)) ——
+      render 那条链路整条绕开 extractBlock，两边都会「通过」。
+      同理：别把 p1: 写在 scene: 同一行（输入本身不合法），也别给 extractBlock 传数组
+      （它内部 text.split，报 text.split is not a function）。
+     「两边都通过」不等于没问题，可能只是没走到那条路上。 */
+
+  /* ── 键表边界锁（v3.19.1）：一条断言同时守住被删片段的两侧 ──
+     来源：自造样例（为一个具体事故而写：删 `|kbf[0-9]*|` 时把两侧竖线一起吃掉了，
+     KEYS 变成 `kbm[0-9]*pts[0-9]+`，pts 与 kbm 一起失效）。KEYS 是一行全是分隔符的
+     正则拼串，删任何一个片段都最容易伤到边界——而伤害方式是「少显示一个东西」，
+     不红就没人看得见。 */
+  const sideSt = api.parseState('p1: 你 | HP 92/100\npts1: 力量 5 | 敏捷 3\nkbm1: 猎隼 | 型 全包 | HP 120/150');
+  T('pts1 与 kbm1 同时在场：pts 一侧仍解析出来',
+    !!(sideSt.players[0] && sideSt.players[0].ptsRow),
+    '实际 ' + JSON.stringify(sideSt.players[0] && sideSt.players[0].ptsRow));
+  T('pts1 与 kbm1 同时在场：kbm 一侧仍解析出来',
+    (sideSt.mechas || []).length === 1, '实际 ' + (sideSt.mechas || []).length);
+
 
   console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
