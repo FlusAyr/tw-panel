@@ -29,7 +29,7 @@
 
 - [content/worldbook/无限恐怖_v2_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/无限恐怖_v2_联机版_AI精简.json)：主世界书，24 条目，含实时结算三级触发器。
 - [content/worldbook/跑团用世界书_v4_联机版_AI精简.json](https://github.com/FlusAyr/tw-panel/blob/main/content/worldbook/跑团用世界书_v4_联机版_AI精简.json)：通用规则层，18 条目，含 cr 行规范。
-- [content/database/无限恐怖数据库模板_主神空间深度版.json](https://github.com/FlusAyr/tw-panel/blob/main/content/database/无限恐怖数据库模板_主神空间深度版.json)：10 表模板（全局/名册/强化台账/结算台账/敌情/势力/物资/任务/纪要/选项）。
+- [content/database/无限恐怖数据库模板_主神空间深度版.json](https://github.com/FlusAyr/tw-panel/blob/main/content/database/无限恐怖数据库模板_主神空间深度版.json)：12 表模板（全局/名册/强化台账/结算台账/敌情/势力/物资/任务/纪要/选项/称号登记/随从与机装）。称号表记谁有什么称号、效果数值与佩戴状态；随从表记机甲使魔的属性/武装/技能/升级模块，14 列。空表无数据行，导入不串档。
 - [content/entries/](https://github.com/FlusAyr/tw-panel/tree/main/content/entries)：自定义条目（超高校级幸运、魔药体系 v1.0）。
 - [content/docs/提示词_自定义血统内功创作系统.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/提示词_自定义血统内功创作系统.md)：交给创作 AI 的规范（三准则、八项功能契约、代价五不变量、七步指引、自检清单）。
 - [content/docs/酒馆状态面板系统_维护手册.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/酒馆状态面板系统_维护手册.md)：面板系统维护手册。
