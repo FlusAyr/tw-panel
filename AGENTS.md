@@ -35,7 +35,7 @@ tw-panel/
 ├── ci/tests.yml.example    可选测试流水线（取代远端误建的 python-package.yml 恒红叉模板；启用同样需 workflow 权限）
 ├── content/                内容下载区（只放内容，不放面板）
 │   ├── README.md           玩家安装顺序与文件说明
-│   ├── worldbook/          无限恐怖 v2（29 条目）、跑团用 v4（18 条目）
+│   ├── worldbook/          无限恐怖 v2（29 条目）、跑团用 v4（19 条目）
 │   ├── database/           10 表深度版模板、原版备份（不含第三方插件）
 │   ├── entries/            超高校级幸运、魔药体系 v1.0
 │   └── docs/               创作系统提示词、面板维护手册、状态块样例
