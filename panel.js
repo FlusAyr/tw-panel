@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.24.0';
+  const VERSION = '3.25.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -1195,6 +1195,9 @@
 
     /* 卡 C·夺取：主体 = 防线逐道。你在拆，关心的是拆到第几道。 */
     /* 「第N道」是编号不是名字 —— 玩家要知道「她哪道线守住了」。名字做主、状态做次、编号降成角标。 */
+    /* 布局契约：窄屏 CSS 把防线钉成 repeat(5,…)、DEF_NAMES 也正好 5 道。
+       防线变多时不能静默变挤（格宽一路掉，而几何判据还能全绿），所以在卡上直接说出来。 */
+    const defOver = b.defTotal > DEF_NAMES.length;
     const defRows = b.defLost == null ? '' : Array.from({ length: b.defTotal }, (_, i) => {
       const lost = i < b.defLost;
       const nm = DEF_NAMES[i] || ('第' + (i + 1) + '道');
@@ -1203,7 +1206,7 @@
     return `<div class="tc-nb s${stage} role-s"><span class="tc-nb-wm">${NB_WM[stage]}</span>${stamp}
       ${head}
       <div class="tc-nb-body">
-        <div class="tc-nb-defs">${defRows || '<div class="tc-def-row hold"><b>无防线记录</b><em>不详</em></div>'}</div>
+        <div class="tc-nb-defs${defOver ? ' over' : ''}">${defRows || '<div class="tc-def-row hold"><b>无防线记录</b><em>不详</em></div>'}${defOver ? `<em class="tc-defs-warn">防线 ${b.defTotal} 道 > 布局 ${DEF_NAMES.length} 列，请同步 DEF_NAMES 与 CSS</em>` : ''}</div>
         ${ring}${ring2}
       </div>
       <div class="tc-nb-side"><b>她</b>${mini}</div>${kinkRow}
@@ -1903,7 +1906,9 @@
 .tc-nb.role-s::after{background:radial-gradient(ellipse at 50% 118%,rgba(124,58,237,.24),transparent 62%)}
 .tc-nb.role-s .tc-bhead b{color:#c4b5fd}
 .tc-nb.role-s .tc-nb-wm{color:rgba(124,58,237,.12)}
-.tc-nb-defs{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:4px 8px}  /* 96→76：五道防线排成等宽一行，不出现 3+2 那种「后两块变宽」的主次错觉；第 6 道起才换行，换行后每块仍与第一行同宽 */
+.tc-nb-defs{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:4px 8px}  /* 76 而非 96：五道防线排成等宽一行，不出现 3+2 那种「后两块变宽」的主次错觉；第 6 道起才换行，换行后每块仍与第一行同宽 */
+.tc-nb-defs.over{outline:1px dashed rgba(252,211,77,.45);outline-offset:2px}
+.tc-defs-warn{grid-column:1 / -1;font-size:9.5px;font-style:normal;color:#fcd34d}  /* 防线数 > 布局列数时才出现的那行黄字，点出「要同步 DEF_NAMES 与窄屏列数」 */
 .tc-def-row{position:relative;display:flex;align-items:baseline;gap:6px;border-radius:5px;padding:3px 7px;font-size:11px;
   border:1px solid transparent;background:rgba(255,255,255,.04)}
 .tc-def-row b{font-weight:700;color:#cbbcf7;font-size:11.5px;letter-spacing:.04em}
@@ -2261,6 +2266,7 @@
   .tc-def-row{padding:3px 4px;gap:1px;flex-wrap:wrap}
   .tc-def-row em{margin-left:0;flex:0 0 100%}
   .tc-def-idx{font-size:7.5px}
+  .tc-defs-warn{grid-column:1 / -1;font-size:9px;font-style:normal;color:#fcd34d;letter-spacing:.02em}
   .tc-swipe-hint{display:none}                      /* 单列不需要横滑提示 */
 }
 
@@ -2313,6 +2319,6 @@
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();

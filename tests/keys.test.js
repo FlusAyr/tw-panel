@@ -712,6 +712,29 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     ['界限', '称谓', '独处', '主动', '归属', '失守', '回填', '在守'].every(w => htmlD.indexOf(w) >= 0),
     '缺字：' + ['界限', '称谓', '独处', '主动', '归属', '失守', '回填', '在守'].filter(w => htmlD.indexOf(w) < 0).join(','));
   const cssNarrow = (SRC.match(/@media \(max-width:520px\)\{([\s\S]*?)\n\}/) || [, ''])[1];
+
+  /* ① 防线列数不是「写死的 5」，而是「必须等于 DEF_NAMES 的条数」。
+     QA 指出的隐患：将来防线变 6 条，布局会挤而几何判据全绿 —— 这条把两个来源绑在一起，
+     改一个不改另一个就红。 */
+  const namesN = (SRC.match(/const DEF_NAMES = \[([^\]]*)\]/) || [, ''])[1]
+    .split(',').map(function (x) { return x.trim(); }).filter(Boolean).length;
+  const colsN = +(((cssNarrow.match(/\.tc-nb-defs\{[^}]*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)/) || [, '0'])[1]) || 0);
+  T('窄屏防线列数 === DEF_NAMES 条数（改一个必须改另一个）', colsN === namesN && colsN > 0,
+    'CSS 列数=' + colsN + ' / DEF_NAMES=' + namesN);
+
+  /* ② 防线数 > 布局列数时必须出现可见警告，不许静默变挤。 */
+  const overTxt = ['nb: 莉娅 | 位 夺取 | 爱 62 | 恋 28 | 调 34 | 屈 41 | 淫 58 | 防线 3/6 称谓'].join('\n');
+  const overHtml = api.render(api.parseState(overTxt));
+  T('防线 6 道时卡上出现可见警告（不静默变挤）',
+    /class="tc-defs-warn"/.test(overHtml) && /防线 6 道 > 布局 5 列/.test(overHtml),
+    '片段=' + ((overHtml.match(/<em class="tc-defs-warn">[^<]*<\/em>/) || ['(无)'])[0]));
+  T('防线 6 道时 .tc-nb-defs 带 over 类（边框提示）', /class="tc-nb-defs over"/.test(overHtml), '');
+  T('防线 5 道时没有任何警告（正常场景零打扰）', !/tc-defs-warn/.test(htmlD) && !/tc-nb-defs over/.test(htmlD), '');
+
+  /* ③ 几何断言的可信入口：__twCard 必须能拿到 CSS 与 injectCss。
+     否则下游只能自己正则抽 `const CSS = `` `，抽不到时静默拿空串，量出来的全是默认值。 */
+  T('__twCard 暴露 CSS（非空且是样式文本）', typeof api.CSS === 'string' && api.CSS.length > 1000 && /\.tc-card\{/.test(api.CSS), 'CSS 长度=' + (api.CSS || '').length);
+  T('__twCard 暴露 injectCss（函数）', typeof api.injectCss === 'function', 'typeof=' + typeof api.injectCss);
   T('窄屏块存在（未匹配到 @media (max-width:520px) 就红）', cssNarrow.length > 200, '长度=' + cssNarrow.length);
   T('窄屏块的 .tc-nb-defs 是五等分（repeat(5,minmax(0,1fr))，不许 auto-fit 自己减列）',
     /\.tc-nb-defs\{[^}]*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(cssNarrow),
