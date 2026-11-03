@@ -677,6 +677,26 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     api.render(api.parseState('scene: x\\np1: 甲 | HP 9/10')).indexOf('tc-dmg') < 0);
 
 
-  console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
+  // ---- 算段不许被省略号/换行吃掉（窄屏那张图暴露的假象，先确认渲染器本身没截） ----
+{
+  const calcSrc = '算 1D8+2 +4 +20% −3';
+  const stC = api.parseState('p1: 你 | 92/100\ndmg1: 甲→乙 | 因 链锯剑·横扫 | ' + calcSrc + ' | 伤 撕裂·左臂 ·12 | 血 84→72 | 判 命中\nnext: 继续');
+  const wantC = stC.dmgs[0].calc;
+  const htmlC = api.render(stC);
+  const mC = htmlC.match(/<u>算<\/u>([\s\S]*?)<\/span>/);
+  const gotC = mC ? mC[1] : '';
+  T('dmg 算段解析保留原文（含 +4 +20% −3）', wantC === '1D8+2 +4 +20% −3', '实际=' + JSON.stringify(wantC));
+  T('算段渲染文本 === 解析原文（长度 ' + gotC.length + '/' + wantC.length + '，不是「看起来完整」）',
+    gotC === wantC, '渲染=' + JSON.stringify(gotC));
+  const metaCss = (SRC.match(/\.tc-dmg-meta\{[^}]*\}/) || [''])[0];
+  // 正向断言：必须是 flex-wrap:wrap。只查「不出现 nowrap」防不住「整句被删掉」——
+  // 没人会故意写 nowrap，但有人会顺手删一句觉得多余的；删掉后行为退化而关键词黑名单照样绿。
+  T('算段容器必须有 flex-wrap:wrap（正向要求，不是「只要没写 nowrap」）',
+    /flex-wrap\s*:\s*wrap/.test(metaCss), '实际规则=' + metaCss);
+  T('算段容器 CSS 不许 white-space:nowrap / text-overflow:ellipsis / overflow:hidden（黑名单，与上面那条互补）',
+    metaCss.indexOf('nowrap') < 0 && metaCss.indexOf('ellipsis') < 0 && metaCss.indexOf('hidden') < 0,
+    '实际规则=' + metaCss);
+}
+console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

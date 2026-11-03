@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.20.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.21.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.20.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.21.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -87,6 +87,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.19.0** 读数与兜底：六维读数标签与数值不再粘连（markup 补真空白 + 3px 间距，断言锁「名字 + 空白 + 数字」）；机甲自定字段的裸段加弱标题「其他」并提亮，明确不进装备插槽；`panel.js` 只改这两处，`boot.mjs` 未动（v2.1 / 19897 B）；旧卡六组样本逐字节相同（基线 tag 见 CHANGELOG）
 - **v3.19.1** `kbm` 的「型」关键字可省：裸段恰是 `人型`/`重装`/`全包` 之一时按型识别（`装` 之后仍一律当装备名）；力/敏/体 缺项显示 `—`、智/感/魅 不占位；`gauge`/`attrsHtml` 抽成共用件，`kbm` 卡输出逐字节不变；撤销使魔 `kbf` 支持（从未发布、已移除，面板不渲染该行，也不吞后续行）；`boot.mjs` 未改动（v2.1 / 19897 B）
 - **v3.20.0** 新增 `dmg<N>` 伤害事件行：六段（谁对谁｜因｜算｜伤｜血｜判），渲染为交火卡（方向箭头 + 伤害数值 + 七色性质 + 六种判定形态 + 血条前后）；`算` 段原样保留不重算，血差与伤值不一致时卡上打黄字标记（不隐藏不改写）；`keys` 断言 109→137（dmg 六段/七色/颜色互不相同/截断锁/血差不一致）；旧卡八组样本逐字节相同（基线 tag 见 CHANGELOG）；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
+- **v3.21.0** 窄屏修复：<520px 时卡片退回单列自适应、不再向右越界，属性单列、标签与值紧邻，血量/SP/负重/机甲三读数强制可见；≥520px 布局一字未改（桌面逐字节对上一版相同）；`dmg` 算段加三条保护（解析保留原文 / 渲染文本须等于原文全文 / 容器禁止省略号与裁切）；`keys` 137→140；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定（基线 tag 见 CHANGELOG）
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）

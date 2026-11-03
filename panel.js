@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.20.0';
+  const VERSION = '3.21.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -2218,6 +2218,38 @@
   .tc-attrs{gap:0 10px}
   .tc-cbody{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tc-opts{grid-template-columns:1fr}
+}
+
+/* ── 窄屏（≤520px）：单列自适应，不再横滑 ──
+   判据不是「能不能滑动」，是「一眼能不能看完」：430px 固定列在 320~430 的屏上必然被剪，
+   而剪掉的部分连 document.scrollWidth 都看不出来（藏在 overflow-x:auto 里），
+   所以这里改成单列，卡片宽度 = 视口 - 边距。
+   宽度不够时按「先牺牲装饰、绝不牺牲数字」排序：收窄标签列、缩边距、藏掉横滑提示；
+   HP / SP / 负重 / 机甲三读数 / 属性值在任何宽度下都必须可见。
+   唯一不删的「装饰」是属性值的 '= '：基础值与总值并排时，没有它就只是两个裸数字，
+   读者分不出哪个是哪一个 —— 它已经不算装饰。 */
+@media (max-width:520px){
+  .tc-wrap{padding:9px 6px;font-size:12px}
+  .tc-main{grid-template-columns:none;grid-auto-flow:row;grid-auto-columns:auto;
+    justify-content:stretch;overflow-x:visible;gap:2px 0}
+  .tc-main>.tc-col{min-width:0}
+  .tc-card{max-width:none}
+  /* 属性区：单列，标签与值紧邻，不跨列对齐 */
+  .tc-attrs{grid-template-columns:1fr;gap:0}
+  .tc-attr{grid-template-columns:42px auto auto;gap:0 5px;justify-content:start}
+  .tc-attr .tc-at{justify-self:start}              /* 值紧邻标签，不排到右边缘去跨列对齐 */
+  .tc-at::before{content:"= ";font-size:9px}       /* 保留 '= '：基础值与总值并排时，没有它就只是两个裸数字 */
+  /* 读数：数值不参与换行计算，永远在条的上方同一行右侧 */
+  .tc-vit{grid-template-columns:52px 1fr;gap:1px 6px}
+  .tc-vit>b{grid-column:2;text-align:right}
+  .tc-vit>.tc-bar{grid-column:1 / -1}
+  /* 机甲 / 使魔读数：标签列收窄，数字仍等宽三位 */
+  .tc-kbm-g{grid-template-columns:38px 32px 1fr}
+  .tc-kbm-sub{grid-template-columns:1fr}
+  .tc-cbody{grid-template-columns:1fr}
+  .tc-bgrid{grid-template-columns:1fr 1fr}
+  .tc-opts{grid-template-columns:1fr}
+  .tc-swipe-hint{display:none}                      /* 单列不需要横滑提示 */
 }
 
 /* ── 尺寸切换（全局持久偏好，点击 .tc-size 在 紧凑/完整 间切换）──
