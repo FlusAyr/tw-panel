@@ -2,7 +2,7 @@
 
 > 你正在接手一个已上线的 SillyTavern（酒馆）跑团系统：**「主神空间」**。
 > 本文件是操作手册，读完即可独立维护，不需要原始对话记录。
-> 最后更新：2026-11-01　｜　面板 v3.19.1（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.20.0（引导 boot v2.1）　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 

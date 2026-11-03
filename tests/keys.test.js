@@ -564,6 +564,119 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     (sideSt.mechas || []).length === 1, '实际 ' + (sideSt.mechas || []).length);
 
 
+
+  /* ══════════ 组 9 · dmg 伤害事件行（v3.20） ══════════
+     来源：自造样例（为覆盖 dmg 的六段解析、七种性质、六种判定、数值校验与截断而写，
+     不是用户实测原文）。第一条的字段顺序与分隔符取自任务卡里的契约示例。
+     判据分层：
+       a) 解析层 —— 六段都要落位，`算` 必须原样保留（渲染器重算一遍就是第二个事实来源）
+       b) 校验层 —— 伤 与 血 的差值对不上时必须可见，不能悄悄取一个
+       c) 渲染层 —— 方向 / 量级 / 性质七色 / 判定形态 / 血条前→后 / 多行顺序
+       d) 边界层 —— dmg 后面还有 p 行时必须保住（KEYS 漏登记的伤害方式正是「截断」） */
+
+  const DMG_LINE = 'dmg1: 甲→乙 | 因 链锯剑·横扫 | 算 1D8+2 +4 +20% −3 | 伤 撕裂·左臂 ·12 | 血 84→72 | 判 命中';
+  const dSt = api.parseState(DMG_LINE);
+  const dx = (dSt.dmgs || [])[0] || {};
+
+  T('dmg 行被解析出 1 条（KEYS 已登记 dmg[0-9]*）', (dSt.dmgs || []).length === 1,
+    '实际 ' + (dSt.dmgs || []).length + '；KEYS 含 dmg：' + /(^|\|)dmg\[0-9\]\*(\||$)/.test(readKeysString()));
+  T('甲→乙 方向解析成 from / to', dx.from === '甲' && dx.to === '乙', JSON.stringify([dx.from, dx.to]));
+  T('因 段原样保留', dx.cause === '链锯剑·横扫', JSON.stringify(dx.cause));
+  T('算 段原样保留、不计算', dx.calc === '1D8+2 +4 +20% −3', JSON.stringify(dx.calc));
+  T('伤 段拆出性质 撕裂 / 部位 左臂 / 数值 12',
+    dx.kindRaw === '撕裂' && dx.kind === 'r' && dx.part === '左臂' && dx.amount === 12,
+    JSON.stringify([dx.kindRaw, dx.kind, dx.part, dx.amount]));
+  T('血 段拆出前 84 / 后 72', dx.hpBefore === 84 && dx.hpAfter === 72, JSON.stringify([dx.hpBefore, dx.hpAfter]));
+  T('判 段映射成 hit 并保留原文', dx.verdict === 'hit' && dx.verdictRaw === '命中',
+    JSON.stringify([dx.verdict, dx.verdictRaw]));
+  T('伤 12 与 血差 12 一致 → mismatch 为 false', dx.mismatch === false && dx.delta === 12,
+    JSON.stringify([dx.mismatch, dx.delta]));
+
+  const dHtml = api.render(dSt);
+  T('dmg 卡有独立容器 tc-dmg / tc-dmgs', /class="tc-dmg /.test(dHtml) && dHtml.indexOf('tc-dmgs') > 0);
+  T('方向感：from 在箭头之前、to 在箭头之后',
+    dHtml.indexOf('who from') > 0 && dHtml.indexOf('who from') < dHtml.indexOf('arrow') &&
+    dHtml.indexOf('arrow') < dHtml.indexOf('who to'));
+  T('性质进 class（撕裂 → k-r）', dHtml.indexOf('tc-dmg k-r') > 0);
+  T('血条画前→后：保留段 + 斜纹段各一个，保留段宽度 = 72/84 = 86%',
+    /class="keep" style="width:86%"/.test(dHtml) && /class="gone" style="left:86%/.test(dHtml));
+
+  /* 只断言 left 会漏掉「斜纹段没有宽度」这个 bug：那样它 left 对、宽度为 0，
+     画面上等于仍然只是两个数字。宽度必须一起钉。 */
+  T('斜纹段有真实宽度（left 86% → width 14%，否则「掉了多少」看不见）',
+    /class="gone" style="left:86%;width:14%"/.test(dHtml),
+    '实际：' + ((dHtml.match(/class="gone"[^>]*/) || [''])[0]));
+
+  /* 校验层：对不上就要看得见。这是全卡唯一能被人肉验算的地方。 */
+  const badSt = api.parseState('dmg1: 甲→乙 | 伤 撕裂 ·12 | 血 84→60 | 判 命中');
+  const bad = (badSt.dmgs || [])[0] || {};
+  T('伤 12 但 血差 24 → mismatch 为 true', bad.mismatch === true && bad.delta === 24,
+    JSON.stringify([bad.mismatch, bad.delta]));
+  T('不一致时打可见标记（不是不显示、也不是悄悄取一个）',
+    api.render(badSt).indexOf('tc-dmg-warn') > 0);
+
+  /* 名字对不上：原样显示，不丢弃 —— 这时「名字不对」本身就是玩家该看到的信息 */
+  const wildSt = api.parseState('dmg1: 不存在的甲→不存在的乙 | 伤 钝击 ·5 | 血 10→5 | 判 命中');
+  const wildHtml = api.render(wildSt);
+  T('名字对不上 players[]/mobs[] 时原样显示',
+    wildHtml.indexOf('不存在的甲') > 0 && wildHtml.indexOf('不存在的乙') > 0);
+
+  /* 判定形态：暴击强化、闪避「空」 */
+  const vSt = api.parseState([
+    'dmg1: 甲→乙 | 伤 钝击·头部 ·40 | 血 100→60 | 判 暴击',
+    'dmg2: 乙→甲 | 伤 穿刺·胸口 ·0 | 血 84→84 | 判 闪避',
+  ].join('\n'));
+  const vHtml = api.render(vSt);
+  T('暴击 → v-crit（强化描边/发光）', vHtml.indexOf('v-crit') > 0);
+  T('闪避 → v-dodge 且数值退让成 —',
+    vHtml.indexOf('v-dodge') > 0 && /class="num">—</.test(vHtml));
+  T('多行按 dmg1 → dmg2 顺序竖排（不是挤成一行）',
+    vHtml.indexOf('钝击') < vHtml.indexOf('穿刺') && (vHtml.match(/class="tc-dmg /g) || []).length === 2);
+
+  /* 量级：字号随伤害涨 —— 数值是这一块的视觉主角 */
+  const sizeCss = (SRC.match(/\.tc-dmg\.s1 \.num\{[^}]*\}/) || [''])[0];
+  const sizeCss2 = (SRC.match(/\.tc-dmg\.s3 \.num\{[^}]*\}/) || [''])[0];
+  T('量级分档：数值字号随伤害增长（s1 与 s3 不同档）',
+    !!sizeCss && !!sizeCss2 && sizeCss !== sizeCss2, sizeCss + ' / ' + sizeCss2);
+
+  /* 七种性质各一色系：少一条就说明有人加性质时忘了配色 */
+  const kinds = ['k-r', 'k-b', 'k-p', 'k-f', 'k-c', 'k-m', 'k-t'];
+  T('七种性质色系齐全（撕裂/钝击/穿刺/灼烧/腐蚀/精神/真实）',
+    kinds.every(x => SRC.indexOf('.tc-dmg.' + x + '{--dk:') > 0),
+    '缺：' + kinds.filter(x => SRC.indexOf('.tc-dmg.' + x + '{--dk:') < 0).join(','));
+  /* 七色映射表漏色：这条不是「意图」，是字符串存在性——所以能测，别留给 review。
+     从源码里现解析 DMG_KINDS（不是手抄一份对照表：抄一份就等于给自己留个会腐烂的第二来源），
+     逐个断言 CSS 里存在 `.tc-dmg.k-<值>{--dk:` 规则。加一个性质却忘了配色，这里会红。 */
+  const kindPairs = [...SRC.matchAll(/'(.)': '(.)'/g)].length ? null : null;
+  const kindsBlock = (SRC.match(/const DMG_KINDS = \{([^}]*)\}/) || [, ''])[1];
+  const kindVals = [...kindsBlock.matchAll(/'([^']+)':\s*'([^']+)'/g)].map(m => ({ zh: m[1], cls: m[2] }));
+  T('DMG_KINDS 解析出 7 种性质（性质表存在且条数对得上）', kindVals.length === 7,
+    '实际 ' + kindVals.length + ' 种：' + JSON.stringify(kindVals.map(k => k.zh)));
+  const noCss = kindVals.filter(k => SRC.indexOf('.tc-dmg.k-' + k.cls + '{--dk:') < 0);
+  T('每个性质都能在 CSS 里找到对应的 .tc-dmg.k-<值>{--dk: 规则（漏色即红）',
+    noCss.length === 0,
+    '缺 CSS 的性质：' + JSON.stringify(noCss.map(k => k.zh + '→k-' + k.cls)));
+  T('七种性质的颜色值互不相同（同一个色系两个性质 = 玩家分不出）',
+    new Set(kindVals.map(k => (SRC.match(new RegExp('\\.tc-dmg\\.k-' + k.cls + '\\{--dk:(#[0-9a-fA-F]+)')) || [, ''])[1])).size === 7,
+    '实际色值：' + JSON.stringify(kindVals.map(k => (SRC.match(new RegExp('\\.tc-dmg\\.k-' + k.cls + '\\{--dk:(#[0-9a-fA-F]+)')) || [, ''])[1])));
+
+  T('未知性质不报错、落到中性色 k-x',
+    api.render(api.parseState('dmg1: 甲→乙 | 伤 未知性质 ·3 | 血 10→7 | 判 命中')).indexOf('k-x') > 0);
+
+  /* 边界层：截断锁。KEYS 里漏登记 dmg，坏的方式不是「少一个卡」而是「后面的键行全没了」。 */
+  const cutSt = api.parseState([
+    'dmg1: 甲→乙 | 伤 撕裂 ·5 | 血 50→45 | 判 命中',
+    'p1: 甲 | HP 45/100',
+    'next: 继续',
+  ].join('\n'));
+  T('dmg 行之后的 p 行仍被解析（截断锁）', (cutSt.players || []).length === 1,
+    '实际 ' + (cutSt.players || []).length);
+  T('dmg 行之后的 next 未被吃掉（截断锁）', cutSt.next === '继续', JSON.stringify(cutSt.next));
+
+  T('无 dmg 行时不产生 tc-dmg 空壳',
+    api.render(api.parseState('scene: x\\np1: 甲 | HP 9/10')).indexOf('tc-dmg') < 0);
+
+
   console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

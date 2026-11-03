@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.19.1';
+  const VERSION = '3.20.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|dmg[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -638,10 +638,65 @@
     return { lines: out, mobs };
   }
 
+  /* ── dmg<N>：伤害事件行 ──
+     契约示例：dmg1: 甲→乙 | 因 链锯剑·横扫 | 算 1D8+2 +4 +20% −3 | 伤 撕裂·左臂 ·12 | 血 84→72 | 判 命中
+     设计要点：
+     1) `算` 只保留原文、绝不求值 —— 数值由模型算，渲染器算一遍就是第二个事实来源，两边不一致时没人知道该信谁。
+     2) `伤` 的数值与 `血` 的前后差值都对得上才算一致；不一致不隐藏、打可见标记 —— 这是全卡唯一能被人肉验算的地方。
+     3) 名字对不上 players[]/mobs[] 时原样显示：这时候「名字不对」本身就是要给玩家看的信息。 */
+  const DMG_KINDS = { '撕裂': 'r', '钝击': 'b', '穿刺': 'p', '灼烧': 'f', '腐蚀': 'c', '精神': 'm', '真实': 't' };
+  const DMG_VERDICTS = { '命中': 'hit', '暴击': 'crit', '闪避': 'dodge', '格挡': 'guard', '破防': 'break', '未破防': 'hold' };
+  const DMG_ARROW = /^(.*?)\s*(?:→|->|⟶|⇒)\s*(.*)$/;
+
+  function parseDmg(v) {
+    const o = {
+      from: '', to: '', cause: '', calc: '', kindRaw: '', kind: '', part: '',
+      amount: null, hpBefore: null, hpAfter: null, verdictRaw: '', verdict: '',
+      extra: [], mismatch: false, delta: null,
+    };
+    seg(v).forEach((piece, i) => {
+      const x = String(piece).trim();
+      if (!x) return;
+      if (i === 0) {
+        const mm = x.match(DMG_ARROW);
+        if (mm) { o.from = mm[1].trim(); o.to = mm[2].trim(); } else { o.from = x; }
+        return;
+      }
+      if (/^因[:：]?/.test(x)) { o.cause = x.replace(/^因[:：]?\s*/, '').trim(); return; }
+      if (/^算[:：]?/.test(x)) { o.calc = x.replace(/^算[:：]?\s*/, '').trim(); return; }
+      if (/^伤[:：]?/.test(x)) {
+        const body = x.replace(/^伤[:：]?\s*/, '').trim();
+        const num = body.match(/(-?\d+)\s*$/);
+        if (num) o.amount = +num[1];
+        const cut = num ? body.slice(0, body.lastIndexOf(num[1])) : body;
+        const bits = cut.split('·');
+        o.kindRaw = (bits[0] || '').trim();
+        o.part = bits.slice(1).join('·').replace(/[·\s]+/g, ' ').trim();
+        o.kind = DMG_KINDS[o.kindRaw] || '';
+        return;
+      }
+      if (/^血[:：]?/.test(x)) {
+        const body = x.replace(/^血[:：]?\s*/, '').trim();
+        const mm = body.match(/^(-?\d+)\s*(?:→|->|⟶|⇒)\s*(-?\d+)$/);
+        if (mm) { o.hpBefore = +mm[1]; o.hpAfter = +mm[2]; }
+        return;
+      }
+      if (/^判[:：]?/.test(x)) {
+        o.verdictRaw = x.replace(/^判[:：]?\s*/, '').trim();
+        o.verdict = DMG_VERDICTS[o.verdictRaw] || '';
+        return;
+      }
+      o.extra.push(x);
+    });
+    if (o.hpBefore != null && o.hpAfter != null) o.delta = o.hpBefore - o.hpAfter;
+    if (o.amount != null && o.delta != null) o.mismatch = o.delta !== o.amount;
+    return o;
+  }
+
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], dmgs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -649,6 +704,7 @@
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
     const mmap = new Map(), kmmap = new Map();
+    const gmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
     const rec = recoverMobLines(String(text).split(/\r?\n/));
@@ -678,6 +734,7 @@
       else if (/^nl\d*$/.test(k)) nlmap.set(k === 'nl' ? 1 : +k.slice(2), parseNtrLog(v));
       else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
       else if (/^kbm\d*$/.test(k)) kmmap.set(k === 'kbm' ? 1 : +k.slice(3), parseMecha(v));
+      else if (/^dmg\d*$/.test(k)) gmap.set(k === 'dmg' ? 1 : +k.slice(3), parseDmg(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -711,6 +768,7 @@
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
     EXT_KEYS.forEach(e => { st[e.field] = [...xmap[e.field].keys()].sort((a, b) => a - b).map(i => xmap[e.field].get(i)); });
     st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; return m; });
+    st.dmgs = [...gmap.keys()].sort((a, b) => a - b).map(k => gmap.get(k));
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -1194,6 +1252,54 @@
     return `<div class="tc-next"><div class="tc-opts">${opts.join('')}</div></div>`;
   }
 
+  /* dmg 卡：一瞬间的事，画面要有爆点。
+     判据（遮住文字只看形状颜色）：谁打谁（方向带箭头）、打得多重（数值是主角，字号随量级涨）、
+     什么性质（七色系）、判定（暴击发光双描边 / 闪避虚线与缺口）。血条画「前→后」，消掉那段用斜纹。 */
+  function renderDmg(d, i, total) {
+    const k = d.kind ? 'k-' + d.kind : 'k-x';
+    const v = d.verdict ? 'v-' + d.verdict : 'v-none';
+    const crit = d.verdict === 'crit';
+    const dodge = d.verdict === 'dodge';
+    const amt = dodge ? '—' : (d.amount == null ? '?' : String(d.amount));
+    const mag = d.amount == null ? 's0' : (d.amount >= 50 ? 's3' : d.amount >= 20 ? 's2' : 's1');
+
+    let hp = '';
+    if (d.hpBefore != null && d.hpAfter != null && d.hpBefore > 0) {
+      const keep = Math.max(0, Math.min(100, Math.round(d.hpAfter / d.hpBefore * 100)));
+      hp = `<div class="tc-dmg-hp">
+        <span class="hb">${d.hpBefore}</span>
+        <div class="tc-dmg-bar"><i class="keep" style="width:${keep}%"></i><i class="gone" style="left:${keep}%;width:${100 - keep}%"></i></div>
+        <span class="ha">${d.hpAfter}</span>
+      </div>`;
+    }
+
+    const warn = d.mismatch
+      ? `<i class="tc-dmg-warn">数值对不上：血 −${d.delta}／伤 ${d.amount}（模型算错了，按上面显示原样核对）</i>`
+      : '';
+
+    const meta = [];
+    if (d.cause) meta.push(`<span><u>因</u>${esc(d.cause)}</span>`);
+    if (d.calc) meta.push(`<span><u>算</u>${esc(d.calc)}</span>`);
+    d.extra.forEach(x => meta.push(`<span>${esc(x)}</span>`));
+
+    return `<div class="tc-dmg ${k} ${v} ${mag}">
+      <i class="tc-dmg-spine"></i>
+      <div class="tc-dmg-flow">
+        <span class="who from">${esc(d.from || '？')}</span>
+        <span class="arrow"><i></i></span>
+        <span class="who to">${esc(d.to || '？')}</span>
+        ${d.verdictRaw ? `<span class="verdict">${esc(d.verdictRaw)}</span>` : ''}
+      </div>
+      <div class="tc-dmg-core">
+        <span class="num">${esc(amt)}</span>
+        <span class="tags">${d.kindRaw ? `<b class="kind">${esc(d.kindRaw)}</b>` : ''}${d.part ? `<span class="part">${esc(d.part)}</span>` : ''}</span>
+      </div>
+      ${hp}
+      ${warn}
+      ${meta.length ? `<div class="tc-dmg-meta">${meta.join('')}</div>` : ''}
+    </div>`;
+  }
+
   function render(st) {
     const scene = seg(st.scene);
     const out = [];
@@ -1211,6 +1317,11 @@
     }
 
     out.push(renderQuest(st.quest));
+
+    /* ── 交火区：dmg 行按发生顺序竖排，走出一条战斗时间线 ── */
+    if (st.dmgs.length) {
+      out.push(`<div class="tc-dmgs">${sect('交火 · 伤害结算', 'IMPACT LOG')}${st.dmgs.map((d, i) => renderDmg(d, i, st.dmgs.length)).join('')}</div>`);
+    }
 
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
@@ -1370,7 +1481,7 @@
           /* 守卫：完全没有已定义状态键的段才跳过。
              孤立的 next: / check: / bond: 等附属段（被正文与主状态块隔开）也必须渲染，
              否则主块渲染完、后续孤段会被静默丢弃（v3.10.0 真实故障：next: 丢失）。 */
-          const meaningful = st.players.length || st.mechas.length || st.scene || st.mobs.length ||
+          const meaningful = st.players.length || st.mechas.length || st.dmgs.length || st.scene || st.mobs.length ||
             st.bonds.length || st.foes.length || st.npcs.length ||
             st.ntrBonds.length || st.ntrFoes.length || st.ntrHearts.length || st.ntrFalls.length || st.ntrLogs.length ||
             st.checks.length || st.quest || st.next || st.result || st.world || st.team;
@@ -1893,6 +2004,80 @@
 .tc-kbm-il>span{letter-spacing:.1em;color:#94a3b8;min-width:15px}
 .tc-kbm-il>b{font-size:11px;font-weight:700;color:#a5f3fc;min-width:22px;text-align:right}
 .tc-kbm-il>em{font-style:normal;font-size:9px;color:#5c7381}
+
+/* ══════════ dmg 交火卡（v3.20） ══════════
+   判据：遮住文字只看轮廓，要能读出「谁打谁 / 多重的伤 / 什么性质 / 死了没」。
+   所以：方向靠箭头与两端的强弱对比，量级靠字号与环色，性质靠七条色系，判定靠描边与缺口。 */
+.tc-dmgs{position:relative;margin:0 0 10px;padding:2px 0 0}
+.tc-dmg{position:relative;display:grid;grid-template-columns:1fr auto;gap:2px 12px;
+  margin:0 0 6px;padding:8px 12px 8px 16px;border-radius:2px;
+  background:linear-gradient(100deg,rgba(12,10,20,.92),rgba(18,12,22,.72));
+  border:1px solid #2a2438;border-left:3px solid var(--dk,#f43f5e)}
+/* 左侧时间线：多行 dmg 竖排时连成一条，表示「按发生顺序」 */
+.tc-dmg-spine{position:absolute;left:5px;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,var(--dk,#f43f5e),transparent);opacity:.55}
+.tc-dmg-flow{grid-column:1 / -1;display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.04em}
+.tc-dmg-flow .who{color:#c7d2fe;font-weight:700}
+.tc-dmg-flow .who.to{color:#e2e8f0}
+.tc-dmg-flow .arrow{flex:1;position:relative;height:9px;min-width:54px}
+/* 方向：一条从中段向右收窄的光带 + 箭头尖，长得像「打过去」 */
+.tc-dmg-flow .arrow::before{content:'';position:absolute;left:0;right:7px;top:4px;height:2px;
+  background:linear-gradient(90deg,rgba(255,255,255,0),var(--dk,#f43f5e))}
+.tc-dmg-flow .arrow::after{content:'';position:absolute;right:1px;top:1px;border:4px solid transparent;border-left:7px solid var(--dk,#f43f5e)}
+.tc-dmg-flow .verdict{margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.16em;
+  color:var(--dk,#f43f5e);border:1px solid color-mix(in srgb,var(--dk,#f43f5e) 55%,transparent);
+  border-radius:2px;padding:1px 6px}
+.tc-dmg-core{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tc-dmg-core .num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;
+  font-weight:800;line-height:1;color:#fff;text-shadow:0 0 14px color-mix(in srgb,var(--dk,#f43f5e) 75%,transparent)}
+.tc-dmg-core .tags{display:flex;align-items:baseline;gap:6px;min-width:0}
+.tc-dmg-core .kind{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dk,#f43f5e);
+  border-bottom:2px solid color-mix(in srgb,var(--dk,#f43f5e) 60%,transparent);padding-bottom:1px}
+.tc-dmg-core .part{font-size:10px;color:#93a4b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 量级：伤越重字越大 —— 数值是这一块的视觉主角 */
+.tc-dmg.s0 .num{font-size:20px}
+.tc-dmg.s1 .num{font-size:30px}
+.tc-dmg.s2 .num{font-size:38px}
+.tc-dmg.s3 .num{font-size:46px}
+/* 血条：前→后。保留段实心，消掉段斜纹 —— 只写两个数字看不出掉了多少 */
+.tc-dmg-hp{grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin-top:4px;font-size:10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#8fa3b5}
+.tc-dmg-hp .hb{min-width:26px;text-align:right;color:#cbd5e1}
+.tc-dmg-hp .ha{min-width:26px;color:var(--dk,#f43f5e);font-weight:700}
+.tc-dmg-bar{position:relative;flex:1;height:7px;border-radius:1px;background:#171322;overflow:hidden}
+.tc-dmg-bar .keep{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#334155,#64748b)}
+.tc-dmg-bar{background:#171322;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.tc-dmg-bar .gone{position:absolute;top:0;bottom:0;
+  background-image:repeating-linear-gradient(45deg,color-mix(in srgb,var(--dk,#f43f5e) 92%,transparent) 0 3px,rgba(8,4,12,.85) 3px 6px);
+  box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dk,#f43f5e) 90%,#fff)}
+.tc-dmg-warn{grid-column:1 / -1;font-style:normal;font-size:10px;color:#fbbf24;margin-top:3px;
+  border-left:2px solid #b45309;padding-left:6px;background:rgba(120,53,15,.16)}
+.tc-dmg-meta{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:5px;font-size:10px;color:#6f8296}
+.tc-dmg-meta u{text-decoration:none;color:#4f6376;margin-right:3px}
+/* 七种性质各一色系（顺序 = 由外到内：撕裂红 / 钝击橙 / 穿刺青 / 灼烧金 / 腐蚀绿 / 精神紫 / 真实白） */
+.tc-dmg.k-r{--dk:#f43f5e}
+.tc-dmg.k-b{--dk:#fb923c}
+.tc-dmg.k-p{--dk:#22d3ee}
+.tc-dmg.k-f{--dk:#fbbf24}
+.tc-dmg.k-c{--dk:#4ade80}
+.tc-dmg.k-m{--dk:#c084fc}
+.tc-dmg.k-t{--dk:#f8fafc}
+.tc-dmg.k-x{--dk:#94a3b8}
+/* 判定：暴击要一眼比命中重；闪避要「空」，所以数值退让、箭头断开、全身虚线 */
+.tc-dmg.v-crit{border-color:color-mix(in srgb,var(--dk,#f43f5e) 70%,#fff);border-width:2px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--dk,#f43f5e) 45%,transparent),0 0 22px color-mix(in srgb,var(--dk,#f43f5e) 40%,transparent)}
+.tc-dmg.v-crit .num{font-weight:900;text-shadow:0 0 10px #fff,0 0 26px var(--dk,#f43f5e)}
+.tc-dmg.v-crit .verdict{background:color-mix(in srgb,var(--dk,#f43f5e) 26%,transparent);
+  border-width:2px;box-shadow:0 0 12px color-mix(in srgb,var(--dk,#f43f5e) 55%,transparent)}
+.tc-dmg.v-crit .tc-dmg-spine{opacity:1;width:2px}
+.tc-dmg.v-dodge{border-style:dashed;background:linear-gradient(100deg,rgba(12,10,20,.7),rgba(18,12,22,.4))}
+.tc-dmg.v-dodge .tc-dmg-flow .arrow::before{background:repeating-linear-gradient(90deg,var(--dk,#94a3b8) 0 4px,transparent 4px 9px)}
+.tc-dmg.v-dodge .tc-dmg-flow .arrow::after{border-left-color:transparent;
+  border:1px dashed color-mix(in srgb,var(--dk,#94a3b8) 80%,transparent);border-radius:50%;width:9px;height:9px;right:2px;top:0}
+.tc-dmg.v-dodge .num{color:#94a3b8;text-shadow:none;font-weight:700}
+.tc-dmg.v-dodge .tc-dmg-core .kind{opacity:.65;border-bottom-style:dashed}
+.tc-dmg.v-guard{border-left-style:double;border-left-width:5px}
+.tc-dmg.v-break{border-left-style:solid;border-left-width:5px}
+.tc-dmg.v-hold .num{color:#cbd5e1}
 .tc-kbm-il .tc-bar{flex:1;height:4px;margin-left:2px}
 .tc-kbm-il.dry>b,.tc-kbm-il.dry>span{color:#6b7280}
 .tc-nb-def{margin-top:7px;font-size:11px;color:#fca5a5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
