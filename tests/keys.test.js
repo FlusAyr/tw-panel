@@ -41,7 +41,7 @@ function makeApi(source) {
 }
 
 const api = makeApi(SRC);
-const BASELINE = 'v3.17.0';   // 跨版本锁的基线 tag：必须是不再变的东西
+const BASELINE = 'v3.25.0';   // 跨版本锁的基线 tag：必须是不再变的东西
 
 /* KEYS 字符串从源码现取（不手抄：手抄的副本会随 panel.js 漂移而变成假绿） */
 function readKeysString() {
@@ -746,6 +746,120 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     /\.tc-def-row\{[^}]*flex-wrap:wrap/.test(cssNarrow) && /\.tc-def-row em\{[^}]*flex:0 0 100%/.test(cssNarrow),
     '实际=' + ((cssNarrow.match(/\.tc-def-row\{[^}]*\}/) || ['(无)'])[0]));
 }
+
+  /* ══════════════ 组 10 · 使魔 kbf（v3.26.0） ══════════════
+     为什么必须有这一组：kbf 在 v3.25.0 里根本没进 KEYS，而世界书一直在写它。
+     按 §3.1 规则 7 的既定行为，未登记的键行「整行不解析，且 extractBlock 遇非状态行即 break」
+     —— 于是它每写一次，就把它**后面所有状态行**一起吞掉（next/scene/其他键全丢）。
+     所以第 1 条测的不是「使魔能不能显示」，是「它在不在 KEYS 里」。 */
+  console.log('\n── 组 10 · 使魔 kbf ──');
+
+  /* 来源：用户真实输出（2026-11-01 平台捕获，原文未改）
+     —— `族兽` / `技撕咬` 都是没有分隔符的原样写法，别「顺手」补空格，补了就不测这条了。 */
+  const KBF_REAL = [
+    'p1: 你 | HP 92/100',
+    'kbf3: 亚龙 | 族兽 | HP 105/160 | MP 0/0 | 忠 70 | 力 75 | 敏 40 | 体 80 | 技撕咬 | 结 实冲撞 | 签 已缔结',
+    'next: 继续'
+  ].join('\n');
+
+  T('kbf 已登记进 KEYS（没登记 = 整行不解析且吞掉其后所有状态行）',
+    /(^|\|)kbf\[0-9\]\*(\||$)/.test(KEYS), 'KEYS=' + KEYS.slice(0, 120));
+
+  /* 必须先过 extractBlock 再看 parseState：
+     parseState 对未匹配行是 `continue`，直接喂原文时 kbf 未登记也照样解析出 next ——
+     那条断言会假绿。真正吞数据的是 extractBlock 的 break。 */
+  const blkKbf = api.extractBlock(KBF_REAL);
+  T('端到端：kbf3 没有截断状态块（extractBlock.end 覆盖到最后一行）',
+    !!blkKbf && blkKbf.end === 2, 'end=' + (blkKbf && blkKbf.end) + '（期望 2）　'
+      + '← 小于 2 说明 extractBlock 在 kbf 那行 break 了，其后状态行全丢');
+  const stKbf = api.parseState(blkKbf ? blkKbf.body : KBF_REAL);
+  const fams = stKbf.familiars || [];
+  T('真实行解析出 1 只使魔，且编号取到 p 同号（idx=3）', fams.length === 1 && fams[0].idx === 3,
+    'length=' + fams.length + ' idx=' + (fams[0] && fams[0].idx));
+  const f0 = fams[0] || {};
+  T('名称 = 亚龙', f0.name === '亚龙', '实际=' + JSON.stringify(f0.name));
+  T('族 无分隔符（`族兽`）也认得出：race=beast / raceRaw=兽',
+    f0.race === 'beast' && f0.raceRaw === '兽', 'race=' + f0.race + ' raw=' + JSON.stringify(f0.raceRaw));
+  T('HP 105/160', !!f0.hp && f0.hp.cur === 105 && f0.hp.max === 160, JSON.stringify(f0.hp));
+  T('MP 0/0（0 是值不是缺项）', !!f0.mp && f0.mp.cur === 0 && f0.mp.max === 0, JSON.stringify(f0.mp));
+  T('忠 70', !!f0.loyal && f0.loyal.cur === 70, JSON.stringify(f0.loyal));
+  T('属性 力75 / 敏40 / 体80（三项都在，顺序照世界书）',
+    (f0.attrs || []).map(a => a.k + a.v).join(',') === '力75,敏40,体80',
+    '实际=' + JSON.stringify((f0.attrs || []).map(a => a.k + a.v)));
+  T('技 无分隔符（`技撕咬`）也认得出：skills=[撕咬]',
+    (f0.skills || []).join(',') === '撕咬', JSON.stringify(f0.skills));
+  T('规格外文本段 `结 实冲撞` 只当标签（进 tags、不进 extra、不猜数值）',
+    (f0.tags || []).indexOf('结 实冲撞') >= 0 && (f0.extra || []).length === 0,
+    'tags=' + JSON.stringify(f0.tags) + ' extra=' + JSON.stringify(f0.extra));
+  T('签 已缔结 -> pact=on（原文保留）', f0.pact === 'on' && f0.pactRaw === '已缔结',
+    'pact=' + f0.pact + ' raw=' + JSON.stringify(f0.pactRaw));
+
+  /* 端到端：这条才是 kbf 真正的病 —— 它后面那行还在不在 */
+  T('端到端：状态块里的 next 解析出来了（next 仍在）', stKbf.next === '继续',
+    'next=' + JSON.stringify(stKbf.next));
+
+  const htmlKbf = api.render(stKbf);
+  T('渲染出使魔卡（tc-fam）且 HP/MP/忠/技/签 都在', /class="tc-fam/.test(htmlKbf)
+    && /105/.test(htmlKbf) && /撕咬/.test(htmlKbf) && /已缔结/.test(htmlKbf), '');
+
+  /* 来源：自造样例（为覆盖 缺项 / 三态 / 兜底 / 无行 分支而写，不是实测证据） */
+  const onlyName = ['kbf1: 灰烬 | 族灵'].join('\n');
+  const fMiss = (api.parseState(onlyName).familiars || [])[0] || {};
+  T('缺项不整块消失：只有名称+族时，力敏体画 — 占位',
+    /力<\/i>\s*<b>—<\/b>/.test(api.render(api.parseState(onlyName)))
+    && /敏<\/i>\s*<b>—<\/b>/.test(api.render(api.parseState(onlyName))),
+    'attrs=' + JSON.stringify(fMiss.attrs));
+
+  const pactHtml = (raw) => api.render(api.parseState('kbf1: 灰烬 | 族灵 | 签 ' + raw));
+  T('签 三态徽章：已缔结 p-on / 待缔结 p-wait / 已解除 p-off',
+    /p-on/.test(pactHtml('已缔结')) && /p-wait/.test(pactHtml('待缔结')) && /p-off/.test(pactHtml('已解除')), '');
+  T('签 非法值不静默改正：p-x 且保留原文', /p-x/.test(pactHtml('半吊子')) && /半吊子/.test(pactHtml('半吊子')), '');
+
+  const extraTxt = 'kbf1: 灰烬 | 族灵 | 护甲 12';
+  T('规格外 `名字 数字` 进 extra 成条（同 kbm 兜底）',
+    ((api.parseState(extraTxt).familiars || [])[0].extra || []).length === 1,
+    JSON.stringify(((api.parseState(extraTxt).familiars || [])[0].extra || [])));
+  T('未知族值不冒充族：`族 龙` 不算 race，但字不丢（进 tags）',
+    ((api.parseState('kbf1: 灰烬 | 族 龙').familiars || [])[0].race) === '',
+    JSON.stringify(api.parseState('kbf1: 灰烬 | 族 龙').familiars));
+
+  const noKbf = ['p1: 你 | HP 92/100', 'next: 继续'].join('\n');
+  T('没有 kbf 行时一张使魔卡都不出（不留空壳）', !/class="tc-fam/.test(api.render(api.parseState(noKbf))), '');
+
+
+  /* ══════════ 组 11 · 通用截断锁：每个登记键都必须能在块中间（v3.26.0） ══════════
+     这一组不是为 kbf 写的，是为「下一个新键」写的。
+     截断只发生在 extractBlock 里，而四套既有测试全部绕开它（直接 render(parseState(t))），
+     所以「未登记键吃掉其后所有状态行」能在全绿的情况下活着 —— kbf 就是这样活了两轮。 */
+  console.log('\n── 组 11 · 通用截断锁（每个登记键） ──');
+
+  /* 从 KEYS 枚举键基名：'npc[0-9]*' -> { base:'npc', num:true }；'scene' -> { base:'scene', num:false } */
+  const keySpecs = frags.map(f => {
+    const m = f.match(/^([A-Za-z]+)(\[0-9\][*+])?$/);
+    return m ? { base: m[1], num: !!m[2], raw: f } : null;
+  }).filter(Boolean);
+
+  T('能从 KEYS 枚举出键基名（枚举失效时不许静默 0 通过）', keySpecs.length >= 20,
+    '枚举到 ' + keySpecs.length + ' 个，KEYS=' + KEYS.slice(0, 80) + '　← 0 个说明解析规则没跟上 KEYS 的写法');
+
+  const broken = [];
+  for (const sp of keySpecs) {
+    const mid = sp.base + (sp.num ? '2' : '') + ': 占位';
+    const text = ['scene: 测试场景 | 地点 | 静', mid, 'next: 继续'].join('\n');
+    const blk = api.extractBlock(text);
+    if (!blk || blk.end !== 2) { broken.push(sp.base + (sp.num ? '2' : '') + '(end=' + (blk ? blk.end : 'null') + ')'); continue; }
+    const st = api.parseState(blk.body);
+    if (st.next !== '继续') broken.push(sp.base + '2(next 被吞)');
+  }
+  T('每个登记键出现在块中间都不会截断（共 ' + keySpecs.length + ' 个键）', broken.length === 0,
+    '失效的：' + broken.join('、') + '　← 出现在这里 = 该键在 KEYS 里但 extractBlock 到它就 break，其后状态行全丢');
+
+  /* 反向：把一个**没登记**的键放进块中间，必须截断 —— 证明上面那条不是恒真。
+     恒真的断言和没写一样；这条保证「会红」的能力还在。 */
+  const fakeBlk = api.extractBlock(['scene: 测试场景 | 地点 | 静', 'zzz9: 占位', 'next: 继续'].join('\n'));
+  T('未登记的键确实会截断（反向对照：证明上一条不是恒真）', !!fakeBlk && fakeBlk.end === 0,
+    'end=' + (fakeBlk && fakeBlk.end) + '（期望 0：遇到未登记行即 break）');
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

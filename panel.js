@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.25.0';
+  const VERSION = '3.26.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|dmg[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -109,6 +109,9 @@
     return null;
   }
   const MECHA_TYPES = { '人型': 'human', '重装': 'heavy', '全包': 'full' };
+  /* 使魔（无限册 八节）：族 兽/灵/构造；签 三态 已缔结/待缔结/已解除。 */
+  const FAMILIAR_RACES = { '兽': 'beast', '灵': 'spirit', '构造': 'construct' };
+  const PACT_MAP = { '已缔结': 'on', '待缔结': 'wait', '已解除': 'off' };
 
   function parseMecha(v) {
     const p = seg(v);
@@ -148,6 +151,54 @@
       if (inEquip) { o.equip.push(x); continue; }
       /* 文本型自定：`自` 段之后的裸词，或任何进不了数值的形状（含 `90/100/次` 这种坏格）。
          原文照收、只当标签，不猜数值 —— 猜错会画出一根看起来正常的条。 */
+      o.tags.push(x);
+    }
+    return o;
+  }
+
+
+  /* 使魔 kbf：数值格复用 mechaPair 的严格校验（第二段非纯数字 -> 整格丢弃，不取前半截），
+     但**没有装上/驾驶关系**，所以不画归属竖线、不画驾驶中带子。 */
+  function parseFamiliar(v) {
+    const p = seg(v);
+    const o = { name: '', race: '', raceRaw: '', hp: null, mp: null, loyal: null, attrs: [], skills: [], extra: [], tags: [], pact: '', pactRaw: '' };
+    let inSkill = false;
+    let inTag = false;
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+
+      let m;
+      if ((m = x.match(/^族\s*[:：]?\s*(.+)$/)) && FAMILIAR_RACES[m[1].trim()]) { inTag = false; inSkill = false; o.raceRaw = m[1].trim(); o.race = FAMILIAR_RACES[o.raceRaw]; continue; }
+      if ((m = x.match(/^HP\s*(.+)$/i))) { inTag = false; inSkill = false; o.hp = mechaPair('HP', m[1]); continue; }
+      if ((m = x.match(/^MP\s*(.+)$/i))) { inTag = false; inSkill = false; o.mp = mechaPair('MP', m[1]); continue; }
+      if ((m = x.match(/^忠(?:\s*[:：]\s*|\s+|$)(.+)$/))) { inTag = false; inSkill = false; o.loyal = mechaPair('忠', m[1]); continue; }
+      if ((m = x.match(/^技\s*[:：]?\s*(.*)$/)) && !/^技能?$/.test(x)) { inSkill = true; inTag = false; if (m[1].trim()) o.skills.push(m[1].trim()); continue; }
+      if ((m = x.match(/^签\s*[:：]?\s*(.+)$/))) {
+        inTag = false; inSkill = false;
+        o.pactRaw = m[1].trim(); o.pact = PACT_MAP[o.pactRaw] || 'x'; continue;
+      }
+      if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inSkill = false; inTag = false; continue; }
+      if ((m = x.match(/^自\s*[:：]?\s*(.*)$/))) { inTag = true; inSkill = false; if (m[1].trim()) o.tags.push(m[1].trim()); continue; }
+
+      /* 族 关键字被省略时的容错（与「型」同款）：裸段整段恰是三种族之一且还没族 -> 当作族。
+         `技` 之后的裸段是技能名，不许改判成族（强规则优先）。 */
+      if (!o.race && !inSkill && FAMILIAR_RACES[x]) { inTag = false; o.raceRaw = x; o.race = FAMILIAR_RACES[x]; continue; }
+
+      /* 规格外的 `名字 数字` / `名字 数字/数字` -> 自定数值，成条，不丢 */
+      if ((m = x.match(/^([^\s：:\/]{1,12})\s*(-?\d+)(?:\s*\/\s*(-?\d+))?$/))) {
+        o.extra.push({ label: m[1], a: +m[2], b: m[3] == null ? null : +m[3] });
+        inSkill = false; inTag = false; continue;
+      }
+
+      if (inSkill) {
+        if (!/\s/.test(x)) { o.skills.push(x); continue; }
+        /* 带空格的段退出技组：技名是单词短语，`结 实冲撞` 这类多单词段更可能是别的字段，
+           顶着「技」的标题显示它会冒充技能；落到 tags 至少不冒充（两边都不丢数据）。 */
+        inSkill = false;
+      }
+      /* 其余（`结 实冲撞` 这类规格外文本段、`90/100/次` 这类坏格）只当标签，绝不猜数值 */
       o.tags.push(x);
     }
     return o;
@@ -696,14 +747,14 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], dmgs: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
-    const mmap = new Map(), kmmap = new Map();
+    const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const gmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
@@ -734,6 +785,7 @@
       else if (/^nl\d*$/.test(k)) nlmap.set(k === 'nl' ? 1 : +k.slice(2), parseNtrLog(v));
       else if (/^npc\d*$/.test(k)) nmap.set(k === 'npc' ? 1 : +k.slice(3), parseNpc(v));
       else if (/^kbm\d*$/.test(k)) kmmap.set(k === 'kbm' ? 1 : +k.slice(3), parseMecha(v));
+      else if (/^kbf\d*$/.test(k)) kfmap.set(k === 'kbf' ? 1 : +k.slice(3), parseFamiliar(v));
       else if (/^dmg\d*$/.test(k)) gmap.set(k === 'dmg' ? 1 : +k.slice(3), parseDmg(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
@@ -768,6 +820,7 @@
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
     EXT_KEYS.forEach(e => { st[e.field] = [...xmap[e.field].keys()].sort((a, b) => a - b).map(i => xmap[e.field].get(i)); });
     st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; return m; });
+    st.familiars = [...kfmap.keys()].sort((a, b) => a - b).map(i => { const f = kfmap.get(i); f.idx = i; return f; });
     st.dmgs = [...gmap.keys()].sort((a, b) => a - b).map(k => gmap.get(k));
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
@@ -872,6 +925,38 @@
           ${gauges}${attrs}${cus}${tags}${equip}
           ${dead ? '<em class="tc-kbm-stamp">已失效</em>' : ''}
         </div>
+      </div>`;
+  }
+
+
+  /* 使魔卡：比机甲小一档 —— 它是附属单位，不该和机甲、更不该和玩家抢视觉重量。
+     结构：头（名称 + 族 + 签徽章）／HP·MP 两条细条 + 忠 一根短条／属性行／技标签／规格外兜底。
+     缺项一律画 —（与 kbm 同规矩）：不许整块消失，否则「没有」和「丢了」分不开。 */
+  function renderFamiliar(f) {
+    const dryOf = (v) => !!(v && v.max > 0 && v.cur <= 0);
+    const bars = (f.hp || f.mp) ? `
+      <div class="tc-fam-bars">
+        ${f.hp ? gaugeHtml('HP', f.hp.cur, f.hp.max, 'fam', false) : ''}
+        ${f.mp ? gaugeHtml('MP', f.mp.cur, f.mp.max, 'fam-mp', dryOf(f.mp)) : ''}
+      </div>` : '';
+    const loyal = f.loyal ? `
+      <div class="tc-fam-loyal"><span>忠</span><b>${f.loyal.cur}</b><div class="tc-bbar"><i class="fam-loyal" style="width:${Math.max(0, Math.min(100, f.loyal.cur))}%"></i></div></div>` : '';
+    const attrs = `
+      <div class="tc-fam-attrs">${attrsHtml(f.attrs || [])}</div>`;
+    const skills = (f.skills || []).length ? `
+      <div class="tc-fam-skills"><em class="tc-fam-l">技</em>${f.skills.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
+    const cus = (f.extra || []).length ? `
+      <div class="tc-fam-cus">${f.extra.map(e => gaugeHtml(esc(e.label), e.a, e.b, 'fam-x', false, ' x')).join('')}</div>` : '';
+    const tags = (f.tags || []).length ? `
+      <div class="tc-fam-tags">${f.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
+    return `
+      <div class="tc-fam${f.race ? ' r-' + f.race : ''}${f.pact === 'off' ? ' gone' : ''}">
+        <div class="tc-fam-hd">
+          <b>${esc(f.name || '使魔')}</b>
+          ${f.raceRaw ? `<i class="tc-fam-race rr-${f.race || 'x'}">${esc(f.raceRaw)}</i>` : ''}
+          ${f.pactRaw ? `<em class="tc-fam-pact p-${f.pact}">${esc(f.pactRaw)}</em>` : ''}
+        </div>
+        ${bars}${loyal}${attrs}${skills}${cus}${tags}
       </div>`;
   }
 
@@ -1328,17 +1413,23 @@
 
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
-    if (st.players.length || st.mechas.length) {
+    if (st.players.length || st.mechas.length || st.familiars.length) {
       colL.push(sect('我方小队', 'SQUAD'));
       /* 同号 kbm 紧跟 p 卡；找不到 p 的 kbm 排在玩家之后单独成卡（不许丢） */
       const kmBy = new Map(st.mechas.map(m => [m.idx, m]));
+      const kfBy = new Map(st.familiars.map(f => [f.idx, f]));
       const kUsed = new Set();
+      const fUsed = new Set();
       const cards = st.players.map(p => {
-        const m = kmBy.get(p.idx);
-        if (m) { kUsed.add(m.idx); return renderPlayer(p) + renderMecha(m, true); }
-        return renderPlayer(p);
+        const m = kmBy.get(p.idx), f = kfBy.get(p.idx);
+        let one = renderPlayer(p);
+        if (m) { kUsed.add(m.idx); one += renderMecha(m, true); }
+        /* 使魔只按「同号 p」排队，不画归属竖线：它不是装上来的，是召来的 */
+        if (f) { fUsed.add(f.idx); one += renderFamiliar(f); }
+        return one;
       });
       st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m, false)); });
+      st.familiars.forEach(f => { if (!fUsed.has(f.idx)) cards.push(renderFamiliar(f)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
     }
     if (st.bonds.length) {
@@ -1484,7 +1575,7 @@
           /* 守卫：完全没有已定义状态键的段才跳过。
              孤立的 next: / check: / bond: 等附属段（被正文与主状态块隔开）也必须渲染，
              否则主块渲染完、后续孤段会被静默丢弃（v3.10.0 真实故障：next: 丢失）。 */
-          const meaningful = st.players.length || st.mechas.length || st.dmgs.length || st.scene || st.mobs.length ||
+          const meaningful = st.players.length || st.mechas.length || st.familiars.length || st.dmgs.length || st.scene || st.mobs.length ||
             st.bonds.length || st.foes.length || st.npcs.length ||
             st.ntrBonds.length || st.ntrFoes.length || st.ntrHearts.length || st.ntrFalls.length || st.ntrLogs.length ||
             st.checks.length || st.quest || st.next || st.result || st.world || st.team;
@@ -2224,6 +2315,50 @@
   .tc-cbody{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tc-opts{grid-template-columns:1fr}
 }
+
+
+  /* 使魔 kbf（v3.26）：比机甲小一档的附属卡。条更细、字号更小、无切角、无插槽，
+     靠左侧一道窄色边区分族 —— 与机甲的「机械感切角 + 方角插槽」刻意不同形。 */
+  .tc-fam{position:relative;margin:4px 0 0 14px;padding:7px 9px 8px;border-radius:6px;
+    background:linear-gradient(180deg,rgba(10,20,16,.94),rgba(6,13,10,.94));border:1px solid #1f4a37;
+    border-left:3px solid var(--fr,#34d399)}
+  .tc-fam.gone{filter:saturate(.35);border-left-color:#475569}
+  .tc-fam.r-beast{--fr:#34d399}
+  .tc-fam.r-spirit{--fr:#7dd3fc}
+  .tc-fam.r-construct{--fr:#a3a3a3}
+  .tc-fam-hd{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .tc-fam-hd b{font-size:12.5px;color:#d7fbe8;letter-spacing:.02em}
+  .tc-fam-race{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;
+    color:#6ee7b7;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.35)}
+  .tc-fam-race.rr-spirit{color:#7dd3fc;background:rgba(125,211,252,.10);border-color:rgba(125,211,252,.35)}
+  .tc-fam-race.rr-construct{color:#cbd5e1;background:rgba(203,213,225,.10);border-color:rgba(203,213,225,.32)}
+  .tc-fam-race.rr-x{color:#fcd34d;background:rgba(252,211,77,.10);border-color:rgba(252,211,77,.35)}
+  .tc-fam-pact{margin-left:auto;font-style:normal;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px}
+  .tc-fam-pact.p-on{color:#34d399;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.4)}
+  .tc-fam-pact.p-wait{color:#fcd34d;background:rgba(252,211,77,.10);border:1px solid rgba(252,211,77,.38)}
+  .tc-fam-pact.p-off{color:#94a3b8;background:rgba(148,163,184,.10);border:1px solid rgba(148,163,184,.35)}
+  .tc-fam-pact.p-x{color:#fda4af;background:rgba(244,63,94,.10);border:1px solid rgba(244,63,94,.35)}
+  .tc-fam-bars{display:grid;gap:3px}
+  .tc-fam .tc-kbm-g{grid-template-columns:26px 30px 1fr;font-size:10px}
+  .tc-fam .tc-kbm-gl{font-size:9.5px}
+  .tc-fam .tc-kbm-gv{font-size:11px}
+  .tc-fam .tc-bar{height:4px}
+  .tc-bar i.fam{background:linear-gradient(90deg,#065f46,#34d399)}
+  .tc-bar i.fam-mp{background:linear-gradient(90deg,#0c4a6e,#38bdf8)}
+  .tc-bar i.fam-mp-dry{background:#52525b}
+  .tc-fam-loyal{display:grid;grid-template-columns:26px 30px 1fr;align-items:center;margin-top:4px;font-size:10px;color:#8fb6c4}
+  .tc-fam-loyal b{font-size:11px;color:#d7fbe8;text-align:right;padding-right:4px}
+  .tc-bar i.fam-loyal{background:linear-gradient(90deg,#78350f,#fbbf24)}
+  .tc-fam-attrs{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:5px;font-size:10.5px;color:#9fc3cf}
+  .tc-fam-attrs span i{font-style:normal;color:#6b8b98;margin-right:3px}
+  .tc-fam-attrs .miss i{color:#3c5563}
+  .tc-fam-attrs .miss b{color:#415a68;font-weight:400}
+  .tc-fam-skills,.tc-fam-tags,.tc-fam-cus{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:5px}
+  .tc-fam-l{font-style:normal;font-size:9.5px;color:#456b7a;margin-right:1px}
+  .tc-fam-skills span{font-size:10px;color:#a8cbd8;padding:1px 6px;border-radius:4px;background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.28)}
+  .tc-fam-tags span{font-size:9.5px;color:#8fb6c4;padding:1px 5px;border-radius:4px;border:1px dashed rgba(143,182,196,.34)}
+  .tc-fam-cus .tc-kbm-g{grid-template-columns:56px 30px 1fr}
+  .tc-bar i.fam-x{background:linear-gradient(90deg,#134e4a,#5eead4)}
 
 /* ── 窄屏（≤520px）：单列自适应，不再横滑 ──
    判据不是「能不能滑动」，是「一眼能不能看完」：430px 固定列在 320~430 的屏上必然被剪，
