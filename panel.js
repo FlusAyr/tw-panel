@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.26.0';
+  const VERSION = '3.27.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -853,7 +853,9 @@
   const gaugeHtml = (lab, cur, max, cls, dry, extraCls) => {
     const num = (v) => String(v == null ? '—' : v).padStart(3, '\u2007');
     
-      const pct = max == null ? Math.max(0, Math.min(100, cur)) : Math.max(0, Math.min(100, Math.round(cur / max * 100)));
+      /* 同上：max 缺省时 cur 直接当百分比；max 为 0 时显式 0，不走 NaN 的「碰巧」路径。 */
+      const pct = max == null ? Math.max(0, Math.min(100, cur))
+        : (max ? Math.max(0, Math.min(100, Math.round(cur / max * 100))) : 0);
       return `<div class="tc-kbm-g ${cls}${dry ? ' dry' : ''}${extraCls || ''}">
         <span class="tc-kbm-gl">${lab}</span>
         <b class="tc-kbm-gv">${num(cur)}</b>

@@ -815,15 +815,44 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     /p-on/.test(pactHtml('已缔结')) && /p-wait/.test(pactHtml('待缔结')) && /p-off/.test(pactHtml('已解除')), '');
   T('签 非法值不静默改正：p-x 且保留原文', /p-x/.test(pactHtml('半吊子')) && /半吊子/.test(pactHtml('半吊子')), '');
 
+  /* 取 .extra 之前先守住 [0]：造红（把 extra 初始化删掉、或让 familiars 为空）时，
+     `[0].extra` 会抛 TypeError —— 进程崩掉，诊断一行都读不到，
+     而「读得到诊断」正是造红的全部价值。所以这里只报形状，不抛。 */
+  const famOf = (txt) => {
+    const st = api.parseState(txt);
+    const list = (st && st.familiars) || [];
+    const f = list[0] || null;
+    return { n: list.length, f: f, hasExtra: !!(f && Array.isArray(f.extra)) };
+  };
   const extraTxt = 'kbf1: 灰烬 | 族灵 | 护甲 12';
+  const ex = famOf(extraTxt);
   T('规格外 `名字 数字` 进 extra 成条（同 kbm 兜底）',
-    ((api.parseState(extraTxt).familiars || [])[0].extra || []).length === 1,
-    JSON.stringify(((api.parseState(extraTxt).familiars || [])[0].extra || [])));
+    ex.hasExtra && ex.f.extra.length === 1,
+    'familiars=' + ex.n + ' 有 extra 数组=' + ex.hasExtra + ' 内容=' + JSON.stringify(ex.f && ex.f.extra));
   T('未知族值不冒充族：`族 龙` 不算 race，但字不丢（进 tags）',
     ((api.parseState('kbf1: 灰烬 | 族 龙').familiars || [])[0].race) === '',
     JSON.stringify(api.parseState('kbf1: 灰烬 | 族 龙').familiars));
 
   const noKbf = ['p1: 你 | HP 92/100', 'next: 继续'].join('\n');
+  /* 0/0 的读数：比例必须显式 0，不能靠浏览器丢弃非法声明「碰巧」变零宽。
+     这里钉两件事：整卡不出现 NaN ／ 那根条确实是 width:0%。 */
+  const zeroTxt = 'kbf1: 亚龙 | 族兽 | HP 0/0 | MP 0/0 | 忠 0 | 力 1';
+  const zeroHtml = api.render(api.parseState(zeroTxt));
+  T('0/0 的读数不产生 NaN（HP 0/0 与 MP 0/0）', !/NaN/.test(zeroHtml),
+    '命中片段：' + (/NaN.{0,40}/.exec(zeroHtml) || ['(无)'])[0]);
+  /* 第一版写的是 /width:0%/.test(zeroHtml) —— 造红 C 时发现它是假绿：
+     同一张卡里的 `忠 0`（无上限那条）本来就会产出 width:0%，于是「HP/MP 的条到底是不是 0」
+     被别的条替它答了（实测：去掉 max=0 守卫后这条仍绿）。改成钉到那两根条自己身上。 */
+  /* 第二版写成 /class="fam[^"]*"/ —— 又错了：`fam-loyal`（忠 0，无上限）同样以 fam 开头，
+     于是 HP 的 NaN% 又一次被别的条替它答了（造红 C 实测：HP 子项读出来是 true）。
+     这里必须锚精确 class，宁可将来改 markup 时它响亮地红。 */
+  const hpZero = /class="fam" style="width:0%"/.test(zeroHtml);
+  const mpZero = /class="fam-mp" style="width:0%"/.test(zeroHtml);
+  T('0/0 的 HP / MP 两根条各自宽度显式为 0%（不是靠浏览器丢弃声明，也不是别的条替它答）',
+    hpZero && mpZero,
+    'HP 条 0%=' + hpZero + ' ｜ MP 条 0%=' + mpZero + ' ｜ 实际条：'
+      + (zeroHtml.match(/class="(?:fam|fam-mp)[^"]*"[^>]*style="width:[^"]*"/g) || []).join(' '));
+
   T('没有 kbf 行时一张使魔卡都不出（不留空壳）', !/class="tc-fam/.test(api.render(api.parseState(noKbf))), '');
 
 
@@ -856,9 +885,73 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
 
   /* 反向：把一个**没登记**的键放进块中间，必须截断 —— 证明上面那条不是恒真。
      恒真的断言和没写一样；这条保证「会红」的能力还在。 */
-  const fakeBlk = api.extractBlock(['scene: 测试场景 | 地点 | 静', 'zzz9: 占位', 'next: 继续'].join('\n'));
+  /* 用 __nokeys__9 而不是 zzz9：zzz9 是个真可能被造出来的键名（调试时会随手写），
+     一旦有人真把它登记进 KEYS，这条反向对照就静默失效。带下划线的名字不会被当成真键。 */
+  const fakeBlk = api.extractBlock(['scene: 测试场景 | 地点 | 静', '__nokeys__9: 占位', 'next: 继续'].join('\n'));
   T('未登记的键确实会截断（反向对照：证明上一条不是恒真）', !!fakeBlk && fakeBlk.end === 0,
     'end=' + (fakeBlk && fakeBlk.end) + '（期望 0：遇到未登记行即 break）');
+
+  /* ══════════ 组 12 · KEYS 契约双向差集（v3.27.0） ══════════
+     KEYS 是**运行时真相**（从源码现取）；EXPECTED_KEYS 是**我们声称支持的全部键**（手写契约）。
+     两边不同源才有比较的意义 —— 若期望集写成 KEYS.split('|') 的别名，就是两面镜子对镜，
+     永远相等，比不检查更糟（它会替一张破网作证）。
+
+     手写清单该不该存在，判据不是「写死还是现取」，而是「它错的时候会不会有人被叫醒」：
+     下面两条差集会在两个方向上叫人 —— 少一个、多一个都红。
+     失败时报**元素**不报数量：报数量的话人只会去改数量，报元素他才得读一遍。 */
+  console.log('\n── 组 12 · KEYS 契约双向差集 ──');
+  const EXPECTED_KEYS = [
+    'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
+    'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
+    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg',
+    'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
+  ];
+  /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
+     没有这条，下一个人把期望集改成 KEYS.split('|') 就能让上面两条恒绿。 */
+  /* 上面那条只能看「值」，看不出「这份值是哪儿来的」：把 EXPECTED_KEYS 换成
+     frags.map(...) 之后 toString() 依旧是 scene,team,quest,…，断言照样绿（实测过）。
+     要判「是不是手写字面清单」，只能读测试文件自己的源码文本。 */
+  const selfSrc = fs.readFileSync(__filename, 'utf8');
+  const declAt = selfSrc.indexOf('const EXPECTED_KEYS = [');
+  const declEnd = declAt < 0 ? -1 : selfSrc.indexOf('];', declAt);
+  const decl = declAt >= 0 && declEnd > declAt ? selfSrc.slice(declAt, declEnd) : '';
+  const quoteCount = (decl.match(/'[a-z]+'/g) || []).length;
+  /* 判「有没有引用外部符号」之前先把标识符自己抹掉：decl 里必然含 EXPECTED_KEYS，
+     而它里面就有「KEYS」三个字母——不抹掉的话这条对文件名自证，恒红。 */
+  const declBody = decl.split('EXPECTED_KEYS').join('');
+  T('期望键集是独立字面清单（源码必须是 [...] 字面量，不许是 KEYS.split / map 的别名）',
+    decl !== '' && /^const EXPECTED_KEYS = \[/.test(decl) && quoteCount >= 20
+      && !/frags|KEYS|SRC|readKeysString|\.map\(/.test(declBody),
+    '声明片段长度=' + decl.length + ' ｜ 引号项=' + quoteCount + ' ｜ 片段前 80 字：' + decl.slice(0, 80));
+
+  /* 上面那条只读「声明那一刻的快照」。QA 造过一个我们没料到的变异：
+     声明一个字不改（仍是 28 项字面清单），在 `];` 之后加一个 IIFE ——
+     `EXPECTED_KEYS.length = 0`，再把 frags 派生的键 push 回去。
+     运行时它就是 KEYS 的别名，而源码文本仍是漂亮的字面清单：删一个键 → 182/0 全绿。
+     这不是「替身」问题，是**时序**问题 —— 声明是真的、值是假的。
+     所以要再比一次「声明里的名字」和「运行时的值」：声明被谁改过、改过几次都不重要，
+     只要它跟声明当初写的那份名字对不上，就红。 */
+  const declNames = (decl.match(/'([a-z]+)'/g) || []).map((t) => t.slice(1, -1));
+  T('期望集运行时值 === 声明里的字面清单（防声明后追加 / 清空重灌）',
+    JSON.stringify(declNames) === JSON.stringify(EXPECTED_KEYS),
+    '声明 ' + declNames.length + ' 项 / 运行时 ' + EXPECTED_KEYS.length + ' 项'
+      + (declNames.length === EXPECTED_KEYS.length
+        ? '（数量相同但内容不同：' + JSON.stringify(declNames.filter((n) => EXPECTED_KEYS.indexOf(n) < 0)) + ' 只在声明里 / '
+          + JSON.stringify(EXPECTED_KEYS.filter((n) => declNames.indexOf(n) < 0)) + ' 只在运行时）'
+        : ''));
+
+  const baseOf = (frag) => frag.replace(/\[0-9\]\*$|\[0-9\]\+$/, '');
+  const actualBases = [];
+  for (const f of frags) { const b = baseOf(f); if (actualBases.indexOf(b) < 0) actualBases.push(b); }
+  const missingInKeys = EXPECTED_KEYS.filter(b => actualBases.indexOf(b) < 0);
+  const extraInKeys = actualBases.filter(b => EXPECTED_KEYS.indexOf(b) < 0);
+  T('契约少一个：EXPECTED_KEYS 里每个键都在 KEYS 中', missingInKeys.length === 0,
+    'KEYS 缺 ' + JSON.stringify(missingInKeys) + '（要么补进 KEYS，要么把它从契约里删掉——别留着）');
+  T('实现多一个：KEYS 里没有契约外的键', extraInKeys.length === 0,
+    'KEYS 多出 ' + JSON.stringify(extraInKeys) + '（新键要么登记进契约，要么写明它为什么是特例）');
+  T('两侧都读到了东西（不是两个空集相等）',
+    EXPECTED_KEYS.length > 20 && actualBases.length > 20,
+    'EXPECTED=' + EXPECTED_KEYS.length + ' / KEYS=' + actualBases.length);
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

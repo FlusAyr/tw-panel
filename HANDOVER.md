@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.26.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.27.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.26.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.27.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -93,6 +93,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.24.0** 测试与文档口径收紧，面板逻辑未改：`version.test.js` 新增 13 条断言（36 → 49），世界书条目数改为从 `content/worldbook/` 的 json 反查（29 / 18），11 处文档的「条目数」被钉死，任一文档写过期数字、或 json 实际条数变了而文档没跟都红；`AGENTS.md §6` 扫描命令加 `-F`（BRE 的 `.` 是通配，会把版本号里的点当成任意字符，搜出 `3X22Y0` 这种不存在的串）；`§8` 第 3 条改精确——多镜像不同步只会延迟更新，不会拿旧代码、不会降级；`§7` 尾部多余空行收掉；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
 - **v3.25.0** 防线容量显式化 + 测试入口去隐式：防线列数与防线名称数绑死（改一边不改另一边即红），超出布局容量时卡面出黄字「防线 N 道 > 布局 M 列」而不是静默变挤；五道时渲染零变化（旧卡逐字节相同）。`window.__twCard` 暴露 `CSS` / `injectCss`，几何断言不再靠正则从源码抽 CSS（抽空时表现为静默全绿）；`keys` 147 → 153。`boot.mjs` 未改动（v2.1 / 19897 B）。
 - **v3.26.0** `kbf<N>` 使魔行进面板：登记进 `KEYS`，渲染紧凑使魔卡（`tc-fam` 主题，族色窄边 + 细条，刻意区别于机甲卡）；`族 兽/灵/构造`、`技`、`签 已缔结/待缔结/已解除` 按世界书 uid3 §八 原文实现，缺项显示 `—`；关键字后可无冒号无空格（`族兽` / `技撕咬`）；`kbf` 未登记时 `extractBlock` 在它那行 `break`、其后状态行被整块吞掉，本次一并修掉（用户实战样本暴露）。`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
+- **v3.27.0** 测试假绿的三个来源逐个堵掉：`KEYS` 与「声称支持的键集合」做**双向差集**（期望集少一个红、多一个红，且期望集不许写成 `KEYS` 的别名）；造红时不再因 `undefined` 崩掉进程，改打印字段名与解析对象形状；`0/0` 的条不再产生 `width:NaN%`，改显式 `0%`；反向对照键 `zzz9` → `__nokeys__9`（`zzz9` 可能被真造出来）。`panel.js` 本版仅 `3/1`（一次 `pct` 守卫 + 两处注释），无新功能、无新键。`boot.mjs` 未改动（v2.1 / 19897 B）
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）
