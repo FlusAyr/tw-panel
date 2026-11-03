@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.23.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.24.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.23.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.24.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -90,6 +90,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.21.0** 窄屏修复：<520px 时卡片退回单列自适应、不再向右越界，属性单列、标签与值紧邻，血量/SP/负重/机甲三读数强制可见；≥520px 布局一字未改（桌面逐字节对上一版相同）；`dmg` 算段加三条保护（解析保留原文 / 渲染文本须等于原文全文 / 容器禁止省略号与裁切）；`keys` 137→140；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定（基线 tag 见 CHANGELOG）
 - **v3.22.0** 窄屏五格防线：<520px 五道防线固定五等分一行（原先退成 1+1+1+1+1 或 3+2），双环挪到防线下一行并排，每格名称与状态上下两行；≥520px 一字未改；`keys` 141→147；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
 - **v3.23.0** 纯文档与内容修正，面板逻辑未改：`README.md` 世界书条目数 24 → 29（上一版世界书同步遗漏）；`AGENTS.md §7` 新增第 15、16 条（让既有规矩变成假话的改动要连带改规矩 / 改掉数字后扫数字不扫句子）；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
+- **v3.24.0** 测试与文档口径收紧，面板逻辑未改：`version.test.js` 新增 13 条断言（36 → 49），世界书条目数改为从 `content/worldbook/` 的 json 反查（29 / 18），11 处文档的「条目数」被钉死，任一文档写过期数字、或 json 实际条数变了而文档没跟都红；`AGENTS.md §6` 扫描命令加 `-F`（BRE 的 `.` 是通配，会把版本号里的点当成任意字符，搜出 `3X22Y0` 这种不存在的串）；`§8` 第 3 条改精确——多镜像不同步只会延迟更新，不会拿旧代码、不会降级；`§7` 尾部多余空行收掉；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）
@@ -164,7 +165,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 
 1. **CI**：仓库无 CI workflow（`.github/workflows/` 已删除）。改动靠本地 `node tests/run_all.js` 六组全绿把关；备选配置在 `ci/tests.yml.example`，启用前须先确认能绿。
 2. **旧版引导用户**（v1.0 loader 三件套时代的）：需手动重导一次导入包才获得 boot v2.1 双通道，否则在 CSP 拦截环境下面板可能永不更新。发布渠道上要把这句带到。
-3. **`@main` 可变别名 + 多镜像缓存不同步**：曾出现 `@main/version.json` 报 3.10.1 而 `@main/panel.js` 已是 3.12.0 的自相矛盾；玩家导入行走的是 gcore，新玩家可能拿到无「面板设置」的旧 boot。处置：引导与面板拉取一律钉不可变 tag `@vX.Y.Z`，唯一例外：设置面板「强制重拉最新」按钮走 `@main`；急发版走 tag。
+3. **`@main` 可变别名 + 多镜像缓存不同步**：曾出现 `@main/version.json` 报 3.10.1 而 `@main/panel.js` 已是 3.12.0 的自相矛盾。玩家导入行走的 gcore 不被 purge 覆盖，只会让更新**延迟**（`s-maxage` 12h），**不会拿到旧代码、不会降级**——代码按 tag 取（不可变）+ 全源并行探版本取最大值 + 只升不降：`boot.mjs` 的 `refresh()` 对所有版本源并行探测后取 `cmpVer` 最大值，拿到 best 后 `cmpVer(best.v, curVer) <= 0` 就不更新。处置：引导与面板拉取一律钉不可变 tag `@vX.Y.Z`，唯一例外：设置面板「强制重拉最新」按钮走 `@main`；急发版走 tag。
 4. **`work/panel_content.js`**：仓库外工作副本（`C:\Users\Administrator\WorkBuddy\2026-10-31-05-01-50\work\`），发版时同步一份，防仓库目录意外损毁。
 5. NTR 卡 v3 的**输出纪律**条款是治「AI 漏生成数值」的第一版方案；如果实际跑团仍漏，下一步方向是把纪律句复制到条目 1（五维数值核心）的头部，双保险。
 6. **字节断言一律落盘后 `wc -c`**。`size_download` 本身准，错在用法：URL 形态错（`repo/@v1.2.3/f`，`@` 前多一个 `/`）→ jsDelivr 回 404 错误体（69~72 B），看着像文件只有几十字节；`-I`(HEAD) 恒 0；`--compressed` 给压缩字节（`llms.txt` 2952 vs 5884）。异常小值先核对 URL。

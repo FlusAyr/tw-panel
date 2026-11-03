@@ -231,5 +231,96 @@ if (mt) {
                 : ' 实际输出=' + JSON.stringify(changed)));
 }
 
+/* ─────────── H 条目数一致性：真值从 content/worldbook/*.json 数出来 ───────────
+ * 为什么需要这一组：世界书从 24 条扩到 29 条时，七处文档里的「条目数」同时变假，
+ * 而没有任何门禁会红（AGENTS.md §7 第 15/16 条就是那次事故的产物）。其中 AGENT_DEPLOY.md:137
+ * 最坏——它给玩家一个会误判的校验动作（照做看到 29≠24，会得出「文件下坏了」并重下）。
+ *
+ * 三条纪律：
+ * 1. 真值不写死：从 json 本体数 entries，代码里不出现字面量 29 / 18。
+ * 2. 锚点逐条写、不许泛型：「条目」在维护手册里还指「条目 3/22」「条目 14」这种**条目编号**，
+ *    泛型正则会连它们一起扫进来。每条锚点必须恰好命中 1 次；命中 0 次 = 文档改写了这句，
+ *    命中 >1 次 = 锚点不唯一。两种都判红，不许静默跳过。
+ * 3. 失败必打印：文件 + 行号 + 该行原文 + 期望值 + 实际值。
+ *
+ * 豁免（不在本组内）：CHANGELOG.md、HANDOVER.md —— 谱系里的「24 → 29」是历史记录，不是缺陷。
+ * 把历史判红等于要求谎报历史；而「第一天就红、红得没道理」的断言最后一定会被调宽或删掉，
+ * 比没写更坏。
+ */
+{
+  const readUtf8 = (rel) => fs.readFileSync(abs(rel), 'utf8');
+  const WB = {
+    kb: 'content/worldbook/无限恐怖_v2_联机版_AI精简.json',
+    tuan: 'content/worldbook/跑团用世界书_v4_联机版_AI精简.json',
+  };
+  const TRUTH = {};
+  Object.keys(WB).forEach((k) => {
+    let n = null, err = '';
+    try {
+      const j = JSON.parse(readUtf8(WB[k]));
+      if (!j || typeof j.entries !== 'object' || j.entries === null) err = 'json 里没有 entries 对象';
+      else n = Object.keys(j.entries).length;
+    } catch (e) { err = e.message; }
+    TRUTH[k] = n;
+    T('真值可数：' + k + ' 的条目数（来自 ' + WB[k] + '）',
+      typeof n === 'number' && n > 0, err || ('实际=' + n));
+  });
+
+  const DOC = 'content/docs/酒馆状态面板系统_维护手册.md';
+  // [文件, 锚点正则（必须恰好命中 1 次）, 捕获组顺序, 这处在说什么]
+  const COUNT_ANCHORS = [
+    ['AGENTS.md', /无限恐怖 v2（(\d+) 条目）、跑团用 v4（(\d+) 条目）/, ['kb', 'tuan'], '仓库地图'],
+    ['llms.txt', /主世界书，(\d+) 条目/, ['kb'], '入口索引·无限恐怖'],
+    ['llms.txt', /通用规则层，(\d+) 条目/, ['tuan'], '入口索引·跑团用'],
+    ['content/README.md', /`无限恐怖_v2_联机版_AI精简\.json` \| (\d+) 条目/, ['kb'], '下载表·无限恐怖'],
+    ['content/README.md', /`跑团用世界书_v4_联机版_AI精简\.json` \| (\d+) 条目/, ['tuan'], '下载表·跑团用'],
+    ['AGENT_DEPLOY.md', /条目数应为 \*\*(\d+)\*\*（无限恐怖）和 \*\*(\d+)\*\*（跑团用）/, ['kb', 'tuan'], '玩家校验动作'],
+    ['AGENT_DEPLOY.md', /条目数 (\d+) \/ (\d+)/, ['kb', 'tuan'], '验收表'],
+    [DOC, /当前世界卡（世界书格式，(\d+) 条目）/, ['kb'], '§条目表·无限恐怖'],
+    [DOC, /### 9\.1 跑团用世界书（基础册，(\d+) 条目）/, ['tuan'], '§9.1 跑团用'],
+    [DOC, /### 9\.2 无限恐怖 v2 联机版（世界册，(\d+) 条目）/, ['kb'], '§9.2 无限恐怖'],
+    ['README.md', /条目数分别为 (\d+) 和 (\d+)/, ['kb', 'tuan'], '玩家安装表'],
+  ];
+
+  const lineAt = (text, idx) => {
+    let n = 1;
+    for (let i = 0; i < idx; i++) if (text.charCodeAt(i) === 10) n++;
+    return n;
+  };
+
+  COUNT_ANCHORS.forEach(([file, re, order, what]) => {
+    const id = file + '（' + what + '）';
+    if (!has(file)) { T('条目数锚点：' + id, false, '文件不存在'); return; }
+    const text = readUtf8(file);
+    const g = new RegExp(re.source, 'g');
+    const hits = [];
+    let m;
+    while ((m = g.exec(text)) !== null) {
+      hits.push({ m: m, idx: m.index });
+      if (m[0] === '') g.lastIndex++;  // 防零宽匹配死循环
+    }
+    if (hits.length !== 1) {
+      T('条目数锚点唯一性：' + id, false,
+        '命中 ' + hits.length + ' 次（必须恰好 1 次）'
+        + (hits.length === 0 ? '　← 锚点失效：文档可能改写了这句，请改锚点，别放宽正则'
+          : '　← 锚点不唯一：同句在文件里出现了多次'));
+      return;
+    }
+    const h = hits[0];
+    const ln = lineAt(text, h.idx);
+    const src = (text.split('\n')[ln - 1] || '').trim();
+    const bad = [];
+    order.forEach((k, i) => {
+      const want = TRUTH[k];
+      const got = Number(h.m[i + 1]);
+      if (want === null || got !== want) bad.push(order.length > 1 ? '第' + (i + 1) + '个(' + k + ')' : k + ' 期望 ' + want + ' 实际 ' + h.m[i + 1]);
+    });
+    T('条目数一致：' + id + ' @ ' + file + ':' + ln, bad.length === 0,
+      (bad.length ? '不符：' + bad.join('；') + '　' : '')
+      + '期望 ' + order.map((k) => TRUTH[k]).join('/') + '　实际 ' + order.map((k, i) => h.m[i + 1]).join('/')
+      + '　原文=' + JSON.stringify(clip(src)));
+  });
+}
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
