@@ -1,746 +1,880 @@
 {
-    "sheet_dCudvUnH": {
-        "uid": "sheet_dCudvUnH",
-        "name": "主神空间全局表",
-        "sourceData": {
-            "note": "主神空间与任务世界的全局参数。此表有且仅有一行。\n\n【与状态块分工】状态块(scene/quest行)管本楼快照，此表管跨楼与跨场的全局锚点；两者必须一致，冲突以状态块为准并回改此表。\n\n【列定义】（列号为 0 基）\n- 列0: 全局状态 story_state（固定字符串`全局状态`）\n- 列1: 场次 mission_no（第X场任务，从1起，返回主神空间结算完成且开启新任务时+1）\n- 列2: 阶段 phase（任务中/幕间）\n- 列3: 当前任务世界 world_name（如 生化危机；幕间填 主神空间）\n- 列4: 当前详细地点 current_location\n- 列5: 当前主要地区 current_major_region\n- 列6: 主线编号 quest_code（格式 MQ.罗马数字，如 MQ.Ⅰ）\n- 列7: 主线目标 quest_goal\n- 列8: 主线时限 quest_limit（如 剩36小时55分）\n- 列9: 主线状态 quest_status（进行中/已完成/失败）\n- 列10: 上轮场景时间 prev_scene_time（初始化时为NULL）\n- 列11: 经过的时间 elapsed_time\n- 列12: 当前时间 cur_time\n\n【强制约束】\n地点层级从小到大：详细地点 < 主要地区。每个字段只写本级名称，不拼上级前缀。\n√ 当前详细地点填 B4维修竖井 × 填 生化危机-浣熊市-B4维修竖井\n时间格式：\nprev_scene_time / cur_time: YYYY-MM-DD HH:MM\nelapsed_time: {数值}{单位}，多单位用空格连。单位集合：[纪元,千年,百年,年,月,周,天,小时,分]。示例：\"3小时20分\" | \"2天\"\n时间计算公式：cur_time = prev_scene_time + elapsed_time；每轮推进时把上轮 cur_time 赋给 prev_scene_time。\n主神空间无昼夜，时间照常流逝；幕间阶段 quest_code/quest_goal 填上一场的主线并标注已完成。\n\n【纪要补充要求】每楼结束时在纪要正文中用一句话记录玩家属性快照：HP/SP档位、新增或解除的状态、属性/技能/装备/自定义资源（如LP）的增减。写进纪要内容，不新增列、不改动纪要表任何结构。",
-            "initNode": "开局初始化时插入唯一条目：写入开场任务世界、地点、主线与初始时间。禁止照搬示例值。\nSQL示例: INSERT INTO godspace_global (story_state, mission_no, phase, world_name, current_location, current_major_region, quest_code, quest_goal, quest_limit, quest_status, prev_scene_time, elapsed_time, cur_time) VALUES ('全局状态', '第1场任务', '任务中', '生化危机', '隔离舱', '浣熊市', 'MQ.Ⅰ', '存活至救援直升机到达', '剩余48小时', '进行中', NULL, '0分', '2026-10-30 07:00');",
-            "deleteNode": "禁止。",
-            "updateNode": "每轮推进时更新时间三件套；地点/阶段/主线任一变化时同步对应列。\nSQL示例(推进): UPDATE godspace_global SET prev_scene_time = '2026-10-31 15:00', elapsed_time = '4小时15分', cur_time = '2026-10-31 19:15' WHERE row_id = 1;\nSQL示例(返回主神空间): UPDATE godspace_global SET phase = '幕间', world_name = '主神空间', quest_status = '已完成', current_location = '汉白玉广场', current_major_region = '主神空间' WHERE row_id = 1;",
-            "insertNode": "禁止。",
-            "ddl": "CREATE TABLE godspace_global ( -- 主神空间全局表\n  row_id INTEGER PRIMARY KEY, -- 行号，仅允许为 1\n  story_state TEXT, -- 全局状态(固定)\n  mission_no TEXT, -- 场次\n  phase TEXT, -- 阶段(任务中/幕间)\n  world_name TEXT, -- 当前任务世界\n  current_location TEXT, -- 当前详细地点\n  current_major_region TEXT, -- 当前主要地区\n  quest_code TEXT, -- 主线编号\n  quest_goal TEXT, -- 主线目标\n  quest_limit TEXT, -- 主线时限\n  quest_status TEXT, -- 主线状态\n  prev_scene_time TEXT, -- 上轮场景时间\n  elapsed_time TEXT, -- 经过的时间\n  cur_time TEXT -- 当前时间\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "全局状态",
-                "场次",
-                "阶段",
-                "当前任务世界",
-                "当前详细地点",
-                "当前主要地区",
-                "主线编号",
-                "主线目标",
-                "主线时限",
-                "主线状态",
-                "上轮场景时间",
-                "经过的时间",
-                "当前时间"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "主神空间全局表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "全局数据表-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "before_character_definition",
-                "depth": 2,
-                "order": 99981
-            },
-            "fixedIndexPlacement": {
-                "position": "before_character_definition",
-                "depth": 2,
-                "order": 99982
-            }
-        },
-        "orderNo": 0
-    },
-    "sheet_DpKcVGqg": {
-        "uid": "sheet_DpKcVGqg",
-        "name": "轮回者名册表",
-        "sourceData": {
-            "note": "全体轮回者的持久名册，一人一行。\n\n【与状态块分工】状态块 p 行管本楼数值快照（HP/SP/属性/负重），此表管数值之外的持久事实（背景、执念、关系）。账户/支线/已兑换/基因锁四列照抄状态块当前值，每楼状态块变动时同步。\n\n【列定义】（列号为 0 基）\n- 列0: 姓名 name（与状态块 p 行姓名完全一致，不得重名）\n- 列1: 编号 player_no（p1~p4，与状态块编号一致）\n- 列2: 性别 gender\n- 列3: 年龄 age\n- 列4: 外貌特征 appearance（整体印象，含日常穿衣，避免罗列数据）\n- 列5: 身份背景 background（被拽入主神空间前的身份+入空间契机，2-3句）\n- 列6: 性格与执念 resolve（行为基调+在死亡面前不愿闭眼的那件事——基因锁伏笔，必须具体到场景，禁写\"求生意志强\"类空话）\n- 列7: 已兑换强化 exchanged（照抄 p 行已兑换字段， 、 分隔）\n- 列8: 基因锁阶位 gene_lock（照抄 lock 行首段：未开/一阶/二阶…）\n- 列9: 账户余额 pts_balance（照抄 pts 行点数）\n- 列10: 支线持有 sidequests（照抄 pts 行支线段，如 C1；无写无）\n- 列11: 当前位置 location_name（只写本级地名）\n- 列12: 在场状态 presence（存活/濒死/离队/阵亡；阵亡保留行不删除）\n- 列13: 人际关系 bonds（与队友及关键NPC的关系，一句话一人）\n\n【强制约束】\n1. 一名玩家一行，行数与 team 行人数一致；新成员加入当楼插入。\n2. resolve 是 gene lock 判定的叙事依据，随剧情有重大变化时更新（如克服/动摇/扭曲）。",
-            "initNode": "开局为每位玩家各插入一行。背景与执念依据角色卡与开局剧情填写，不得臆造。\nSQL示例: INSERT INTO roster (name, player_no, gender, age, appearance, background, resolve, exchanged, gene_lock, pts_balance, sidequests, location_name, presence, bonds) VALUES ('沈知', 'p1', '女', '24', '清瘦短发，旧黑外套', '大学生，与队伍一同被拽入', '解剖学笔记还差最后一页没交', '超高校级幸运·B', '未开', '1000', '无', '隔离舱', '存活', '与张狂相互信任');",
-            "deleteNode": "禁止。阵亡成员保留行，presence 改为 阵亡——死亡是主神空间的既定事实，删除即篡改账本。",
-            "updateNode": "状态块变动时同步对应列：pts_balance/sidequests 照抄 pts 行；exchanged 照抄 p 行已兑换；gene_lock 照抄 lock 行；presence 与 p 行伤势徽章联动（濒死写濒死）；位置变化时更新。\nSQL示例: UPDATE roster SET pts_balance = '6000', exchanged = '超高校级幸运·B', presence = '濒死', location_name = '汉白玉广场' WHERE name = '沈知';",
-            "insertNode": "新轮回者加入队伍当楼插入一行，编号顺延（p5…）。\nSQL示例: INSERT INTO roster (name, player_no, gender, age, appearance, background, resolve, exchanged, gene_lock, pts_balance, sidequests, location_name, presence, bonds) VALUES ('新成员', 'p5', '男', '30', '外貌', '背景', '执念', '无', '未开', '0', '无', '当前位置', '存活', '无');",
-            "ddl": "CREATE TABLE roster ( -- 轮回者名册表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  name TEXT, -- 姓名\n  player_no TEXT, -- 编号(p1~p4)\n  gender TEXT, -- 性别\n  age TEXT, -- 年龄\n  appearance TEXT, -- 外貌特征\n  background TEXT, -- 身份背景\n  resolve TEXT, -- 性格与执念\n  exchanged TEXT, -- 已兑换强化\n  gene_lock TEXT, -- 基因锁阶位\n  pts_balance TEXT, -- 账户余额\n  sidequests TEXT, -- 支线持有\n  location_name TEXT, -- 当前位置\n  presence TEXT, -- 在场状态\n  bonds TEXT -- 人际关系\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "姓名",
-                "编号",
-                "性别",
-                "年龄",
-                "外貌特征",
-                "身份背景",
-                "性格与执念",
-                "已兑换强化",
-                "基因锁阶位",
-                "账户余额",
-                "支线持有",
-                "当前位置",
-                "在场状态",
-                "人际关系"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "轮回者名册表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "主角信息-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99990
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99991
-            }
-        },
-        "orderNo": 1
-    },
-    "sheet_lEARaBa8": {
-        "uid": "sheet_lEARaBa8",
-        "name": "强化台账表",
-        "sourceData": {
-            "note": "全体轮回者获得的每一项强化的总账，一项一行。\n\n【与状态块分工】状态块 sk 行管本楼技能全文、cr 行管资源当前值，此表管强化的来历账（谁、何时、花多少、换来了什么）。查档、防重复兑换、遗产继承都以此表为准。\n\n【列定义】（列号为 0 基）\n- 列0: 归属者 owner（玩家姓名；队伍共用作 全队）\n- 列1: 名称 name（同一归属者内不得重名）\n- 列2: 类别 category（血统/内功/科技装备/药物/技能/基因锁/称号/其他）\n- 列3: 档位 tier（B/A/S/Lv.x；未分档写 无）\n- 列4: 效果摘要 effect（一两句写死数值，如 属性加成PER+15/CHA+12/WIL+8，两项上限130）\n- 列5: 自定义资源 cr_fields（该强化在 cr 行占用的资源段名，空格分隔，如 幸运LP 幸运因果债 幸运擦边；无则写无）\n- 列6: 获得方式 source（主神兑换/剧情获得/任务奖励/初始自带）\n- 列7: 消耗点数 cost（数字；赠送写0）\n- 列8: 获得场次 session（第X场任务/幕间X）\n\n【强制约束】\n1. 效果摘要必须含关键数值与代价关键词（CD/SP/债/次数上限），不许只写\"强力强化\"。\n2. 兑换当楼插入；同一强化的消耗点数与结算台账的扣除记录对得上。",
-            "initNode": "开局为每位玩家的初始已兑换各插入一行（含初始自带）。\nSQL示例: INSERT INTO enhancements (owner, name, category, tier, effect_desc, cr_fields, source, cost, session) VALUES ('沈知', '超高校级幸运', '血统', 'B', 'PER+15 CHA+12 WIL+8，两项上限130；LP 12/场，宣告与补救线', '幸运LP 幸运因果债 幸运擦边', '主神兑换', '7000', '幕间0');",
-            "deleteNode": "强化被剥离、剥夺或装备被夺/销毁时删除（同时状态块 p 行已兑换与 sk 行同步移除）。\nSQL示例: DELETE FROM enhancements WHERE owner = '张狂' AND name = '被夺走的装备名';",
-            "updateNode": "升档/修复/效果变化时更新档位与效果摘要。\nSQL示例: UPDATE enhancements SET tier = 'A', effect_desc = '新效果', cost = 12000 WHERE owner = '沈知' AND name = '超高校级幸运';",
-            "insertNode": "获得新强化（兑换/剧情/奖励）当楼插入。\nSQL示例: INSERT INTO enhancements (owner, name, category, tier, effect_desc, cr_fields, source, cost, session) VALUES ('张狂', '血族变异强化', '血统', 'B', 'STR+30 DEX+20 CON+10，血族能量操控', '无', '主神兑换', '4000', '第1场任务');",
-            "ddl": "CREATE TABLE enhancements ( -- 强化台账表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  owner TEXT, -- 归属者\n  name TEXT, -- 名称\n  category TEXT, -- 类别\n  tier TEXT, -- 档位\n  effect_desc TEXT, -- 效果摘要\n  cr_fields TEXT, -- 自定义资源段名\n  source TEXT, -- 获得方式\n  cost TEXT, -- 消耗点数\n  session TEXT -- 获得场次\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "归属者",
-                "名称",
-                "类别",
-                "档位",
-                "效果摘要",
-                "自定义资源",
-                "获得方式",
-                "消耗点数",
-                "获得场次"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "强化台账表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "主角技能表-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99990
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99991
-            }
-        },
-        "orderNo": 3
-    },
-    "sheet_StLd9Qm7": {
-        "uid": "sheet_StLd9Qm7",
-        "name": "结算台账表",
-        "sourceData": {
-            "note": "奖励点数与支线剧情的总账，一笔一行。这是实时结算铁律的审计依据。\n\n【核心规则】状态块 pts 行任何数字变动，必须能在本表找到对应楼层的一行；反之本表每行也必须能在该楼状态块 pts 行兑现。对不上=记账错误，发现当楼立即补录。\n\n【列定义】（列号为 0 基）\n- 列0: 编码 settle_code（ST0001 起递增，不得重复）\n- 列1: 楼层 floor_no（发生楼层，与 progress 的 PG 编号一致，如 PG.44）\n- 列2: 类型 type（击杀/剧情改变/隐藏任务/存活保底/支线结算/兑换扣除/修复扣除/惩罚/补录）\n- 列3: 对象 target（敌人名或事件一句话）\n- 列4: 归属 owner（全队/个人姓名）\n- 列5: 点数变动 pts_delta（+500 或 -2000；无写0）\n- 列6: 支线变动 sq_delta（+C1 / +D2；无写无）\n- 列7: 依据 basis（价目与档位，如 价目：精英300~800 取500 ／ 主神保底 ／ 兑换-超高校级幸运B）\n\n【价目基准】（依据列须引用）\n存活保底1000；杂兵100~300；精英300~800；小BOSS 800~2000；大BOSS 2000~5000。\n剧情改变：小100~500；中500~2000；大2000~5000；颠覆5000+。\n支线：D 300~800；C 800~2000；B 2000~5000；A 5000~12000；S 12000+。合成：3D=1C，3C=1B，只升不拆。\n\n【强制约束】\n1. 击杀入账：敌人在本楼死亡 → 本表与 pts 行同楼同步入账，叙事里数据流闪现（数据流：击杀确认 精英级 +500点）。\n2. 收尾结算楼（返回主神空间）只做汇总核对：逐行核对本场明细，严禁此刻才补发漏账，补录必须标 补录 类型并注明漏发楼层。\n3. 禁止删除任何行——账本是永久的。",
-            "initNode": "开局初始化时若无历史账目则此表为空（仅表头），首笔账目发生时插入。\nSQL示例: INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0001', 'PG.01', '存活保底', '开场结算', '全队', '+1000', '无', '主神保底');",
-            "deleteNode": "禁止。账本行永久保留，错账只能用 补录/冲正 行修正。",
-            "updateNode": "原则上禁止修改已入账行；确属错账时新增一行 类型=补录 或 冲正，对象注明原编码。\nSQL示例(补录): INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0012', 'PG.44', '补录', '漏发的4精英+1BOSS击杀奖励(原楼PG.31~PG.40)', '全队', '+5000', '无', '价目：精英×4+大BOSS，漏发补录');",
-            "insertNode": "pts 行变动的当楼必须插入一条；击杀楼同步敌情档案表。\nSQL示例: INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0007', 'PG.31', '击杀', '爬行异种(精英)', '击杀者绝燕(全队共享)', '+500', '无', '价目：精英300~800 取500');",
-            "ddl": "CREATE TABLE settle_ledger ( -- 结算台账表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  settle_code TEXT, -- 编码(STxxxx)\n  floor_no TEXT, -- 楼层\n  type TEXT, -- 类型\n  target TEXT, -- 对象\n  owner TEXT, -- 归属\n  pts_delta TEXT, -- 点数变动\n  sq_delta TEXT, -- 支线变动\n  basis TEXT -- 依据\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "编码",
-                "楼层",
-                "类型",
-                "对象",
-                "归属",
-                "点数变动",
-                "支线变动",
-                "依据"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": true,
-            "splitByRow": true,
-            "entryName": "结算台账表",
-            "entryType": "keyword",
-            "keywords": "编码",
-            "preventRecursion": true,
-            "injectionTemplate": "<收支流水>\n$1\n</收支流水>",
-            "extraIndexEnabled": true,
-            "extraIndexEntryName": "结算台账-索引",
-            "extraIndexColumns": [
-                "编码",
-                "楼层",
-                "类型"
-            ],
-            "extraIndexColumnModes": {
-                "编码": "both",
-                "楼层": "both",
-                "类型": "index_only"
-            },
-            "extraIndexInjectionTemplate": "<收支流水索引>\n$1\n</收支流水索引>",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 999,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 1000,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99987
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99988
-            }
-        },
-        "orderNo": "8"
-    },
-    "sheet_EnFi8Rz2": {
-        "uid": "sheet_EnFi8Rz2",
-        "name": "敌情档案表",
-        "sourceData": {
-            "note": "本任务世界全部已登场敌人的档案，一个体一行。\n\n【与状态块分工】状态块 mob 行管本楼在场敌人的实时数值，此表管跨楼档案（交手史、弱点、结算状态）。mob 行消失（死亡/逃逸）后，档案仍保留。\n\n【列定义】（列号为 0 基）\n- 列0: 编号 mob_code（MB0001 起递增）\n- 列1: 名称 name（不得与已有重复；同类个体加序号如 爬行异种·3号）\n- 列2: 阶级 threat_class（杂兵/精英/小BOSS/大BOSS）\n- 列3: 状态 status（存活/已击杀/逃逸/不明）\n- 列4: 首遇地点 first_seen（本级地名）\n- 列5: 属性与能力 traits（体型/速度/攻击方式/特殊能力/弱点，1-3句写死观察到的数值）\n- 列6: 交手记录 combat_log（楼层+结果一句话，分号分隔追加，如 PG.28 遭遇战小队负伤撤离；PG.31 被绝燕击杀）\n- 列7: 结算状态 settle_state（已入账ST0007 ／ 未结算！ ／ 逃逸无奖励）\n- 列8: 击杀者 killer（击杀者姓名；未击杀留空）\n\n【强制约束】\n1. 敌人首次登场当楼插入（与状态块 mob 行同楼）。\n2. 死亡当楼：status=已击杀、killer 填写、settle_state 填写，并**同一楼**向结算台账表插入击杀入账——分楼即为漏发。\n3. traits 只写队伍实际观察到的信息；未观察到的写 未知，不许开天眼。",
-            "initNode": "开局无敌人则此表为空（仅表头）。",
-            "deleteNode": "禁止。已击杀敌人的档案保留，是击杀奖励的审计依据。",
-            "updateNode": "每次交手当楼追加 combat_log；观察出新能力/弱点时更新 traits；死亡当楼更新 status/killer/settle_state。\nSQL示例: UPDATE mob_dossier SET status = '已击杀', killer = '绝燕', settle_state = '已入账ST0007', combat_log = combat_log || '；PG.31 被绝燕霰弹枪击杀' WHERE mob_code = 'MB0003';",
-            "insertNode": "敌人首次登场当楼插入。\nSQL示例: INSERT INTO mob_dossier (mob_code, name, threat_class, status, first_seen, traits, combat_log, settle_state, killer) VALUES ('MB0003', '爬行异种', '精英', '存活', 'B4维修竖井', '体型约3米，攀爬迅速，复眼夜视，畏强光；外壳铆钉接缝处脆弱', 'PG.28 遭遇战小队负伤撤离', '未结算！', NULL);",
-            "ddl": "CREATE TABLE mob_dossier ( -- 敌情档案表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  mob_code TEXT, -- 编号(MBxxxx)\n  name TEXT, -- 名称\n  threat_class TEXT, -- 阶级\n  status TEXT, -- 状态\n  first_seen TEXT, -- 首遇地点\n  traits TEXT, -- 属性与能力\n  combat_log TEXT, -- 交手记录\n  settle_state TEXT, -- 结算状态\n  killer TEXT -- 击杀者\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "编号",
-                "名称",
-                "阶级",
-                "状态",
-                "首遇地点",
-                "属性与能力",
-                "交手记录",
-                "结算状态",
-                "击杀者"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": true,
-            "splitByRow": true,
-            "entryName": "敌情档案表",
-            "entryType": "keyword",
-            "keywords": "名称",
-            "preventRecursion": true,
-            "injectionTemplate": "<敌情档案>\n$1\n</敌情档案>",
-            "extraIndexEnabled": true,
-            "extraIndexEntryName": "敌情档案-索引",
-            "extraIndexColumns": [
-                "编号",
-                "名称",
-                "阶级",
-                "状态"
-            ],
-            "extraIndexColumnModes": {
-                "编号": "both",
-                "名称": "both",
-                "阶级": "both",
-                "状态": "index_only"
-            },
-            "extraIndexInjectionTemplate": "<敌情索引>\n$1\n</敌情索引>",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 999,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 1000,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99987
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99988
-            }
-        },
-        "orderNo": "9"
-    },
-    "sheet_NcBlYRH5": {
-        "uid": "sheet_NcBlYRH5",
-        "name": "NPC与势力表",
-        "sourceData": {
-            "note": "任务世界与主神空间中所有与队伍产生过作用的重要NPC与势力，一方一行。\n\n【与状态块分工】状态块 npc 行管本楼在场NPC名单，此表管跨楼关系档案（情报、态度、钩子）。\n\n【列定义】（列号为 0 基）\n- 列0: 姓名 name（不得与已有重复；势力条目用势力名如 安布雷拉清理部队）\n- 列1: 阵营 faction（安布雷拉/幸存者/中立/敌对势力/主神/其他）\n- 列2: 身份 brief_intro（仅客观事实：核心身份、与剧情强相关的客观行为、与关键人物的客观关联。严禁性格标签如 开朗/冷漠/温柔）\n√ 安布雷拉B4实验室首席研究员 / 掌握T病毒原液保存密码\n× 冷漠的研究员 / 危险但迷人的科学家\n- 列3: 所在地点 location_name（只写本级地名；下落不明写 未知）\n- 列4: 在场状态 presence_status（在场/离场/死亡/下落不明）\n- 列5: 已知情报 known_info（该对象已向队伍透露或队伍已证实的事实，分号分隔；对方的隐瞒与谎言不写入）\n- 列6: 与队伍关系 relation（敌对/合作/交易/中立/受恩/结仇+一句话）\n- 列7: 交互记录 interaction_log（楼层+事件一句话，分号分隔追加）\n- 列8: 后续钩子 hook（可发展的支线/未拿到的情报/可再交易的线索；无写无）\n\n【强制约束】\n1. NPC 死亡保留行，presence_status=死亡——钩子与情报仍有价值。\n2. 队伍对 NPC 的承诺/威胁/交易条件必须记入 interaction_log，AI 后续剧情不得违背。",
-            "initNode": "开局初始化时，为剧情中登场的关键NPC与势力各插入一行。\nSQL示例: INSERT INTO npc_factions (name, faction, brief_intro, location_name, presence_status, known_info, relation, interaction_log, hook) VALUES ('马丁医生', '安布雷拉', 'B4实验室值班研究员，掌握冷库权限卡', 'B4实验室', '在场', '冷库密码分两段保管；承认T病毒原液在冷库', '交易(用抗寒注射液换情报)', 'PG.20 用解毒剂换到冷库位置', '冷库密码第二段在情报警卫身上');",
-            "deleteNode": "NPC 或势力彻底退出且无任何钩子时删除（一般不删，死亡也保留）。\nSQL示例: DELETE FROM npc_factions WHERE name = '彻底退场的路人';",
-            "updateNode": "关系、情报、状态、地点任一变化时更新对应列；交互记录追加不覆盖。\nSQL示例: UPDATE npc_factions SET presence_status = '死亡', interaction_log = interaction_log || '；PG.35 死于清理部队扫射', relation = '死亡(遗物留给队伍)' WHERE name = '马丁医生';",
-            "insertNode": "新NPC/势力首次与队伍产生作用当楼插入。\nSQL示例: INSERT INTO npc_factions (name, faction, brief_intro, location_name, presence_status, known_info, relation, interaction_log, hook) VALUES ('清理部队队长', '安布雷拉', '带队的武装人员', 'B4外围', '在场', '执行全层清洗命令', '敌对', 'PG.38 交火', '其身上可能有B4通行卡');",
-            "ddl": "CREATE TABLE npc_factions ( -- NPC与势力表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  name TEXT, -- 姓名/势力名\n  faction TEXT, -- 阵营\n  brief_intro TEXT, -- 身份(客观事实)\n  location_name TEXT, -- 所在地点\n  presence_status TEXT, -- 在场状态\n  known_info TEXT, -- 已知情报\n  relation TEXT, -- 与队伍关系\n  interaction_log TEXT, -- 交互记录\n  hook TEXT -- 后续钩子\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "姓名",
-                "阵营",
-                "身份",
-                "所在地点",
-                "在场状态",
-                "已知情报",
-                "与队伍关系",
-                "交互记录",
-                "后续钩子"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": true,
-            "splitByRow": true,
-            "entryName": "NPC与势力表",
-            "entryType": "keyword",
-            "keywords": "姓名",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": true,
-            "extraIndexEntryName": "重要角色表-索引",
-            "extraIndexColumns": [
-                "姓名",
-                "一句话介绍"
-            ],
-            "extraIndexColumnModes": {
-                "姓名": "both",
-                "一句话介绍": "index_only"
-            },
-            "extraIndexInjectionTemplate": "以下为已经登场过的重要角色：\n<重要角色索引>\n$1\n</重要角色索引>",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 10000,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 10000,
-                "order": 8010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 10000,
-                "order": 99985
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 10000,
-                "order": 99986
-            }
-        },
-        "orderNo": 2
-    },
-    "sheet_in05z9vz": {
-        "uid": "sheet_in05z9vz",
-        "name": "物资仓库表",
-        "sourceData": {
-            "note": "全队物资总账：随身装备、托运行李与主神空间仓库的库存，一物一行。\n\n【与状态块分工】状态块 eq 行管本楼随身现货（唯一实时依据），此表管台账与仓库。随身物品在 eq 行变动当楼同步本表；仓库物资只记本表（如稀有材料、任务物、暂存装备）。\n\n【列定义】（列号为 0 基）\n- 列0: 归属者 owner（个人姓名/全队公用）\n- 列1: 物品名称 item_name（同一归属者内不得重名）\n- 列2: 数量 quantity（数字）\n- 列3: 类别 category（武器/护甲/弹药/消耗品/情报/任务物/稀有材料/杂物）\n- 列4: 描述/效果 description（功能+状态，如 劣质抗寒注射液(有副作用，延缓冻僵2小时)）\n- 列5: 来源 source（搜刮/兑换/剧情获得/队友给予/敌方遗落）\n- 列6: 存放位置 storage（随身/托运/主神空间仓库）\n\n【强制约束】\n1. 获得当楼入账；消耗/损坏减数量，归零删除该行。\n2. 装备被夺/毁坏（如驱动器被夺）当楼删除或改数量，并与强化台账联动。\n3. 任务物（蓝光权限卡等）不许漏记——支线审计要用。",
-            "initNode": "开局为每位玩家与全队公用的初始物品各插入一行，以状态块 eq 行为基准。\nSQL示例: INSERT INTO warehouse (owner, item_name, quantity, category, description, source, storage) VALUES ('绝燕', '劣质抗寒注射液', 2, '消耗品', '延缓冻僵约2小时，有副作用', '搜刮', '随身');",
-            "deleteNode": "物品数量归零、被完全消耗、丢失或摧毁时删除。\nSQL示例: DELETE FROM warehouse WHERE owner = '艾瑟尔' AND item_name = '强酸体液小滴瓶';\nSQL示例(批量): DELETE FROM warehouse WHERE quantity <= 0;",
-            "updateNode": "数量变化、状态变化、存放位置变化时更新。\nSQL示例: UPDATE warehouse SET quantity = quantity - 1 WHERE owner = '绝燕' AND item_name = '劣质抗寒注射液';\nSQL示例(入库): UPDATE warehouse SET storage = '主神空间仓库' WHERE owner = '艾瑟尔' AND item_name = 'T病毒原液';",
-            "insertNode": "获得新物品当楼插入（搜刮楼必须对账：搜到什么入什么）。\nSQL示例: INSERT INTO warehouse (owner, item_name, quantity, category, description, source, storage) VALUES ('全队公用', '蓝光权限卡', 1, '任务物', 'B4区通行凭证', '搜刮', '随身');",
-            "ddl": "CREATE TABLE warehouse ( -- 物资仓库表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  owner TEXT, -- 归属者\n  item_name TEXT, -- 物品名称\n  quantity TEXT, -- 数量\n  category TEXT, -- 类别\n  description TEXT, -- 描述/效果\n  source TEXT, -- 来源\n  storage TEXT -- 存放位置\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "归属者",
-                "物品名称",
-                "数量",
-                "类别",
-                "描述/效果",
-                "来源",
-                "存放位置"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "物资仓库表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "背包物品表-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99990
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99991
-            }
-        },
-        "orderNo": 4
-    },
-    "sheet_etak47Ve": {
-        "uid": "sheet_etak47Ve",
-        "name": "任务与支线表",
-        "sourceData": {
-            "note": "主神发布与剧情触发的全部任务，一任务一行。\n\n【与状态块分工】状态块 quest 行管本楼主线快照，此表管主线+全部支线/隐藏任务的总账。进度与状态块 quest 行保持一致。\n\n【列定义】（列号为 0 基）\n- 列0: 编号 quest_code（主线 MQ.罗马数字；支线 SQ.阿拉伯数字，顺序递增不得重复）\n- 列1: 名称 quest_name\n- 列2: 类型 quest_type（主线/支线/隐藏）\n- 列3: 发布者 issuer（主神/剧情人物/势力）\n- 列4: 目标 goal（完成条件写死，可验证）\n- 列5: 当前进度 progress（对完成度的简要描述）\n- 列6: 时限 limit（如 剩36小时55分；无时限写 无）\n- 列7: 奖励 reward（点数区间+支线档位，对齐价目：D 300~800/C 800~2000/B 2000~5000/A 5000~12000/S 12000+）\n- 列8: 惩罚 penalty（主线失败=全队死亡等）\n- 列9: 状态 status（进行中/已完成/失败）\n\n【强制约束】\n1. 完成/失败不删行：status 改 已完成/失败，作为结算台账的核对依据。\n2. 隐藏任务在触发当楼插入（AI 不得提前透露其存在）。\n3. 每场任务开场，上一场已完成主线保留，新主线新编号（罗马数字递增 MQ.Ⅱ…）。",
-            "initNode": "开局插入当前主线一条；已有支线一并插入。\nSQL示例: INSERT INTO quests_sideqs (quest_code, quest_name, quest_type, issuer, goal, progress, time_limit, reward, penalty, status) VALUES ('MQ.Ⅰ', '存活至救援直升机到达', '主线', '主神', '撑过时限并保持至少一人存活', '进行中', '剩余48小时', '基础保底1000点', '全队死亡', '进行中');",
-            "deleteNode": "禁止删除。完成任务保留行（status=已完成），是结算核对的依据。",
-            "updateNode": "进度/时限/状态变化时更新；支线达成当楼更新 status 并同步结算台账。\nSQL示例: UPDATE quests_sideqs SET status = '已完成', progress = '时限归零全员存活，主神回收' WHERE quest_code = 'MQ.Ⅰ';",
-            "insertNode": "接取/触发新任务当楼插入。\nSQL示例: INSERT INTO quests_sideqs (quest_code, quest_name, quest_type, issuer, goal, progress, time_limit, reward, penalty, status) VALUES ('SQ.3', '取得冷库密码', '支线', '马丁医生', '拿到两段密码并取出T病毒原液', '已取得第一段', '无', 'C级支线800~2000点', '无', '进行中');",
-            "ddl": "CREATE TABLE quests_sideqs ( -- 任务与支线表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  quest_code TEXT, -- 编号\n  quest_name TEXT, -- 名称\n  quest_type TEXT, -- 类型\n  issuer TEXT, -- 发布者\n  goal TEXT, -- 目标\n  progress TEXT, -- 当前进度\n  time_limit TEXT, -- 时限\n  reward TEXT, -- 奖励\n  penalty TEXT, -- 惩罚\n  status TEXT -- 状态\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "编号",
-                "名称",
-                "类型",
-                "发布者",
-                "目标",
-                "当前进度",
-                "时限",
-                "奖励",
-                "惩罚",
-                "状态"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "任务与支线表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "任务与事件表-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99990
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99991
-            }
-        },
-        "orderNo": 5
-    },
-    "sheet_3NoMc1wI": {
-        "uid": "sheet_3NoMc1wI",
-        "name": "纪要表",
-        "sourceData": {
-            "note": "轮次日志。每轮交互结束后立刻插入一条新记录。\n\n【列定义】（列号为 0 基，与表格数据中的列标一致）\n- 列0: 编码索引 code_index（AM0001起递增，不得与已有编号重复）\n- 列1: 时间跨度 time_span\n- 列2: 概览 summary（≤30字）\n- 列3: 纪要 chronicle_text（240-480字）\n- 列4: 重要对话 key_dialogue（可留空）\n\n【强制约束】\n1.编码索引格式 AMXXXX，从0001开始递增。\n2.时间跨度格式为 \"YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM\"，覆盖本轮事件的实际时间范围。\n3.概览一句话概括本轮纪要内容，≤30字。\n\n4.纪要规范：\n- 以第三方视角中立客观记录正文发生的一切，移除所有修辞与对话。不滥用环境描写、不进行动作细节分析、不加评论，不抒情，不升华。\n- 用词直白生活化，避免正式措辞（如“达成协议”“确立计划”）。\n- 结尾必须开放，在事件自然流动中结束，不得归纳状态或做出封闭式收束。\n违例：故事仍在继续 / 新的篇章开启 / 二人关系迈入新阶段 / 未来等待着他们。\n- 多轮交互整合为一条记录。\n- 禁止内容：极端情绪（崩溃、狂喜、绝望等）、夸张、比喻、升华、情绪总结、支配欲、掌控欲、总结性收尾。\n\n5.重要对话仅摘录直接推动剧情转折、揭示关键信息、改变人物关系/决策或构成承诺/誓约/约定的原文台词，标明说话人。排除寒暄、重复、情绪感叹。通常3句，最多5句，总token不超过150。",
-            "initNode": "故事初始化时，插入一条新记录用于记录剧情。",
-            "deleteNode": "禁止。",
-            "updateNode": "禁止。",
-            "insertNode": "每轮交互结束后插入一条新记录。\n\n【填写规范】\ncode_index、time_span、summary、chronicle_text 必须全部填写，不得留空或写 NULL。\ntime_span 格式必须为 YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM。\ncode_index 格式必须为 AM0001 这种四位编号，且不得与已有编号重复。\n\nSQL示例：INSERT INTO chronicle (code_index, time_span, summary, chronicle_text, key_dialogue) VALUES ('AM0036', '2026-02-04 08:00 ~ 2026-02-04 08:30', '一句话概括', '本轮纪要内容...', NULL);",
-            "ddl": "CREATE TABLE chronicle ( -- 纪要表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code_index TEXT, -- 编码索引\n  time_span TEXT, -- 时间跨度\n  summary TEXT, -- 概览\n  chronicle_text TEXT, -- 纪要\n  key_dialogue TEXT -- 重要对话\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "编码索引",
-                "时间跨度",
-                "概览",
-                "纪要",
-                "重要对话"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1,
-            "groupId": -1
-        },
-        "exportConfig": {
-            "enabled": true,
-            "splitByRow": true,
-            "entryName": "纪要",
-            "entryType": "keyword",
-            "keywords": "编码索引",
-            "preventRecursion": true,
-            "injectionTemplate": "<记忆回溯>\n$1\n</记忆回溯>",
-            "extraIndexEnabled": true,
-            "extraIndexEntryName": "纪要索引",
-            "extraIndexColumns": [
-                "编码索引",
-                "时间跨度",
-                "概览"
-            ],
-            "extraIndexColumnModes": {
-                "编码索引": "both",
-                "时间跨度": "both",
-                "概览": "index_only"
-            },
-            "extraIndexInjectionTemplate": "<已发生的事件概览>\n$1\n</已发生的事件概览>",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 999,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 1000,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99987
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 9999,
-                "order": 99988
-            }
-        },
-        "orderNo": 6
-    },
-    "sheet_OptionsNew": {
-        "uid": "sheet_OptionsNew",
-        "name": "选项表",
-        "sourceData": {
-            "note": "本楼行动选项，此表有且仅有一行。\n\n【与状态块分工】状态块 next 行管本楼 A/B/C/D 选项，此表与其保持一致，供数据库插件渲染交互按钮。\n\n【列定义】（列号为 0 基）\n- 列0: 选项一 = 状态块 next 行 A 选项\n- 列1: 选项二 = 状态块 next 行 B 选项\n- 列2: 选项三 = 状态块 next 行 C 选项\n- 列3: 选项四 = 状态块 next 行 D 选项\n\n【强制约束】\n1. 每楼生成状态块时同步覆盖本表，文本与 next 行逐字一致（不得改写、缩写）。\n2. next 行不足四个选项时，多余列填 无。",
-            "initNode": "游戏初始化时，按首楼 next 行生成四个选项。\nSQL示例: UPDATE options SET option_1 = 'A选项文本', option_2 = 'B选项文本', option_3 = 'C选项文本', option_4 = 'D选项文本' WHERE row_id = 1;",
-            "deleteNode": "禁止删除。",
-            "updateNode": "每楼与 next 行同步覆盖。\nSQL示例: UPDATE options SET option_1 = 'A', option_2 = 'B', option_3 = 'C', option_4 = 'D' WHERE row_id = 1;",
-            "insertNode": "禁止操作。",
-            "ddl": "CREATE TABLE options ( -- 选项表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  option_1 TEXT, -- 选项一(next行A)\n  option_2 TEXT, -- 选项二(next行B)\n  option_3 TEXT, -- 选项三(next行C)\n  option_4 TEXT -- 选项四(next行D)\n);"
-        },
-        "content": [
-            [
-                "row_id",
-                "选项一",
-                "选项二",
-                "选项三",
-                "选项四"
-            ]
-        ],
-        "updateConfig": {
-            "uiSentinel": -1,
-            "contextDepth": -1,
-            "updateFrequency": -1,
-            "batchSize": -1,
-            "skipFloors": -1
-        },
-        "exportConfig": {
-            "enabled": false,
-            "splitByRow": false,
-            "entryName": "选项表",
-            "entryType": "constant",
-            "keywords": "",
-            "preventRecursion": true,
-            "injectionTemplate": "",
-            "extraIndexEnabled": false,
-            "extraIndexEntryName": "选项表-索引",
-            "extraIndexColumns": [],
-            "extraIndexColumnModes": {},
-            "extraIndexInjectionTemplate": "",
-            "sqlInjectionTemplate": "",
-            "entryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10000
-            },
-            "extraIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 10010
-            },
-            "fixedEntryPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99990
-            },
-            "fixedIndexPlacement": {
-                "position": "at_depth_as_system",
-                "depth": 2,
-                "order": 99991
-            },
-            "injectIntoWorldbook": false
-        },
-        "orderNo": 7
-    },
-    "mate": {
-        "type": "chatSheets",
-        "version": 1,
-        "updateConfigUiSentinel": -1,
-        "globalInjectionConfig": {
-            "readableEntryPlacement": {
-                "position": "before_char",
-                "depth": 2,
-                "order": 99981
-            },
-            "wrapperPlacement": {
-                "position": "before_char",
-                "depth": 2,
-                "order": 99980
-            }
-        }
+  "mate": {
+    "type": "chatSheets",
+    "version": 1,
+    "updateConfigUiSentinel": -1,
+    "globalInjectionConfig": {
+      "readableEntryPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99981
+      },
+      "wrapperPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99980
+      }
     }
+  },
+  "sheet_di_qing_dang_an_biao": {
+    "uid": "sheet_di_qing_dang_an_biao",
+    "name": "敌情档案表",
+    "sourceData": {
+      "note": "本任务世界全部已登场敌人的档案，一个体一行。\n\n【与状态块分工】状态块 mob 行管本楼在场敌人的实时数值，此表管跨楼档案（交手史、弱点、结算状态）。mob 行消失（死亡/逃逸）后，档案仍保留。\n\n【列定义】（列号为 0 基）\n- 列0: 编号 mob_code（MB0001 起递增）\n- 列1: 名称 name（不得与已有重复；同类个体加序号如 爬行异种·3号）\n- 列2: 阶级 threat_class（杂兵/精英/小BOSS/大BOSS）\n- 列3: 状态 status（存活/已击杀/逃逸/不明）\n- 列4: 首遇地点 first_seen（本级地名）\n- 列5: 属性与能力 traits（体型/速度/攻击方式/特殊能力/弱点，1-3句写死观察到的数值）\n- 列6: 交手记录 combat_log（楼层+结果一句话，分号分隔追加，如 PG.28 遭遇战小队负伤撤离；PG.31 被绝燕击杀）\n- 列7: 结算状态 settle_state（已入账ST0007 ／ 未结算！ ／ 逃逸无奖励）\n- 列8: 击杀者 killer（击杀者姓名；未击杀留空）\n\n【强制约束】\n1. 敌人首次登场当楼插入（与状态块 mob 行同楼）。\n2. 死亡当楼：status=已击杀、killer 填写、settle_state 填写，并**同一楼**向结算台账表插入击杀入账——分楼即为漏发。\n3. traits 只写队伍实际观察到的信息；未观察到的写 未知，不许开天眼。",
+      "initNode": "开局无敌人则此表为空（仅表头）。",
+      "deleteNode": "禁止。已击杀敌人的档案保留，是击杀奖励的审计依据。",
+      "updateNode": "每次交手当楼追加 combat_log；观察出新能力/弱点时更新 traits；死亡当楼更新 status/killer/settle_state。\nSQL示例: UPDATE mob_dossier SET status = '已击杀', killer = '绝燕', settle_state = '已入账ST0007', combat_log = combat_log || '；PG.31 被绝燕霰弹枪击杀' WHERE mob_code = 'MB0003';",
+      "insertNode": "敌人首次登场当楼插入。\nSQL示例: INSERT INTO mob_dossier (mob_code, name, threat_class, status, first_seen, traits, combat_log, settle_state, killer) VALUES ('MB0003', '爬行异种', '精英', '存活', 'B4维修竖井', '体型约3米，攀爬迅速，复眼夜视，畏强光；外壳铆钉接缝处脆弱', 'PG.28 遭遇战小队负伤撤离', '未结算！', NULL);",
+      "ddl": "CREATE TABLE sheet_di_qing_dang_an_biao ( -- 敌情档案表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  mob_code TEXT, -- 编号(MBxxxx)\n  name TEXT, -- 名称\n  threat_class TEXT, -- 阶级\n  status TEXT, -- 状态\n  first_seen TEXT, -- 首遇地点\n  traits TEXT, -- 属性与能力\n  combat_log TEXT, -- 交手记录\n  settle_state TEXT, -- 结算状态\n  killer TEXT -- 击杀者\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编号",
+        "名称",
+        "阶级",
+        "状态",
+        "首遇地点",
+        "属性与能力",
+        "交手记录",
+        "结算状态",
+        "击杀者"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "敌情档案表",
+      "entryType": "keyword",
+      "keywords": "名称",
+      "preventRecursion": true,
+      "injectionTemplate": "<敌情档案>\n$1\n</敌情档案>",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "敌情档案-索引",
+      "extraIndexColumns": [
+        "编号",
+        "名称",
+        "阶级",
+        "状态"
+      ],
+      "extraIndexColumnModes": {
+        "编号": "both",
+        "名称": "both",
+        "阶级": "both",
+        "状态": "index_only"
+      },
+      "extraIndexInjectionTemplate": "<敌情索引>\n$1\n</敌情索引>",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 999,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 1000,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99987
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99988
+      }
+    },
+    "orderNo": 4
+  },
+  "sheet_jie_suan_tai_zhang_biao": {
+    "uid": "sheet_jie_suan_tai_zhang_biao",
+    "name": "结算台账表",
+    "sourceData": {
+      "note": "奖励点数与支线剧情的总账，一笔一行。这是实时结算铁律的审计依据。\n\n【核心规则】状态块 pts 行任何数字变动，必须能在本表找到对应楼层的一行；反之本表每行也必须能在该楼状态块 pts 行兑现。对不上=记账错误，发现当楼立即补录。\n\n【列定义】（列号为 0 基）\n- 列0: 编码 settle_code（ST0001 起递增，不得重复）\n- 列1: 楼层 floor_no（发生楼层，与 progress 的 PG 编号一致，如 PG.44）\n- 列2: 类型 type（击杀/剧情改变/隐藏任务/存活保底/支线结算/兑换扣除/修复扣除/惩罚/补录）\n- 列3: 对象 target（敌人名或事件一句话）\n- 列4: 归属 owner（全队/个人姓名）\n- 列5: 点数变动 pts_delta（+500 或 -2000；无写0）\n- 列6: 支线变动 sq_delta（+C1 / +D2；无写无）\n- 列7: 依据 basis（价目与档位，如 价目：精英300~800 取500 ／ 主神保底 ／ 兑换-超高校级幸运B）\n\n【价目基准】（依据列须引用）\n存活保底1000；杂兵100~300；精英300~800；小BOSS 800~2000；大BOSS 2000~5000。\n剧情改变：小100~500；中500~2000；大2000~5000；颠覆5000+。\n支线：D 300~800；C 800~2000；B 2000~5000；A 5000~12000；S 12000+。合成：3D=1C，3C=1B，只升不拆。\n\n【强制约束】\n1. 击杀入账：敌人在本楼死亡 → 本表与 pts 行同楼同步入账，叙事里数据流闪现（数据流：击杀确认 精英级 +500点）。\n2. 收尾结算楼（返回主神空间）只做汇总核对：逐行核对本场明细，严禁此刻才补发漏账，补录必须标 补录 类型并注明漏发楼层。\n3. 禁止删除任何行——账本是永久的。",
+      "initNode": "开局初始化时若无历史账目则此表为空（仅表头），首笔账目发生时插入。\nSQL示例: INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0001', 'PG.01', '存活保底', '开场结算', '全队', '+1000', '无', '主神保底');",
+      "deleteNode": "禁止。账本行永久保留，错账只能用 补录/冲正 行修正。",
+      "updateNode": "原则上禁止修改已入账行；确属错账时新增一行 类型=补录 或 冲正，对象注明原编码。\nSQL示例(补录): INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0012', 'PG.44', '补录', '漏发的4精英+1BOSS击杀奖励(原楼PG.31~PG.40)', '全队', '+5000', '无', '价目：精英×4+大BOSS，漏发补录');",
+      "insertNode": "pts 行变动的当楼必须插入一条；击杀楼同步敌情档案表。\nSQL示例: INSERT INTO settle_ledger (settle_code, floor_no, type, target, owner, pts_delta, sq_delta, basis) VALUES ('ST0007', 'PG.31', '击杀', '爬行异种(精英)', '击杀者绝燕(全队共享)', '+500', '无', '价目：精英300~800 取500');",
+      "ddl": "CREATE TABLE sheet_jie_suan_tai_zhang_biao ( -- 结算台账表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  settle_code TEXT, -- 编码(STxxxx)\n  floor_no TEXT, -- 楼层\n  type TEXT, -- 类型\n  target TEXT, -- 对象\n  owner TEXT, -- 归属\n  pts_delta TEXT, -- 点数变动\n  sq_delta TEXT, -- 支线变动\n  basis TEXT -- 依据\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编码",
+        "楼层",
+        "类型",
+        "对象",
+        "归属",
+        "点数变动",
+        "支线变动",
+        "依据"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "结算台账表",
+      "entryType": "keyword",
+      "keywords": "编码",
+      "preventRecursion": true,
+      "injectionTemplate": "<收支流水>\n$1\n</收支流水>",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "结算台账-索引",
+      "extraIndexColumns": [
+        "编码",
+        "楼层",
+        "类型"
+      ],
+      "extraIndexColumnModes": {
+        "编码": "both",
+        "楼层": "both",
+        "类型": "index_only"
+      },
+      "extraIndexInjectionTemplate": "<收支流水索引>\n$1\n</收支流水索引>",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 999,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 1000,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99987
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99988
+      }
+    },
+    "orderNo": 3
+  },
+  "sheet_lun_hui_zhe_ming_ce_biao": {
+    "uid": "sheet_lun_hui_zhe_ming_ce_biao",
+    "name": "轮回者名册表",
+    "sourceData": {
+      "note": "全体轮回者的持久名册，一人一行。\n\n【与状态块分工】状态块 p 行管本楼数值快照（HP/SP/属性/负重），此表管数值之外的持久事实（背景、执念、关系）。账户/支线/已兑换/基因锁四列照抄状态块当前值，每楼状态块变动时同步。\n\n【列定义】（列号为 0 基）\n- 列0: 姓名 name（与状态块 p 行姓名完全一致，不得重名）\n- 列1: 编号 player_no（p1~p4，与状态块编号一致）\n- 列2: 性别 gender\n- 列3: 年龄 age\n- 列4: 外貌特征 appearance（整体印象，含日常穿衣，避免罗列数据）\n- 列5: 身份背景 background（被拽入主神空间前的身份+入空间契机，2-3句）\n- 列6: 性格与执念 resolve（行为基调+在死亡面前不愿闭眼的那件事——基因锁伏笔，必须具体到场景，禁写\"求生意志强\"类空话）\n- 列7: 已兑换强化 exchanged（照抄 p 行已兑换字段， 、 分隔）\n- 列8: 基因锁阶位 gene_lock（照抄 lock 行首段：未开/一阶/二阶…）\n- 列9: 账户余额 pts_balance（照抄 pts 行点数）\n- 列10: 支线持有 sidequests（照抄 pts 行支线段，如 C1；无写无）\n- 列11: 当前位置 location_name（只写本级地名）\n- 列12: 在场状态 presence（存活/濒死/离队/阵亡；阵亡保留行不删除）\n- 列13: 人际关系 bonds（与队友及关键NPC的关系，一句话一人）\n\n【强制约束】\n1. 一名玩家一行，行数与 team 行人数一致；新成员加入当楼插入。\n2. resolve 是 gene lock 判定的叙事依据，随剧情有重大变化时更新（如克服/动摇/扭曲）。",
+      "initNode": "开局为每位玩家各插入一行。背景与执念依据角色卡与开局剧情填写，不得臆造。\nSQL示例: INSERT INTO roster (name, player_no, gender, age, appearance, background, resolve, exchanged, gene_lock, pts_balance, sidequests, location_name, presence, bonds) VALUES ('沈知', 'p1', '女', '24', '清瘦短发，旧黑外套', '大学生，与队伍一同被拽入', '解剖学笔记还差最后一页没交', '超高校级幸运·B', '未开', '1000', '无', '隔离舱', '存活', '与张狂相互信任');",
+      "deleteNode": "禁止。阵亡成员保留行，presence 改为 阵亡——死亡是主神空间的既定事实，删除即篡改账本。",
+      "updateNode": "状态块变动时同步对应列：pts_balance/sidequests 照抄 pts 行；exchanged 照抄 p 行已兑换；gene_lock 照抄 lock 行；presence 与 p 行伤势徽章联动（濒死写濒死）；位置变化时更新。\nSQL示例: UPDATE roster SET pts_balance = '6000', exchanged = '超高校级幸运·B', presence = '濒死', location_name = '汉白玉广场' WHERE name = '沈知';",
+      "insertNode": "新轮回者加入队伍当楼插入一行，编号顺延（p5…）。\nSQL示例: INSERT INTO roster (name, player_no, gender, age, appearance, background, resolve, exchanged, gene_lock, pts_balance, sidequests, location_name, presence, bonds) VALUES ('新成员', 'p5', '男', '30', '外貌', '背景', '执念', '无', '未开', '0', '无', '当前位置', '存活', '无');",
+      "ddl": "CREATE TABLE sheet_lun_hui_zhe_ming_ce_biao ( -- 轮回者名册表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  name TEXT, -- 姓名\n  player_no TEXT, -- 编号(p1~p4)\n  gender TEXT, -- 性别\n  age TEXT, -- 年龄\n  appearance TEXT, -- 外貌特征\n  background TEXT, -- 身份背景\n  resolve TEXT, -- 性格与执念\n  exchanged TEXT, -- 已兑换强化\n  gene_lock TEXT, -- 基因锁阶位\n  pts_balance TEXT, -- 账户余额\n  sidequests TEXT, -- 支线持有\n  location_name TEXT, -- 当前位置\n  presence TEXT, -- 在场状态\n  bonds TEXT -- 人际关系\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "姓名",
+        "编号",
+        "性别",
+        "年龄",
+        "外貌特征",
+        "身份背景",
+        "性格与执念",
+        "已兑换强化",
+        "基因锁阶位",
+        "账户余额",
+        "支线持有",
+        "当前位置",
+        "在场状态",
+        "人际关系"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "轮回者名册表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角信息-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 1
+  },
+  "sheet_npc_yu_shi_li_biao": {
+    "uid": "sheet_npc_yu_shi_li_biao",
+    "name": "NPC与势力表",
+    "sourceData": {
+      "note": "任务世界与主神空间中所有与队伍产生过作用的重要NPC与势力，一方一行。\n\n【与状态块分工】状态块 npc 行管本楼在场NPC名单，此表管跨楼关系档案（情报、态度、钩子）。\n\n【列定义】（列号为 0 基）\n- 列0: 姓名 name（不得与已有重复；势力条目用势力名如 安布雷拉清理部队）\n- 列1: 阵营 faction（安布雷拉/幸存者/中立/敌对势力/主神/其他）\n- 列2: 身份 brief_intro（仅客观事实：核心身份、与剧情强相关的客观行为、与关键人物的客观关联。严禁性格标签如 开朗/冷漠/温柔）\n√ 安布雷拉B4实验室首席研究员 / 掌握T病毒原液保存密码\n× 冷漠的研究员 / 危险但迷人的科学家\n- 列3: 所在地点 location_name（只写本级地名；下落不明写 未知）\n- 列4: 在场状态 presence_status（在场/离场/死亡/下落不明）\n- 列5: 已知情报 known_info（该对象已向队伍透露或队伍已证实的事实，分号分隔；对方的隐瞒与谎言不写入）\n- 列6: 与队伍关系 relation（敌对/合作/交易/中立/受恩/结仇+一句话）\n- 列7: 交互记录 interaction_log（楼层+事件一句话，分号分隔追加）\n- 列8: 后续钩子 hook（可发展的支线/未拿到的情报/可再交易的线索；无写无）\n\n【强制约束】\n1. NPC 死亡保留行，presence_status=死亡——钩子与情报仍有价值。\n2. 队伍对 NPC 的承诺/威胁/交易条件必须记入 interaction_log，AI 后续剧情不得违背。",
+      "initNode": "开局初始化时，为剧情中登场的关键NPC与势力各插入一行。\nSQL示例: INSERT INTO npc_factions (name, faction, brief_intro, location_name, presence_status, known_info, relation, interaction_log, hook) VALUES ('马丁医生', '安布雷拉', 'B4实验室值班研究员，掌握冷库权限卡', 'B4实验室', '在场', '冷库密码分两段保管；承认T病毒原液在冷库', '交易(用抗寒注射液换情报)', 'PG.20 用解毒剂换到冷库位置', '冷库密码第二段在情报警卫身上');",
+      "deleteNode": "NPC 或势力彻底退出且无任何钩子时删除（一般不删，死亡也保留）。\nSQL示例: DELETE FROM npc_factions WHERE name = '彻底退场的路人';",
+      "updateNode": "关系、情报、状态、地点任一变化时更新对应列；交互记录追加不覆盖。\nSQL示例: UPDATE npc_factions SET presence_status = '死亡', interaction_log = interaction_log || '；PG.35 死于清理部队扫射', relation = '死亡(遗物留给队伍)' WHERE name = '马丁医生';",
+      "insertNode": "新NPC/势力首次与队伍产生作用当楼插入。\nSQL示例: INSERT INTO npc_factions (name, faction, brief_intro, location_name, presence_status, known_info, relation, interaction_log, hook) VALUES ('清理部队队长', '安布雷拉', '带队的武装人员', 'B4外围', '在场', '执行全层清洗命令', '敌对', 'PG.38 交火', '其身上可能有B4通行卡');",
+      "ddl": "CREATE TABLE sheet_npc_yu_shi_li_biao ( -- NPC与势力表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  name TEXT, -- 姓名/势力名\n  faction TEXT, -- 阵营\n  brief_intro TEXT, -- 身份(客观事实)\n  location_name TEXT, -- 所在地点\n  presence_status TEXT, -- 在场状态\n  known_info TEXT, -- 已知情报\n  relation TEXT, -- 与队伍关系\n  interaction_log TEXT, -- 交互记录\n  hook TEXT -- 后续钩子\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "姓名",
+        "阵营",
+        "身份",
+        "所在地点",
+        "在场状态",
+        "已知情报",
+        "与队伍关系",
+        "交互记录",
+        "后续钩子"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "NPC与势力表",
+      "entryType": "keyword",
+      "keywords": "姓名",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "重要角色表-索引",
+      "extraIndexColumns": [
+        "姓名",
+        "一句话介绍"
+      ],
+      "extraIndexColumnModes": {
+        "姓名": "both",
+        "一句话介绍": "index_only"
+      },
+      "extraIndexInjectionTemplate": "以下为已经登场过的重要角色：\n<重要角色索引>\n$1\n</重要角色索引>",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 8010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 99985
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 99986
+      }
+    },
+    "orderNo": 5
+  },
+  "sheet_qiang_hua_tai_zhang_biao": {
+    "uid": "sheet_qiang_hua_tai_zhang_biao",
+    "name": "强化台账表",
+    "sourceData": {
+      "note": "全体轮回者获得的每一项强化的总账，一项一行。\n\n【与状态块分工】状态块 sk 行管本楼技能全文、cr 行管资源当前值，此表管强化的来历账（谁、何时、花多少、换来了什么）。查档、防重复兑换、遗产继承都以此表为准。\n\n【列定义】（列号为 0 基）\n- 列0: 归属者 owner（玩家姓名；队伍共用作 全队）\n- 列1: 名称 name（同一归属者内不得重名）\n- 列2: 类别 category（血统/内功/科技装备/药物/技能/基因锁/其他）。**称号不进本表**，统一记载号登记表；**机甲、使魔等有独立行动能力的单位本体也不进本表**，记随从与机装表，本表只记驾驶员本人的改造与强化\n- 列3: 档位 tier（B/A/S/Lv.x；未分档写 无）\n- 列4: 效果摘要 effect（一两句写死数值，如 属性加成PER+15/CHA+12/WIL+8，两项上限130）\n- 列5: 自定义资源 cr_fields（该强化在 cr 行占用的资源段名，空格分隔，如 幸运LP 幸运因果债 幸运擦边；无则写无）\n- 列6: 获得方式 source（主神兑换/剧情获得/任务奖励/初始自带）\n- 列7: 消耗点数 cost（数字；赠送写0）\n- 列8: 获得场次 session（第X场任务/幕间X）\n\n【强制约束】\n1. 效果摘要必须含关键数值与代价关键词（CD/SP/债/次数上限），不许只写\"强力强化\"。\n2. 兑换当楼插入；同一强化的消耗点数与结算台账的扣除记录对得上。",
+      "initNode": "开局为每位玩家的初始已兑换各插入一行（含初始自带）。\nSQL示例: INSERT INTO enhancements (owner, name, category, tier, effect_desc, cr_fields, source, cost, session) VALUES ('沈知', '超高校级幸运', '血统', 'B', 'PER+15 CHA+12 WIL+8，两项上限130；LP 12/场，宣告与补救线', '幸运LP 幸运因果债 幸运擦边', '主神兑换', '7000', '幕间0');",
+      "deleteNode": "强化被剥离、剥夺或装备被夺/销毁时删除（同时状态块 p 行已兑换与 sk 行同步移除）。\nSQL示例: DELETE FROM enhancements WHERE owner = '张狂' AND name = '被夺走的装备名';",
+      "updateNode": "升档/修复/效果变化时更新档位与效果摘要。\nSQL示例: UPDATE enhancements SET tier = 'A', effect_desc = '新效果', cost = 12000 WHERE owner = '沈知' AND name = '超高校级幸运';",
+      "insertNode": "获得新强化（兑换/剧情/奖励）当楼插入。\nSQL示例: INSERT INTO enhancements (owner, name, category, tier, effect_desc, cr_fields, source, cost, session) VALUES ('张狂', '血族变异强化', '血统', 'B', 'STR+30 DEX+20 CON+10，血族能量操控', '无', '主神兑换', '4000', '第1场任务');",
+      "ddl": "CREATE TABLE sheet_qiang_hua_tai_zhang_biao ( -- 强化台账表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  owner TEXT, -- 归属者\n  name TEXT, -- 名称\n  category TEXT, -- 类别\n  tier TEXT, -- 档位\n  effect_desc TEXT, -- 效果摘要\n  cr_fields TEXT, -- 自定义资源段名\n  source TEXT, -- 获得方式\n  cost TEXT, -- 消耗点数\n  session TEXT -- 获得场次\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "归属者",
+        "名称",
+        "类别",
+        "档位",
+        "效果摘要",
+        "自定义资源",
+        "获得方式",
+        "消耗点数",
+        "获得场次"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "强化台账表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角技能表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 2
+  },
+  "sheet_ren_wu_yu_zhi_xian_biao": {
+    "uid": "sheet_ren_wu_yu_zhi_xian_biao",
+    "name": "任务与支线表",
+    "sourceData": {
+      "note": "主神发布与剧情触发的全部任务，一任务一行。\n\n【与状态块分工】状态块 quest 行管本楼主线快照，此表管主线+全部支线/隐藏任务的总账。进度与状态块 quest 行保持一致。\n\n【列定义】（列号为 0 基）\n- 列0: 编号 quest_code（主线 MQ.罗马数字；支线 SQ.阿拉伯数字，顺序递增不得重复）\n- 列1: 名称 quest_name\n- 列2: 类型 quest_type（主线/支线/隐藏）\n- 列3: 发布者 issuer（主神/剧情人物/势力）\n- 列4: 目标 goal（完成条件写死，可验证）\n- 列5: 当前进度 progress（对完成度的简要描述）\n- 列6: 时限 limit（如 剩36小时55分；无时限写 无）\n- 列7: 奖励 reward（点数区间+支线档位，对齐价目：D 300~800/C 800~2000/B 2000~5000/A 5000~12000/S 12000+）\n- 列8: 惩罚 penalty（主线失败=全队死亡等）\n- 列9: 状态 status（进行中/已完成/失败）\n\n【强制约束】\n1. 完成/失败不删行：status 改 已完成/失败，作为结算台账的核对依据。\n2. 隐藏任务在触发当楼插入（AI 不得提前透露其存在）。\n3. 每场任务开场，上一场已完成主线保留，新主线新编号（罗马数字递增 MQ.Ⅱ…）。",
+      "initNode": "开局插入当前主线一条；已有支线一并插入。\nSQL示例: INSERT INTO quests_sideqs (quest_code, quest_name, quest_type, issuer, goal, progress, time_limit, reward, penalty, status) VALUES ('MQ.Ⅰ', '存活至救援直升机到达', '主线', '主神', '撑过时限并保持至少一人存活', '进行中', '剩余48小时', '基础保底1000点', '全队死亡', '进行中');",
+      "deleteNode": "禁止删除。完成任务保留行（status=已完成），是结算核对的依据。",
+      "updateNode": "进度/时限/状态变化时更新；支线达成当楼更新 status 并同步结算台账。\nSQL示例: UPDATE quests_sideqs SET status = '已完成', progress = '时限归零全员存活，主神回收' WHERE quest_code = 'MQ.Ⅰ';",
+      "insertNode": "接取/触发新任务当楼插入。\nSQL示例: INSERT INTO quests_sideqs (quest_code, quest_name, quest_type, issuer, goal, progress, time_limit, reward, penalty, status) VALUES ('SQ.3', '取得冷库密码', '支线', '马丁医生', '拿到两段密码并取出T病毒原液', '已取得第一段', '无', 'C级支线800~2000点', '无', '进行中');",
+      "ddl": "CREATE TABLE sheet_ren_wu_yu_zhi_xian_biao ( -- 任务与支线表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  quest_code TEXT, -- 编号\n  quest_name TEXT, -- 名称\n  quest_type TEXT, -- 类型\n  issuer TEXT, -- 发布者\n  goal TEXT, -- 目标\n  progress TEXT, -- 当前进度\n  time_limit TEXT, -- 时限\n  reward TEXT, -- 奖励\n  penalty TEXT, -- 惩罚\n  status TEXT -- 状态\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编号",
+        "名称",
+        "类型",
+        "发布者",
+        "目标",
+        "当前进度",
+        "时限",
+        "奖励",
+        "惩罚",
+        "状态"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "任务与支线表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "任务与事件表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 7
+  },
+  "sheet_wu_zi_cang_ku_biao": {
+    "uid": "sheet_wu_zi_cang_ku_biao",
+    "name": "物资仓库表",
+    "sourceData": {
+      "note": "全队物资总账：随身装备、托运行李与主神空间仓库的库存，一物一行。\n\n【与状态块分工】状态块 eq 行管本楼随身现货（唯一实时依据），此表管台账与仓库。随身物品在 eq 行变动当楼同步本表；仓库物资只记本表（如稀有材料、任务物、暂存装备）。\n\n【列定义】（列号为 0 基）\n- 列0: 归属者 owner（个人姓名/全队公用）\n- 列1: 物品名称 item_name（同一归属者内不得重名）\n- 列2: 数量 quantity（数字）\n- 列3: 类别 category（武器/护甲/弹药/消耗品/情报/任务物/稀有材料/模块/杂物）。机甲、使魔、召唤物、坐骑、无人机等有独立行动能力的单位不进本表，记「随从与机装表」；本表只记它们的配件、弹药、维护材料与拆下来闲置的模块\n- 列4: 描述/效果 description（功能+状态，如 劣质抗寒注射液(有副作用，延缓冻僵2小时)）\n- 列5: 来源 source（搜刮/兑换/剧情获得/队友给予/敌方遗落）\n- 列6: 存放位置 storage（随身/托运/主神空间仓库）\n\n【强制约束】\n1. 获得当楼入账；消耗/损坏减数量，归零删除该行。\n2. 装备被夺/毁坏（如驱动器被夺）当楼删除或改数量，并与强化台账联动。\n3. 任务物（蓝光权限卡等）不许漏记——支线审计要用。",
+      "initNode": "开局为每位玩家与全队公用的初始物品各插入一行，以状态块 eq 行为基准。\nSQL示例: INSERT INTO warehouse (owner, item_name, quantity, category, description, source, storage) VALUES ('绝燕', '劣质抗寒注射液', 2, '消耗品', '延缓冻僵约2小时，有副作用', '搜刮', '随身');",
+      "deleteNode": "物品数量归零、被完全消耗、丢失或摧毁时删除。\nSQL示例: DELETE FROM warehouse WHERE owner = '艾瑟尔' AND item_name = '强酸体液小滴瓶';\nSQL示例(批量): DELETE FROM warehouse WHERE quantity <= 0;",
+      "updateNode": "数量变化、状态变化、存放位置变化时更新。\nSQL示例: UPDATE warehouse SET quantity = quantity - 1 WHERE owner = '绝燕' AND item_name = '劣质抗寒注射液';\nSQL示例(入库): UPDATE warehouse SET storage = '主神空间仓库' WHERE owner = '艾瑟尔' AND item_name = 'T病毒原液';",
+      "insertNode": "获得新物品当楼插入（搜刮楼必须对账：搜到什么入什么）。\nSQL示例: INSERT INTO warehouse (owner, item_name, quantity, category, description, source, storage) VALUES ('全队公用', '蓝光权限卡', 1, '任务物', 'B4区通行凭证', '搜刮', '随身');",
+      "ddl": "CREATE TABLE sheet_wu_zi_cang_ku_biao ( -- 物资仓库表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  owner TEXT, -- 归属者\n  item_name TEXT, -- 物品名称\n  quantity TEXT, -- 数量\n  category TEXT, -- 类别\n  description TEXT, -- 描述/效果\n  source TEXT, -- 来源\n  storage TEXT -- 存放位置\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "归属者",
+        "物品名称",
+        "数量",
+        "类别",
+        "描述/效果",
+        "来源",
+        "存放位置"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "物资仓库表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "背包物品表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 6
+  },
+  "sheet_zhu_shen_kong_jian_quan_ju_biao": {
+    "uid": "sheet_zhu_shen_kong_jian_quan_ju_biao",
+    "name": "主神空间全局表",
+    "sourceData": {
+      "note": "主神空间与任务世界的全局参数。此表有且仅有一行。\n\n【与状态块分工】状态块(scene/quest行)管本楼快照，此表管跨楼与跨场的全局锚点；两者必须一致，冲突以状态块为准并回改此表。\n\n【列定义】（列号为 0 基）\n- 列0: 全局状态 story_state（固定字符串`全局状态`）\n- 列1: 场次 mission_no（第X场任务，从1起，返回主神空间结算完成且开启新任务时+1）\n- 列2: 阶段 phase（任务中/幕间）\n- 列3: 当前任务世界 world_name（如 生化危机；幕间填 主神空间）\n- 列4: 当前详细地点 current_location\n- 列5: 当前主要地区 current_major_region\n- 列6: 主线编号 quest_code（格式 MQ.罗马数字，如 MQ.Ⅰ）\n- 列7: 主线目标 quest_goal\n- 列8: 主线时限 quest_limit（如 剩36小时55分）\n- 列9: 主线状态 quest_status（进行中/已完成/失败）\n- 列10: 上轮场景时间 prev_scene_time（初始化时为NULL）\n- 列11: 经过的时间 elapsed_time\n- 列12: 当前时间 cur_time\n\n【强制约束】\n地点层级从小到大：详细地点 < 主要地区。每个字段只写本级名称，不拼上级前缀。\n√ 当前详细地点填 B4维修竖井 × 填 生化危机-浣熊市-B4维修竖井\n时间格式：\nprev_scene_time / cur_time: YYYY-MM-DD HH:MM\nelapsed_time: {数值}{单位}，多单位用空格连。单位集合：[纪元,千年,百年,年,月,周,天,小时,分]。示例：\"3小时20分\" | \"2天\"\n时间计算公式：cur_time = prev_scene_time + elapsed_time；每轮推进时把上轮 cur_time 赋给 prev_scene_time。\n主神空间无昼夜，时间照常流逝；幕间阶段 quest_code/quest_goal 填上一场的主线并标注已完成。\n\n【纪要补充要求】每楼结束时在纪要正文中用一句话记录玩家属性快照：HP/SP档位、新增或解除的状态、属性/技能/装备/自定义资源（如LP）的增减。写进纪要内容，不新增列、不改动纪要表任何结构。",
+      "initNode": "开局初始化时插入唯一条目：写入开场任务世界、地点、主线与初始时间。禁止照搬示例值。\nSQL示例: INSERT INTO godspace_global (story_state, mission_no, phase, world_name, current_location, current_major_region, quest_code, quest_goal, quest_limit, quest_status, prev_scene_time, elapsed_time, cur_time) VALUES ('全局状态', '第1场任务', '任务中', '生化危机', '隔离舱', '浣熊市', 'MQ.Ⅰ', '存活至救援直升机到达', '剩余48小时', '进行中', NULL, '0分', '2026-10-30 07:00');",
+      "deleteNode": "禁止。",
+      "updateNode": "每轮推进时更新时间三件套；地点/阶段/主线任一变化时同步对应列。\nSQL示例(推进): UPDATE godspace_global SET prev_scene_time = '2026-10-31 15:00', elapsed_time = '4小时15分', cur_time = '2026-10-31 19:15' WHERE row_id = 1;\nSQL示例(返回主神空间): UPDATE godspace_global SET phase = '幕间', world_name = '主神空间', quest_status = '已完成', current_location = '汉白玉广场', current_major_region = '主神空间' WHERE row_id = 1;",
+      "insertNode": "禁止。",
+      "ddl": "CREATE TABLE sheet_zhu_shen_kong_jian_quan_ju_biao ( -- 主神空间全局表\n  row_id INTEGER PRIMARY KEY, -- 行号，仅允许为 1\n  story_state TEXT, -- 全局状态(固定)\n  mission_no TEXT, -- 场次\n  phase TEXT, -- 阶段(任务中/幕间)\n  world_name TEXT, -- 当前任务世界\n  current_location TEXT, -- 当前详细地点\n  current_major_region TEXT, -- 当前主要地区\n  quest_code TEXT, -- 主线编号\n  quest_goal TEXT, -- 主线目标\n  quest_limit TEXT, -- 主线时限\n  quest_status TEXT, -- 主线状态\n  prev_scene_time TEXT, -- 上轮场景时间\n  elapsed_time TEXT, -- 经过的时间\n  cur_time TEXT -- 当前时间\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "全局状态",
+        "场次",
+        "阶段",
+        "当前任务世界",
+        "当前详细地点",
+        "当前主要地区",
+        "主线编号",
+        "主线目标",
+        "主线时限",
+        "主线状态",
+        "上轮场景时间",
+        "经过的时间",
+        "当前时间"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "主神空间全局表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "全局数据表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "before_character_definition",
+        "depth": 2,
+        "order": 99981
+      },
+      "fixedIndexPlacement": {
+        "position": "before_character_definition",
+        "depth": 2,
+        "order": 99982
+      }
+    },
+    "orderNo": 0
+  },
+  "sheet_xuan_xiang_biao": {
+    "uid": "sheet_xuan_xiang_biao",
+    "name": "选项表",
+    "sourceData": {
+      "note": "本楼行动选项，此表有且仅有一行。\n\n【与状态块分工】状态块 next 行管本楼 A/B/C/D 选项，此表与其保持一致，供数据库插件渲染交互按钮。\n\n【列定义】（列号为 0 基）\n- 列0: 选项一 = 状态块 next 行 A 选项\n- 列1: 选项二 = 状态块 next 行 B 选项\n- 列2: 选项三 = 状态块 next 行 C 选项\n- 列3: 选项四 = 状态块 next 行 D 选项\n\n【强制约束】\n1. 每楼生成状态块时同步覆盖本表，文本与 next 行逐字一致（不得改写、缩写）。\n2. next 行不足四个选项时，多余列填 无。",
+      "initNode": "游戏初始化时，按首楼 next 行生成四个选项。\nSQL示例: UPDATE options SET option_1 = 'A选项文本', option_2 = 'B选项文本', option_3 = 'C选项文本', option_4 = 'D选项文本' WHERE row_id = 1;",
+      "deleteNode": "禁止删除。",
+      "updateNode": "每楼与 next 行同步覆盖。\nSQL示例: UPDATE options SET option_1 = 'A', option_2 = 'B', option_3 = 'C', option_4 = 'D' WHERE row_id = 1;",
+      "insertNode": "禁止操作。",
+      "ddl": "CREATE TABLE sheet_xuan_xiang_biao ( -- 选项表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  option_1 TEXT, -- 选项一(next行A)\n  option_2 TEXT, -- 选项二(next行B)\n  option_3 TEXT, -- 选项三(next行C)\n  option_4 TEXT -- 选项四(next行D)\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "选项一",
+        "选项二",
+        "选项三",
+        "选项四"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "选项表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "选项表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 9
+  },
+  "sheet_ji_yao_biao": {
+    "uid": "sheet_ji_yao_biao",
+    "name": "纪要表",
+    "sourceData": {
+      "note": "轮次日志。每轮交互结束后立刻插入一条新记录。\n\n【列定义】（列号为 0 基，与表格数据中的列标一致）\n- 列0: 编码索引 code_index（AM0001起递增，不得与已有编号重复）\n- 列1: 时间跨度 time_span\n- 列2: 概览 summary（≤30字）\n- 列3: 纪要 chronicle_text（240-480字）\n- 列4: 重要对话 key_dialogue（可留空）\n\n【强制约束】\n1.编码索引格式 AMXXXX，从0001开始递增。\n2.时间跨度格式为 \"YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM\"，覆盖本轮事件的实际时间范围。\n3.概览一句话概括本轮纪要内容，≤30字。\n\n4.纪要规范：\n- 以第三方视角中立客观记录正文发生的一切，移除所有修辞与对话。不滥用环境描写、不进行动作细节分析、不加评论，不抒情，不升华。\n- 用词直白生活化，避免正式措辞（如“达成协议”“确立计划”）。\n- 结尾必须开放，在事件自然流动中结束，不得归纳状态或做出封闭式收束。\n违例：故事仍在继续 / 新的篇章开启 / 二人关系迈入新阶段 / 未来等待着他们。\n- 多轮交互整合为一条记录。\n- 禁止内容：极端情绪（崩溃、狂喜、绝望等）、夸张、比喻、升华、情绪总结、支配欲、掌控欲、总结性收尾。\n\n5.重要对话仅摘录直接推动剧情转折、揭示关键信息、改变人物关系/决策或构成承诺/誓约/约定的原文台词，标明说话人。排除寒暄、重复、情绪感叹。通常3句，最多5句，总token不超过150。",
+      "initNode": "故事初始化时，插入一条新记录用于记录剧情。",
+      "deleteNode": "禁止。",
+      "updateNode": "禁止。",
+      "insertNode": "每轮交互结束后插入一条新记录。\n\n【填写规范】\ncode_index、time_span、summary、chronicle_text 必须全部填写，不得留空或写 NULL。\ntime_span 格式必须为 YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM。\ncode_index 格式必须为 AM0001 这种四位编号，且不得与已有编号重复。\n\nSQL示例：INSERT INTO chronicle (code_index, time_span, summary, chronicle_text, key_dialogue) VALUES ('AM0036', '2026-02-04 08:00 ~ 2026-02-04 08:30', '一句话概括', '本轮纪要内容...', NULL);",
+      "ddl": "CREATE TABLE chronicle ( -- 纪要表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code_index TEXT, -- 编码索引\n  time_span TEXT, -- 时间跨度\n  summary TEXT, -- 概览\n  chronicle_text TEXT, -- 纪要\n  key_dialogue TEXT -- 重要对话\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编码索引",
+        "时间跨度",
+        "概览",
+        "纪要",
+        "重要对话"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "纪要",
+      "entryType": "keyword",
+      "keywords": "编码索引",
+      "preventRecursion": true,
+      "injectionTemplate": "<记忆回溯>\n$1\n</记忆回溯>",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "纪要索引",
+      "extraIndexColumns": [
+        "编码索引",
+        "时间跨度",
+        "概览"
+      ],
+      "extraIndexColumnModes": {
+        "编码索引": "both",
+        "时间跨度": "both",
+        "概览": "index_only"
+      },
+      "extraIndexInjectionTemplate": "<已发生的事件概览>\n$1\n</已发生的事件概览>",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 999,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 1000,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99987
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99988
+      }
+    },
+    "orderNo": 8
+  },
+  "sheet_cheng_hao_deng_ji_biao": {
+    "uid": "sheet_cheng_hao_deng_ji_biao",
+    "name": "称号登记表",
+    "sourceData": {
+      "note": "全体轮回者的称号总账，一个称号一行。\n\n【与状态块分工】状态块 ti 行只写本楼当前佩戴的那一个（如 ti1: 世界删减者 / Eraser ｜ 生效），此表管称号库——谁有、效果是什么、戴没戴。ti 行与 worn 列（列3）必须逐字对得上。\n\n【列定义】（列号为 0 基）\n- 列0: 称号名 name（中英全称照抄授予文本，如 世界删减者 / Eraser；同一持有者内不得重名）\n- 列1: 持有者 owner（玩家姓名，与名册表「姓名」完全一致）\n- 列2: 效果 effect（写死触发条件与数值，如 对具虚拟/数据属性的屏障、结界或锁，破坏判定最终阈值+10，并获得一次额外检定机会）\n- 列3: 佩戴状态 worn（已佩戴/未佩戴/已剥夺；同楼只能有一个已佩戴）\n- 列4: 评语 comment（主神授予时那句评语，照抄不改写）\n- 列5: 来源 source（主神单向授予/剧情获得/兑换）\n- 列6: 获得场次 session（第X场任务/幕间X/PG.xx）\n\n【强制约束】\n1. 称号是单向归档，只增不删：被剥夺写 已剥夺 并保留行，不得删除行。\n2. 授予当楼插入；效果照抄授予文本，不许润色，不许只写\"强力称号\"。\n3. 效果里的数值必须原样保留（阈值+10、INT+3、降一档、次数上限），它要参与判定；效果空泛的称号视为无效。\n4. 一人同时只戴一个称号：换戴时旧行改 未佩戴、新行改 已佩戴，同一楼完成。\n5. 称号给的属性加成同样受基因锁上限约束（见基因锁体系条目）。",
+      "initNode": "开局为空；主神授予称号的当楼插入。\nSQL示例: INSERT INTO titles (name, owner, effect, worn, comment, source, session) VALUES ('世界删减者 / Eraser', '沈知', '对具虚拟/数据属性的屏障、结界或锁，破坏判定最终阈值+10，并获得一次额外检定机会', '已佩戴', '你看不见生机，只看得见累赘。连同根基一起挖出。', '主神单向授予', '幕间1');"
+    },
+    "content": [
+      [
+        "row_id",
+        "称号名",
+        "持有者",
+        "效果",
+        "佩戴状态",
+        "评语",
+        "来源",
+        "获得场次"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "称号登记表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角信息-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 10
+  },
+  "sheet_sui_cong_yu_ji_zhuang_biao": {
+    "uid": "sheet_sui_cong_yu_ji_zhuang_biao",
+    "name": "随从与机装表",
+    "sourceData": {
+      "note": "全队的机甲、使魔、召唤物、坐骑、无人机、构装体、改造生物总账，一个有独立行动能力的单位一行。\n\n【与其它表的分工】\n- 物资仓库表：只记纯装备与道具，以及本表单位的配件、弹药、维护材料、拆下来的模块。\n- 强化台账表：只记轮回者本人的强化。驾驶员改造记那边，机体与使魔本体的强化记本表。\n- 状态块：没有专门行。本楼是否出场、同步率、受损写进 p 行或 world 行；台账与实时数值以本表为准。启用机甲体系（kbm 行）时，kbm 行写本楼驾驶与同步状态，本表管归属与存量。\n\n【列定义】（列号为 0 基）\n- 列0: 名称 name（同一归属者内不得重名；同型多台加编号，如 守卫机兵-01/02）\n- 列1: 归属者 owner（玩家姓名/全队公用，与名册表「姓名」逐字一致）\n- 列2: 类型 type（机甲/使魔/召唤物/坐骑/无人机/构装体/改造生物）\n- 列3: 规格/阶位 spec（体量、型号等级、属性上限，如 S级人形机甲·高18m·42t·上限150 ／ 二阶炎属亚龙·体长9m·上限120）\n- 列4: 状态 status（完好/轻损/重损/待修/沉睡/已收容/失控/已损毁）\n- 列5: 属性 stats（十项固定顺序，缺项写 —）：HP/结构 300 ｜ 装甲 8 ｜ STR 90 ｜ DEX 60 ｜ CON 80 ｜ INT 40 ｜ PER 70 ｜ WIL — ｜ MOV 9 ｜ DB 12\n- 列6: 武装 weapons（伤害/射程/弹药，分号分隔）：主炮 3D10 穿甲 射程800m ｜ 导弹巢 2D8 范围10m 弹药6\n- 列7: 技能 skills（与 sk 行同构：名称 效果 | CDx SPy，标明主动/被动）：纳米抢修 恢复2D6结构值 | CD1场 SP20 ; 护盾超载 减伤+5持续2轮 | CD1场 SP15\n- 列8: 升级模块 modules（在装模块，名称(等级)：效果，分号分隔，空槽写 空槽N）：反应装甲II：减伤+3 ; 推进器强化I：MOV+2 ; 空槽1\n- 列9: 控制条件与代价 control（驾驶要求、同步率、契约、召唤消耗、失控条件与反噬）\n- 列10: 维护与消耗 upkeep（每场或每日点数、能源、口粮、修复费用）\n- 列11: 来源 source（兑换/捕获/剧情获得/队友转让/敌方遗落）\n- 列12: 所在/收容 location（随身/主神空间机库/收容球/召唤位/寄养地）\n\n【属性口径】\n单位不走基因锁：无 lock 行、无超标反噬、无心魔。属性即该单位真实拥有的数值，不叠加驾驶员或契约者的加成（那部分改 p 行）。\n七项沿用 STR/DEX/CON/INT/PER/CHA/WIL 同一判定体系——机甲 STR 即出力、DEX 即机动、CON 即结构强度、PER 即传感器、INT 即火控算力、WIL 即抗干扰与电子防护；使魔照常理填。\n装甲写固定减伤值，与护甲的「减伤X」同口径。生物用 HP，机械用结构值，同一行只填一个。\n列3 写了属性上限就该守住：任何一项超过上限，按上限改写，不许留下越限数值。\n\n【强制约束】\n1. 只记有独立行动能力的单位。一把枪、一件护甲不进来，走物资仓库表。\n2. 获得或签约当楼插入；损毁写 已损毁 并保留行（可修复则改 待修），不得删行。\n3. 列5 十项必须齐全，缺项写 —。禁止整格空着或只写「很强」。\n4. 升级模块只在装时记本表；拆下、闲置、备用的模块转记物资仓库表（类别=模块），避免两处记账。\n5. 状态变更当楼同步：受损写 轻损/重损 并注明部位（左臂传动断裂、火控离线）；模块被打坏当楼从列8 移出并在列4 记 重损。\n6. 若驾驶或契约给本人加成（同步率加成、使魔视野共享），必须同时改 p 行并在列9 注明，两边不许只改一处。\n7. 归属变更（转让、被夺、死亡继承）当楼改列1，不改行号。\n8. 召唤物若每场重召且无持久实体，只在首次签约时建行，之后不重复建行。",
+      "initNode": "开局为空；首次获得、捕获或签约当楼插入。\nSQL示例: INSERT INTO companions (name, owner, type, spec, status, stats, weapons, skills, modules, control, upkeep, source, location) VALUES ('隐士概念机', '沈知', '机甲', 'A级全包型折叠堡垒·人形·高6m·上限120', '完好', 'HP/结构 300 ｜ 装甲 8 ｜ STR — ｜ DEX 50 ｜ CON 80 ｜ INT 60 ｜ PER 70 ｜ WIL — ｜ MOV 6 ｜ DB —', '无固定武装，靠外挂接口', '纳米抢修 恢复2D6结构值 | CD1场 SP20 ; 折叠维生舱 全密封，隔绝外部环境与排异干扰 被动', '空槽2', '需在舱内操作，同步率 60%；同步率低于 40% 时 MOV 减半', '每场 200 点或 1 份能源块；结构值修复 30 点/100点', '兑换', '主神空间机库');"
+    },
+    "content": [
+      [
+        "row_id",
+        "名称",
+        "归属者",
+        "类型",
+        "规格/阶位",
+        "状态",
+        "属性",
+        "武装",
+        "技能",
+        "升级模块",
+        "控制条件与代价",
+        "维护与消耗",
+        "来源",
+        "所在/收容"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "随从与机装表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角信息-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 11
+  }
 }
