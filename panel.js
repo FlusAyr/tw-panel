@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.21.0';
+  const VERSION = '3.22.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -2249,6 +2249,18 @@
   .tc-cbody{grid-template-columns:1fr}
   .tc-bgrid{grid-template-columns:1fr 1fr}
   .tc-opts{grid-template-columns:1fr}
+  /* 五道防线：窄屏仍要「一行五格」——1..5 是有顺序的防线带，折行会让读者以为
+     后几格是另一类东西（布局替内容撒谎）。auto-fit 无论阈值调多少都会在某个宽度减列，
+     所以这里改成固定 5 等分；格内文字允许换行，序号与字号可让位，名称/状态绝不让位。 */
+  /* 防线带宽不够就换行的话，1..5 的顺序语义会被折行拆散；所以窄屏让防线独占一整行
+     （basis:100% 逼它自己占一行），两个 58px 的环退到第二行并排 —— 环是副信息，退一步不丢语义。 */
+  .tc-nb-body{flex-wrap:wrap}
+  .tc-nb-defs{flex:0 0 100%;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px 5px}
+  /* 格宽只有 50px 上下时，名称与状态并排会把两边都挤成两个字一行；改成上下两行占位，
+     名称和状态各自一整行 —— 排的是行，不是字。 */
+  .tc-def-row{padding:3px 4px;gap:1px;flex-wrap:wrap}
+  .tc-def-row em{margin-left:0;flex:0 0 100%}
+  .tc-def-idx{font-size:7.5px}
   .tc-swipe-hint{display:none}                      /* 单列不需要横滑提示 */
 }
 

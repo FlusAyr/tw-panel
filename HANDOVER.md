@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.21.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.22.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.21.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.22.0** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -88,6 +88,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.19.1** `kbm` 的「型」关键字可省：裸段恰是 `人型`/`重装`/`全包` 之一时按型识别（`装` 之后仍一律当装备名）；力/敏/体 缺项显示 `—`、智/感/魅 不占位；`gauge`/`attrsHtml` 抽成共用件，`kbm` 卡输出逐字节不变；撤销使魔 `kbf` 支持（从未发布、已移除，面板不渲染该行，也不吞后续行）；`boot.mjs` 未改动（v2.1 / 19897 B）
 - **v3.20.0** 新增 `dmg<N>` 伤害事件行：六段（谁对谁｜因｜算｜伤｜血｜判），渲染为交火卡（方向箭头 + 伤害数值 + 七色性质 + 六种判定形态 + 血条前后）；`算` 段原样保留不重算，血差与伤值不一致时卡上打黄字标记（不隐藏不改写）；`keys` 断言 109→137（dmg 六段/七色/颜色互不相同/截断锁/血差不一致）；旧卡八组样本逐字节相同（基线 tag 见 CHANGELOG）；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
 - **v3.21.0** 窄屏修复：<520px 时卡片退回单列自适应、不再向右越界，属性单列、标签与值紧邻，血量/SP/负重/机甲三读数强制可见；≥520px 布局一字未改（桌面逐字节对上一版相同）；`dmg` 算段加三条保护（解析保留原文 / 渲染文本须等于原文全文 / 容器禁止省略号与裁切）；`keys` 137→140；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定（基线 tag 见 CHANGELOG）
+- **v3.22.0** 窄屏五格防线：<520px 五道防线固定五等分一行（原先退成 1+1+1+1+1 或 3+2），双环挪到防线下一行并排，每格名称与状态上下两行；≥520px 一字未改；`keys` 141→147；`boot.mjs` 未改动（v2.1 / 19897 B），导入行 tag 仍由 `build.py` 的 `BOOT_TAG` 决定
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）
@@ -167,6 +168,7 @@ curl -s "https://api.github.com/repos/FlusAyr/tw-panel/contents/version.json?ref
 5. NTR 卡 v3 的**输出纪律**条款是治「AI 漏生成数值」的第一版方案；如果实际跑团仍漏，下一步方向是把纪律句复制到条目 1（五维数值核心）的头部，双保险。
 6. **字节断言一律落盘后 `wc -c`**。`size_download` 本身准，错在用法：URL 形态错（`repo/@v1.2.3/f`，`@` 前多一个 `/`）→ jsDelivr 回 404 错误体（69~72 B），看着像文件只有几十字节；`-I`(HEAD) 恒 0；`--compressed` 给压缩字节（`llms.txt` 2952 vs 5884）。异常小值先核对 URL。
 7. **R18 扩展册仍在 git 历史中**：`content/worldbook/NTR_伴侣夺走_v3_纯净框架版.json` 已于 2026-11-01 从 HEAD 移除（仓库无版本变更、未打 tag），但引入它的提交 `24802fe` 仍在历史里（`git log --all -- <该路径>` 可取回）。管理层已知并接受：仓库保持公开，重写历史会改变全部 tag 指向的 commit，与「tag 永不覆盖」冲突。新增 R18 册一律不入公开仓库。
+8. **递归扫描默认关闭**（`world_info_recursive` 在 ST `settings.json`，默认 `false`；世界书文件里没有这个字段）。玩家若开启：无限恐怖册 `uid 19`（常驻的世界选择表，正文含队名与选项值）已设 `preventRecursion:true`，不再作为递归触发源；`uid 28` 故意不设 —— 它被「换个难度」叫起来时，递归拉进 `uid 8` 难度基准表正好有用。三个字段别单看名字猜：`excludeRecursion` = 本条不被递归拉进来（`:4870`）；`preventRecursion` = 本条不去触发别人（`:5080` `filter(x => !x.preventRecursion)`）；`delayUntilRecursion` = 非递归轮跳过本条，数字＝递归第 N 层才放行（`:4860/:4865`）。来源：`SillyTavern/SillyTavern@06bde939fb1e` · `public/scripts/world-info.js`。
 
 ## 9. 红线（AGENTS.md §2 的摘要，全文去读原文）
 

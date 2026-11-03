@@ -697,6 +697,32 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     metaCss.indexOf('nowrap') < 0 && metaCss.indexOf('ellipsis') < 0 && metaCss.indexOf('hidden') < 0,
     '实际规则=' + metaCss);
 }
+// ---- 五道防线：结构层（几何断言在浏览器探针里，vm 无布局） ----
+{
+  const stD = api.parseState([
+    'p1: 你 | 92/100',
+    'nb: 莉娅 | 位 夺取 | 爱 62 | 恋 28 | 调 34 | 屈 41 | 淫 58 | 癖 35 | 防线 2/5 称谓',
+    'nd: 莉娅 | 界限 失守 4月6日 某 | 称谓 回填 12月16日 某 | 独处 在守 | 主动 失守 4月23日 某 | 归属 在守',
+    'next: 继续',
+  ].join('\n'));
+  const htmlD = api.render(stD);
+  const rowsD = htmlD.match(/class="tc-def-row /g) || [];
+  T('夺取卡产出 5 个 .tc-def-row（五道防线逐格）', rowsD.length === 5, '实际=' + rowsD.length);
+  T('五格文字完整：名称与状态都在（界限/称谓/独处/主动/归属 + 失守/回填/在守）',
+    ['界限', '称谓', '独处', '主动', '归属', '失守', '回填', '在守'].every(w => htmlD.indexOf(w) >= 0),
+    '缺字：' + ['界限', '称谓', '独处', '主动', '归属', '失守', '回填', '在守'].filter(w => htmlD.indexOf(w) < 0).join(','));
+  const cssNarrow = (SRC.match(/@media \(max-width:520px\)\{([\s\S]*?)\n\}/) || [, ''])[1];
+  T('窄屏块存在（未匹配到 @media (max-width:520px) 就红）', cssNarrow.length > 200, '长度=' + cssNarrow.length);
+  T('窄屏块的 .tc-nb-defs 是五等分（repeat(5,minmax(0,1fr))，不许 auto-fit 自己减列）',
+    /\.tc-nb-defs\{[^}]*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(cssNarrow),
+    '实际=' + ((cssNarrow.match(/\.tc-nb-defs\{[^}]*\}/) || ['(无)'])[0]));
+  T('窄屏块让防线独占一行（basis:100% + 换行），环退第二行',
+    /\.tc-nb-defs\{[^}]*flex:0 0 100%/.test(cssNarrow) && /\.tc-nb-body\{[^}]*flex-wrap:wrap/.test(cssNarrow),
+    'defs=' + ((cssNarrow.match(/\.tc-nb-defs\{[^}]*\}/) || ['(无)'])[0]) + ' body=' + ((cssNarrow.match(/\.tc-nb-body\{[^}]*\}/) || ['(无)'])[0]));
+  T('窄屏格内名称与状态上下两行占位（flex-wrap + em 独占一行），不并排挤成竖排',
+    /\.tc-def-row\{[^}]*flex-wrap:wrap/.test(cssNarrow) && /\.tc-def-row em\{[^}]*flex:0 0 100%/.test(cssNarrow),
+    '实际=' + ((cssNarrow.match(/\.tc-def-row\{[^}]*\}/) || ['(无)'])[0]));
+}
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);
