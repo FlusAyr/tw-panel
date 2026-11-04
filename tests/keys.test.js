@@ -675,7 +675,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
 
   T('无 dmg 行时不产生 tc-dmg 空壳',
     api.render(api.parseState('scene: x\\np1: 甲 | HP 9/10')).indexOf('tc-dmg') < 0);
-
+
 
   // ---- 算段不许被省略号/换行吃掉（窄屏那张图暴露的假象，先确认渲染器本身没截） ----
 {
@@ -903,7 +903,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const EXPECTED_KEYS = [
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
-    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg',
+    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -952,6 +952,158 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('两侧都读到了东西（不是两个空集相等）',
     EXPECTED_KEYS.length > 20 && actualBases.length > 20,
     'EXPECTED=' + EXPECTED_KEYS.length + ' / KEYS=' + actualBases.length);
+
+/* ───────── 组 13 · 避难所 sh / 灾变 dz ─────────
+   两个键都是「前缀独占 + 独立卡片」（同 kbm/kbf/dmg，不进 EXT_KEYS）。
+   这里要盯的不是「卡面好不好看」，是几件会**静默**坏掉的事：
+   ① 夹在状态块中间时会不会把后面的行吞掉 —— 入口必须是 extractBlock。
+      parseState 拿到的是已经切好的 body，截断发生在它之前，结构上看不见（§7 第 20 条）；
+   ② `余 0` 会不会被真值判断当成「没写」；
+   ③ 数值格坏掉时有没有把**原文片段**报出来（不许静默返回空对象）。
+   整组裹一层块作用域：本文件的 setTimeout 回调是个大函数，组 1/2 已用过 html / blk 这些名字。 */
+{
+  console.log('\n── 组 13 · 避难所 sh / 灾变 dz ──');
+
+  /* 每条都点名「哪一个」，不报「有几个」—— 报数量人只会去改数量（§7 第 22 条） */
+  const SH_OK = '浮岛·望潮 ｜ 型 浮岛 ｜ 耐久 82/100 ｜ 舱 40/60 ｜ 电 12/30 ｜ 食 21/40 ｜ 温 6/12 ｜ 防 14 ｜ 模 净水器×3 ｜ 探照灯×2';
+  const DZ_OK = '酸雨 ｜ 级 3 ｜ 余 0 ｜ 效 每回合 舱 -1';
+
+  const s1 = api.parseShelter(SH_OK);
+  T('sh 第 1 段取作名称', s1.name === '浮岛·望潮', 'name=' + JSON.stringify(s1.name));
+  T('sh 型 三值映射（浮岛→isle，原文保留在 typeRaw）',
+    s1.type === 'isle' && s1.typeRaw === '浮岛',
+    'type=' + JSON.stringify(s1.type) + ' / typeRaw=' + JSON.stringify(s1.typeRaw));
+  const resBad = [['hull', 82, 100], ['hold', 40, 60], ['power', 12, 30], ['food', 21, 40], ['temp', 6, 12]]
+    .filter(([k, c, m]) => !s1[k] || s1[k].cur !== c || s1[k].max !== m)
+    .map(([k]) => k + '=' + JSON.stringify(s1[k]));
+  T('sh 五项资源各取 当前/上限', resBad.length === 0, '不对的项：' + JSON.stringify(resBad));
+  T('sh 防 是单值数字', s1.def === 14, 'def=' + JSON.stringify(s1.def));
+  T('sh 模 每段一组 名×级（2 段，顺序不乱）',
+    s1.mods.length === 2 && s1.mods[0].name === '净水器' && s1.mods[0].lv === 3
+      && s1.mods[1].name === '探照灯' && s1.mods[1].lv === 2,
+    'mods=' + JSON.stringify(s1.mods));
+  T('sh 正常行不产 errs（errs 只留给真的坏段）', s1.errs.length === 0, JSON.stringify(s1.errs));
+
+  const s2 = api.parseShelter('无名礁 ｜ 耐久 50/50 ｜ 防 3');
+  T('sh 缺 型 不误判，其余字段照解析',
+    s2.type === '' && s2.typeRaw === '' && !!s2.hull && s2.hull.cur === 50 && s2.def === 3,
+    'type=' + JSON.stringify(s2.type) + ' / hull=' + JSON.stringify(s2.hull) + ' / def=' + JSON.stringify(s2.def));
+
+  const s0 = api.parseShelter('孤礁 ｜ 型 船坞 ｜ 模');
+  T('sh 模 0 段：不产模组、也不算错', s0.mods.length === 0 && s0.errs.length === 0,
+    'mods=' + s0.mods.length + ' / errs=' + JSON.stringify(s0.errs));
+  /* 「模 无」是内容侧写「没有改装件」的常态写法：不许被当成「缺了 ×级 的模组名」报错 */
+  const sNone = api.parseShelter('沉舟 ｜ 型 潜航 ｜ 模 无');
+  T('sh 模 无：0 模组且不报错（无 ≠ 缺 ×级）',
+    sNone.mods.length === 0 && sNone.errs.length === 0,
+    'mods=' + JSON.stringify(sNone.mods) + ' / errs=' + JSON.stringify(sNone.errs));
+  const s5 = api.parseShelter('船坞·铁锚 ｜ 型 船坞 ｜ 模 净化器×1 ｜ 蓄电池×2 ｜ 渔网×3 ｜ 补漏胶×4 ｜ 信标×5');
+  T('sh 模 5 段：段数不定，末项名字与等级都在',
+    s5.mods.length === 5 && s5.mods[4].name === '信标' && s5.mods[4].lv === 5,
+    'mods=' + JSON.stringify(s5.mods));
+  /* 顺序依赖：模 之后的裸段是设备名，不许被「型 关键字省略」的容错改判成载体形态 */
+  const sm = api.parseShelter('礁盘 ｜ 模 浮岛×2');
+  T('sh 模 之后的段不被改判成 型（容错分支的顺序）',
+    sm.type === '' && sm.mods.length === 1 && sm.mods[0].name === '浮岛',
+    'type=' + JSON.stringify(sm.type) + ' / mods=' + JSON.stringify(sm.mods));
+
+  const d1 = api.parseDisaster(DZ_OK);
+  T('dz 名称 / 级 1-5 取值', d1.name === '酸雨' && d1.level === 3,
+    'name=' + JSON.stringify(d1.name) + ' / level=' + JSON.stringify(d1.level));
+  T('dz 余 0 严格等于 0（真值判断会把终局读成「没写」）', d1.left === 0, 'left=' + JSON.stringify(d1.left));
+  T('dz 效 一段自由文字原样取回', d1.effect === '每回合 舱 -1', 'effect=' + JSON.stringify(d1.effect));
+  T('dz 正常行不产 errs', d1.errs.length === 0, JSON.stringify(d1.errs));
+
+  /* ── 截断锁：入口必须 extractBlock ── */
+  const MIX = ['scene: 夜航 ｜ 甲板', 'sh: ' + SH_OK, 'dz: ' + DZ_OK, 'p1: 我 ｜ HP 9/10', 'next: 收帆'].join('\n');
+  const mixBlk = api.extractBlock(MIX);
+  T('sh/dz 夹在状态块中间：extractBlock.end 一直覆盖到最后一行（end===4）',
+    !!mixBlk && mixBlk.start === 0 && mixBlk.end === 4,
+    'blk=' + JSON.stringify(mixBlk && { start: mixBlk.start, end: mixBlk.end }));
+  const mixSt = api.parseState(mixBlk ? mixBlk.body : '');
+  T('截断锁：sh/dz 之后的 p1 与 next 仍然被解析',
+    mixSt.players.length === 1 && mixSt.next === '收帆',
+    'players=' + mixSt.players.length + ' / next=' + JSON.stringify(mixSt.next));
+  T('两个键都真进了解析结果（不是「没报错但也没东西」）',
+    mixSt.shelters.length === 1 && mixSt.disasters.length === 1,
+    'shelters=' + mixSt.shelters.length + ' / disasters=' + mixSt.disasters.length);
+
+  /* ── 渲染：每条断言钉在具体元素上，不用「存在某个 0% / 某个 class」这种替身 ── */
+  const shHtml = api.render(mixSt);
+  const labMiss = ['耐久', '舱', '电', '食', '温']
+    .filter(l => shHtml.indexOf('<span class="tc-kbm-gl">' + l + '</span>') < 0);
+  T('sh 五条资源条逐条命中（点名缺哪一条）', labMiss.length === 0, '缺：' + JSON.stringify(labMiss));
+  T('sh 条宽绑在「耐久」自己身上（82/100→82%，不是「某个 82%」）',
+    shHtml.indexOf('<i class="sh-hull" style="width:82%"></i>') >= 0,
+    '未命中 <i class="sh-hull" style="width:82%"></i>');
+  T('sh 防 渲染为单值（不给条——给条会被读成消耗量）',
+    shHtml.indexOf('<span class="tc-sh-def"><em>防</em><b>14</b></span>') >= 0);
+  const modMiss = ['<span class="tc-sh-mod">净水器<i>×3</i></span>', '<span class="tc-sh-mod">探照灯<i>×2</i></span>']
+    .filter(s => shHtml.indexOf(s) < 0);
+  T('sh 模 逐枚渲染成徽章（点名缺哪一枚）', modMiss.length === 0, '缺：' + JSON.stringify(modMiss));
+
+  const dzHtml = api.render(api.parseState('dz: ' + DZ_OK));
+  T('dz 渲染为横幅：tc-dz + lv-3 + over 同在一个元素上',
+    dzHtml.indexOf('class="tc-dz lv-3 over"') >= 0, '未命中 class="tc-dz lv-3 over"');
+  T('dz 余 0 照字面显示为「余 0 回合」',
+    dzHtml.indexOf('<b class="tc-dz-left">余 0 回合</b>') >= 0);
+  T('dz 余 0 触发「已平息」印章', dzHtml.indexOf('<span class="tc-dz-over">已平息</span>') >= 0);
+  T('dz 效 落在横幅底部整行（.tc-dz-fx）',
+    dzHtml.indexOf('<div class="tc-dz-fx">每回合 舱 -1</div>') >= 0);
+  T('dz 严重度点阵亮 3 格（1..5 是档位不是进度）',
+    (dzHtml.match(/<i class="on"><\/i>/g) || []).length === 3,
+    '亮格数=' + (dzHtml.match(/<i class="on"><\/i>/g) || []).length);
+
+  /* ── 负向对照：同一台渲染器，没有这两个键时不许凭空出卡 ── */
+  const plainHtml = api.render(api.parseState(['scene: 走廊', 'p1: 我 ｜ HP 9/10', 'next: 走'].join('\n')));
+  const ghost = ['tc-shelter', 'tc-dz'].filter(c => plainHtml.indexOf(c) >= 0);
+  T('没有 sh/dz 行时不出避难所与灾变容器', ghost.length === 0, '凭空出现：' + JSON.stringify(ghost));
+
+  /* ── 破裂态：耐久归零才盖章；健康的那张必须没有章（反向对照） ── */
+  const sunkHtml = api.render(api.parseState('sh: 沉礁 ｜ 型 潜航 ｜ 耐久 0/80 ｜ 舱 0/40'));
+  T('耐久归零 → wrecked 主题 + 舱体破裂印章',
+    sunkHtml.indexOf('tc-shelter t-sub wrecked') >= 0 && sunkHtml.indexOf('舱体破裂') >= 0,
+    'class/印章未命中');
+  T('同一张卡健康时不盖破裂章（防「总有一个章在」）',
+    shHtml.indexOf('wrecked') < 0 && shHtml.indexOf('舱体破裂') < 0);
+
+  /* ── 报错必须带原文片段，并且真的画得出来 ── */
+  const sbad = api.parseShelter('破船 ｜ 型 飞艇 ｜ 耐久 八/十 ｜ 防 甲');
+  const sbadTxt = sbad.errs.join(' ⏐ ');
+  T('sh 坏 型 报错带原文（飞艇）', /飞艇/.test(sbadTxt), sbadTxt);
+  T('sh 坏 数值格 报错带原文（八/十）', /八\/十/.test(sbadTxt), sbadTxt);
+  T('sh 坏 防 报错带原文（甲）', /甲/.test(sbadTxt), sbadTxt);
+  const sfull = api.parseShelter('破船 ｜ 耐久 82／100');
+  T('sh 全角斜线不认双值：hull 为空且报错带原文（82／100）',
+    sfull.hull === null && sfull.errs.join(' ⏐ ').indexOf('82／100') >= 0,
+    'hull=' + JSON.stringify(sfull.hull) + ' / errs=' + JSON.stringify(sfull.errs));
+  const sbadHtml = api.render(api.parseState('sh: 破船 ｜ 型 飞艇 ｜ 耐久 八/十 ｜ 防 甲'));
+  T('sh 解析报错在卡面上可见（不许静默返回空对象）',
+    sbadHtml.indexOf('class="tc-sh-err"') >= 0 && sbadHtml.indexOf('八/十') >= 0 && sbadHtml.indexOf('飞艇') >= 0);
+
+  const dbad = api.parseDisaster('迷雾 ｜ 级 9 ｜ 余 若干 ｜ 效 视野 -2');
+  const dbadTxt = dbad.errs.join(' ⏐ ');
+  T('dz 级 越界报错带原文（9）', /级 必须是 1-5：9/.test(dbadTxt), dbadTxt);
+  T('dz 余 非数字报错带原文（若干）', /若干/.test(dbadTxt), dbadTxt);
+  const dzMissHtml = api.render(api.parseState('dz: 迷雾 ｜ 效 视野 -2'));
+  T('dz 没写 余 时画「余 —」，不许冒充「余 0 回合」',
+    dzMissHtml.indexOf('<b class="tc-dz-left miss">余 —</b>') >= 0 && dzMissHtml.indexOf('余 0 回合') < 0);
+
+  /* ── 登记面：它们是独立卡片，不是 EXT_KEYS 的共享渲染器（登记会双注册） ── */
+  T('sh/dz 不进 EXT_KEYS（与 kbm/kbf/dmg 同款：KEYS 前缀 + 自己那条分支）',
+    REG.every(e => e.key !== 'sh' && e.key !== 'dz'),
+    'EXT_KEYS 里的键：' + JSON.stringify(REG.map(e => e.key)));
+
+  /* ── 视觉可区分：五条各配色、两张卡各有一处**形状**识别符 ── */
+  const barMiss = ['sh-hull', 'sh-hold', 'sh-power', 'sh-food', 'sh-temp']
+    .filter(k => api.CSS.indexOf('.tc-bar i.' + k + '{') < 0);
+  T('五条资源条各有自己的配色（点名缺哪一条）', barMiss.length === 0, '缺：' + JSON.stringify(barMiss));
+  T('shelter 的识别符是「圆角浮筒 + 水位线」（不是 kbm 的直角切角钢板）',
+    api.CSS.indexOf('.tc-sh-water{') >= 0 && !/\.tc-shelter\{[^}]*clip-path/.test(api.CSS));
+  T('dz 的识别符是「左侧 9px 等级色块 + 血色斜纹带」（横条不是卡片）',
+    api.CSS.indexOf('border-left:9px solid var(--dl)') >= 0
+      && api.CSS.indexOf('repeating-linear-gradient(135deg,rgba(120,20,20,.20)') >= 0);
+}
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

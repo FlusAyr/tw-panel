@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.27.0';
+  const VERSION = '3.28.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -200,6 +200,121 @@
       }
       /* 其余（`结 实冲撞` 这类规格外文本段、`90/100/次` 这类坏格）只当标签，绝不猜数值 */
       o.tags.push(x);
+    }
+    return o;
+  }
+
+  /* ── 避难所 sh（海上浮岛 / 船坞 / 潜航）──
+     与 kbm 的差别有两处：`型` 三值描述的是**载体形态**而不是战斗形态；`模` 之后是**不定长**的
+     `名×级` 段（0..N 组），所以用开关而不是定长字段。
+     非法数值格一律把**原文片段**塞进 o.errs 并在卡上画出来：静默丢格会画出一根看起来正常的条，
+     比少一行字更难发现（§7 第 22 条：报元素，不报数量）。 */
+  const SHELTER_TYPES = { '浮岛': 'isle', '船坞': 'dock', '潜航': 'sub' };
+  const SHELTER_RES = [['hull', '耐久'], ['hold', '舱'], ['power', '电'], ['food', '食'], ['temp', '温']];
+  const SHELTER_KEY = { '耐久': 'hull', '舱': 'hold', '电': 'power', '食': 'food', '温': 'temp' };
+
+  /* 五项资源都有上限，所以两段缺一不可：只写 `82` 不是「满格 82」，是「上限没给」——
+     这里不走 mechaPair 的单值宽松路径，缺 B 侧就整格丢弃并报原文。 */
+  function shelterPair(field, rest, errs) {
+    const s = String(rest == null ? '' : rest).trim();
+    const m = s.match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (m) return { cur: +m[1], max: +m[2] };
+    errs.push(field + ' 数值格不合法：' + s);
+    return null;
+  }
+
+  function shelterMod(o, x) {
+    const s = String(x).trim();
+    /* 「无」是内容侧写「这艘船没有改装件」的常态写法，不是一段缺了 ×级 的模组名。 */
+    if (/^(无|—|－|-|暂无|none)$/i.test(s)) return;
+    const m = s.match(/^(.+?)\s*[×xX*]\s*(\d+)$/);
+    if (m) { o.mods.push({ name: m[1].trim(), lv: +m[2] }); return; }
+    /* 少了 ×级 的模组名照收（不丢数据），但要报出来：模组行是「有什么设备」，
+       不是「等级几」——收下名字、标出缺级，比整段扔掉更接近原文。 */
+    o.mods.push({ name: s, lv: null });
+    o.errs.push('模 段缺少 ×级：' + s);
+  }
+
+  function parseShelter(v) {
+    const raw = String(v == null ? '' : v);
+    const p = seg(raw);
+    const o = {
+      name: '', type: '', typeRaw: '',
+      hull: null, hold: null, power: null, food: null, temp: null,
+      def: null, mods: [], errs: [], raw,
+    };
+    let inMod = false;
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+
+      let m;
+      if ((m = x.match(/^型(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        o.typeRaw = m[1].trim();
+        o.type = SHELTER_TYPES[o.typeRaw] || '';
+        inMod = false;
+        if (!o.type) o.errs.push('型 不在三值内：' + x);
+        continue;
+      }
+      if ((m = x.match(/^(耐久|舱|电|食|温)(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        o[SHELTER_KEY[m[1]]] = shelterPair(m[1], m[2], o.errs);
+        inMod = false; continue;
+      }
+      if ((m = x.match(/^防(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        const d = m[1].trim();
+        if (/^-?\d+$/.test(d)) o.def = +d;
+        else o.errs.push('防 不是数字：' + d);
+        inMod = false; continue;
+      }
+      if ((m = x.match(/^模(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        inMod = true;
+        if (m[1].trim()) shelterMod(o, m[1]);
+        continue;
+      }
+      if (inMod) { shelterMod(o, x); continue; }
+
+      /* 型 关键字被省略时的容错（与 kbm 同款）：裸段整段恰是三型之一且还没型 → 当作型。
+         `模` 之后的裸段是模组名，不许改判成型（那里改了就是把一台设备读成载体形态）。 */
+      if (!o.type && SHELTER_TYPES[x]) { o.typeRaw = x; o.type = SHELTER_TYPES[x]; continue; }
+
+      o.errs.push('无法归类的段：' + x);
+    }
+    return o;
+  }
+
+  /* ── 灾变 dz ──
+     一行里四件事：名称 / 级 1-5 / 余 N 回合 / 效 一句。`效` 之后被 ｜ 切开的裸段接回同一句，
+     因为那句话本来就可能带竖线（`舱 -1 ｜ 电 -2`）。 */
+  function parseDisaster(v) {
+    const raw = String(v == null ? '' : v);
+    const p = seg(raw);
+    const o = { name: '', level: null, left: null, effect: '', errs: [], raw };
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+
+      let m;
+      if ((m = x.match(/^级(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        const s = m[1].trim();
+        if (/^\d+$/.test(s) && +s >= 1 && +s <= 5) o.level = +s;
+        else o.errs.push('级 必须是 1-5：' + s);
+        continue;
+      }
+      if ((m = x.match(/^余(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        const s = m[1].trim();
+        /* `余 0` 是合法终局（本回合结束后平息）：不许用真值判断，否则 0 会被当成"没写" */
+        if (/^\d+$/.test(s)) o.left = +s;
+        else o.errs.push('余 必须是非负整数：' + s);
+        continue;
+      }
+      if ((m = x.match(/^效(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        if (m[1].trim()) o.effect = o.effect ? o.effect + ' ' + m[1].trim() : m[1].trim();
+        continue;
+      }
+      /* 规格外的裸段：接着写进 效（这一段本来就是自由文字），不丢、也不冒充别的字段 */
+      o.effect = o.effect ? o.effect + ' ' + x : x;
     }
     return o;
   }
@@ -747,7 +862,7 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -756,6 +871,7 @@
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const gmap = new Map();
+    const shmap = new Map(), dzmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
     const rec = recoverMobLines(String(text).split(/\r?\n/));
@@ -787,6 +903,8 @@
       else if (/^kbm\d*$/.test(k)) kmmap.set(k === 'kbm' ? 1 : +k.slice(3), parseMecha(v));
       else if (/^kbf\d*$/.test(k)) kfmap.set(k === 'kbf' ? 1 : +k.slice(3), parseFamiliar(v));
       else if (/^dmg\d*$/.test(k)) gmap.set(k === 'dmg' ? 1 : +k.slice(3), parseDmg(v));
+      else if (/^sh\d*$/.test(k)) shmap.set(k === 'sh' ? 1 : +k.slice(2), parseShelter(v));
+      else if (/^dz\d*$/.test(k)) dzmap.set(k === 'dz' ? 1 : +k.slice(2), parseDisaster(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -822,6 +940,8 @@
     st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; return m; });
     st.familiars = [...kfmap.keys()].sort((a, b) => a - b).map(i => { const f = kfmap.get(i); f.idx = i; return f; });
     st.dmgs = [...gmap.keys()].sort((a, b) => a - b).map(k => gmap.get(k));
+    st.shelters = [...shmap.keys()].sort((a, b) => a - b).map(i => { const s = shmap.get(i); s.idx = i; return s; });
+    st.disasters = [...dzmap.keys()].sort((a, b) => a - b).map(i => { const d = dzmap.get(i); d.idx = i; return d; });
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -959,6 +1079,82 @@
           ${f.pactRaw ? `<em class="tc-fam-pact p-${f.pact}">${esc(f.pactRaw)}</em>` : ''}
         </div>
         ${bars}${loyal}${attrs}${skills}${cus}${tags}
+      </div>`;
+  }
+
+
+  /* 避难所卡：海上载体的「船壳」——圆角浮筒 + 锈斑 + 水位线，和机甲的直角切角不是一套骨架。
+     五项资源全走 gaugeHtml（与机甲/使魔同一只读数组件）：同一件事不写第二遍，
+     差异靠配色与外壳，不靠另造一根条。
+     缺项一律画 —（与 kbm 同规矩）：五格里少一格而不留痕，会把「没写」读成「这条不存在」。 */
+  function renderShelter(s) {
+    const wrecked = !!(s.hull && s.hull.max > 0 && s.hull.cur <= 0);
+    const cls = ['tc-shelter'];
+    if (s.type) cls.push('t-' + s.type);
+    if (wrecked) cls.push('wrecked');
+
+    const dryOf = (v) => !!(v && v.max > 0 && v.cur <= 0);
+    const gauges = SHELTER_RES.map(([key, lab]) => {
+      const v = s[key];
+      return v ? gaugeHtml(lab, v.cur, v.max, 'sh-' + key, dryOf(v))
+        : gaugeHtml(lab, null, null, 'sh-' + key, false, ' miss');
+    }).join('');
+
+    /* 防 是单值、不给条：它回答「多难打穿」，不是「还剩多少」。给条就会被读成消耗量。 */
+    const def = s.def != null
+      ? `<span class="tc-sh-def"><em>防</em><b>${s.def}</b></span>`
+      : `<span class="tc-sh-def miss"><em>防</em><b>—</b></span>`;
+
+    /* 模 是徽章行：段数不定（0 段就不出这一行），等级画成 ×N 的角标 */
+    const mods = s.mods.length ? `
+      <div class="tc-sh-mods"><em class="tc-sh-mods-l">模</em>${
+        s.mods.map(m => `<span class="tc-sh-mod">${esc(m.name)}${m.lv == null ? '' : `<i>×${m.lv}</i>`}</span>`).join('')
+      }</div>` : '';
+
+    /* 解析报错照原文片段显示：这是「少一块」的可见化，不是给玩家的说明文字 */
+    const errs = s.errs.length ? `
+      <div class="tc-sh-err">${s.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+
+    return `
+      <div class="${cls.join(' ')}">
+        <div class="tc-sh-in">
+          <div class="tc-sh-hd">
+            <b class="tc-sh-name">${esc(s.name || '避难所')}</b>
+            ${s.typeRaw ? `<span class="tc-sh-type ty-${s.type || 'x'}">${esc(s.typeRaw)}</span>` : ''}
+            ${def}
+          </div>
+          <div class="tc-sh-gauges">${gauges}</div>
+          ${mods}${errs}
+          <div class="tc-sh-water"></div>
+          ${wrecked ? '<em class="tc-sh-stamp">舱体破裂</em>' : ''}
+        </div>
+      </div>`;
+  }
+
+  /* 灾变横幅：它是横条不是卡片 —— 描述的是「这场正在发生什么」，不是某个单位。
+     左边等级色块 + 五格严重度点阵（1..5 是**档位**不是进度，全亮=满级），
+     所以用点阵不用条：画成条会被读成「快结束了」。 */
+  function renderDisaster(d) {
+    const lv = d.level == null ? 0 : Math.max(1, Math.min(5, d.level));
+    const cls = ['tc-dz'];
+    if (lv) cls.push('lv-' + lv);
+    const over = d.left != null && d.left <= 0;
+    if (over) cls.push('over');
+    const pips = [1, 2, 3, 4, 5].map(i => `<i class="${lv >= i ? 'on' : ''}"></i>`).join('');
+    const left = d.left != null
+      ? `<b class="tc-dz-left">余 ${d.left} 回合</b>`
+      : '<b class="tc-dz-left miss">余 —</b>';
+    const errs = d.errs.length ? `
+      <div class="tc-dz-err">${d.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+    return `
+      <div class="${cls.join(' ')}">
+        <span class="tc-dz-sev"><u></u><em class="tc-dz-lv">${pips}</em></span>
+        <b class="tc-dz-name">${esc(d.name || '灾变')}</b>
+        ${d.level != null ? `<span class="tc-dz-grd">级 ${d.level}</span>` : ''}
+        ${over ? '<span class="tc-dz-over">已平息</span>' : ''}
+        ${left}
+        ${d.effect ? `<div class="tc-dz-fx">${esc(d.effect)}</div>` : ''}
+        ${errs}
       </div>`;
   }
 
@@ -1413,6 +1609,11 @@
       out.push(`<div class="tc-dmgs">${sect('交火 · 伤害结算', 'IMPACT LOG')}${st.dmgs.map((d, i) => renderDmg(d, i, st.dmgs.length)).join('')}</div>`);
     }
 
+    /* ── 灾变横幅：全宽横条，压在双栏之前 —— 它描述的是整场的处境，不属于任何一栏 ── */
+    if (st.disasters.length) {
+      out.push(`<div class="tc-dzs">${st.disasters.map(renderDisaster).join('')}</div>`);
+    }
+
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
     if (st.players.length || st.mechas.length || st.familiars.length) {
@@ -1433,6 +1634,10 @@
       st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m, false)); });
       st.familiars.forEach(f => { if (!fUsed.has(f.idx)) cards.push(renderFamiliar(f)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
+    }
+    if (st.shelters.length) {
+      colL.push(sect('避难所', 'SHELTER'));
+      colL.push(`<div class="tc-shelters">${st.shelters.map(renderShelter).join('')}</div>`);
     }
     if (st.bonds.length) {
       colL.push(sect('羁绊', 'BONDS'));
@@ -2407,6 +2612,108 @@
   .tc-swipe-hint{display:none}                      /* 单列不需要横滑提示 */
 }
 
+/* ══════════ sh 避难所卡（海上载体） ══════════
+   判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、
+   kb 是紫金，shelter 必须是「圆角浮筒 + 锈斑 + 一条水位线」。四张并排时先被认出来的是那条水线。 */
+.tc-shelters{display:flex;flex-direction:column;gap:6px}
+.tc-shelter{position:relative;margin-top:6px;padding:1px;border-radius:11px;
+  background:linear-gradient(135deg,rgba(45,212,191,.30),rgba(180,83,9,.26) 52%,rgba(13,148,136,.20))}
+.tc-sh-in{position:relative;border-radius:10px;padding:9px 12px 11px;overflow:hidden;
+  background:radial-gradient(130% 90% at 100% 0%,rgba(45,212,191,.12),transparent 58%),
+             linear-gradient(180deg,#07181b,#061014 58%,#0b1210);
+  border:1px solid #235053}
+/* 锈斑：两向细纹，远看只是一层脏，近看才认得出锈迹 —— 不加噪点，噪点会跟 dmg 的斜纹撞形 */
+.tc-sh-in::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:repeating-linear-gradient(115deg,rgba(180,83,9,.10) 0 2px,rgba(0,0,0,0) 2px 7px),
+                   repeating-linear-gradient(28deg,rgba(120,53,15,.10) 0 3px,rgba(0,0,0,0) 3px 11px)}
+.tc-sh-hd{position:relative;display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.tc-sh-name{font-size:13.5px;color:#99f6e4;letter-spacing:.05em}
+.tc-sh-type{font-size:10px;font-weight:700;letter-spacing:.12em;padding:2px 8px;color:#5eead4;
+  background:rgba(13,148,136,.18)}
+/* 三型用三种**边界画法**区分，不靠填色（填色在缩略图里全糊成一块青） */
+.tc-sh-type.ty-isle{border:1px solid #2dd4bf;border-radius:999px;color:#99f6e4}
+.tc-sh-type.ty-dock{border:1px solid #14b8a6;border-left:3px solid #b45309;border-radius:2px}
+.tc-sh-type.ty-sub{border:0;border-top:2px dashed #22d3ee;border-radius:0;color:#a5f3fc;background:transparent}
+.tc-sh-type.ty-x{border:1px dashed #7c2d12;color:#fdba74}
+.tc-sh-def{margin-left:auto;display:flex;align-items:baseline;gap:4px;
+  padding:1px 9px 1px 7px;border:1px solid rgba(180,83,9,.55);border-radius:3px;
+  background:linear-gradient(90deg,rgba(120,53,15,.28),rgba(0,0,0,0))}
+.tc-sh-def em{font-style:normal;font-size:9.5px;letter-spacing:.16em;color:#a16207}
+.tc-sh-def b{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;
+  font-size:15px;line-height:1;color:#fcd34d}
+.tc-sh-def.miss em,.tc-sh-def.miss b{color:#5b4a35}
+.tc-sh-gauges{position:relative;display:flex;flex-direction:column;gap:4px}
+/* 读数复用 .tc-kbm-g 的列宽与等宽数字（同一只组件，列宽继承，不在此处另调），只改配色与条高：
+   五条比三条更需要读得清，所以条从 5px 抬到 6px、行距加 1px。 */
+.tc-shelter .tc-kbm-gl{color:#5f8c86;font-size:10px}
+.tc-shelter .tc-kbm-gv{color:#ccfbf1}
+.tc-shelter .tc-kbm-gm{color:#3f6360}
+.tc-shelter .tc-kbm-g .tc-bar{height:6px;background:#0a1c1e}
+.tc-shelter .tc-kbm-g.miss .tc-kbm-gv,.tc-shelter .tc-kbm-g.miss .tc-kbm-gm{color:#41504f}
+.tc-shelter .tc-kbm-g.dry .tc-kbm-gv,.tc-shelter .tc-kbm-g.dry .tc-kbm-gm{color:#7c6a5a}
+.tc-bar i.sh-hull{background:linear-gradient(90deg,#115e59,#2dd4bf)}
+.tc-bar i.sh-hold{background:linear-gradient(90deg,#0f766e,#5eead4)}
+.tc-bar i.sh-power{background:linear-gradient(90deg,#92400e,#fbbf24)}
+.tc-bar i.sh-food{background:linear-gradient(90deg,#7c2d12,#f97316)}
+.tc-bar i.sh-temp{background:linear-gradient(90deg,#164e63,#67e8f9)}
+.tc-bar i.sh-hull-dry,.tc-bar i.sh-hold-dry,.tc-bar i.sh-power-dry,
+.tc-bar i.sh-food-dry,.tc-bar i.sh-temp-dry{background:linear-gradient(90deg,#3f3f46,#71717a)}
+.tc-sh-mods{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px;
+  padding-top:7px;border-top:1px dashed rgba(45,212,191,.18)}
+.tc-sh-mods-l{font-style:normal;font-size:9.5px;letter-spacing:.16em;color:#3f7d74;margin-right:1px}
+.tc-sh-mod{font-size:10.5px;color:#a7f3d0;padding:1px 7px;border-radius:3px;
+  border:1px solid rgba(45,212,191,.42);background:rgba(13,148,136,.15)}
+.tc-sh-mod i{font-style:normal;margin-left:3px;font-size:10px;font-weight:800;color:#fbbf24}
+/* 解析报错：左竖条 + 原文片段。它不是给玩家的说明，是「这里少了一块 / 这个格没读懂」的凭证 */
+.tc-sh-err,.tc-dz-err{margin-top:7px;display:flex;flex-direction:column;gap:2px}
+.tc-sh-err em,.tc-dz-err em{font-style:normal;font-size:9.5px;color:#fdba74;letter-spacing:.02em;
+  border-left:2px solid #b45309;padding-left:6px;line-height:1.4}
+/* 水位线：等宽虚格的水面 —— shelter 的识别符，缩略图里第一眼看到的是它 */
+.tc-sh-water{position:relative;height:5px;margin-top:9px;border-radius:1px;opacity:.55;
+  background:repeating-linear-gradient(90deg,#0e7490 0 5px,#134e4a 5px 10px)}
+.tc-shelter.wrecked{filter:saturate(.4)}
+.tc-shelter.wrecked .tc-sh-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.22) 0 6px,rgba(6,16,20,0) 6px 12px)}
+.tc-shelter.wrecked .tc-sh-water{opacity:.8;background:repeating-linear-gradient(90deg,#7f1d1d 0 5px,#450a0a 5px 10px)}
+/* 盖章要反向补饱和：整卡 filter 会把它一起削灰，而失效是重点 */
+.tc-sh-stamp{position:absolute;right:10px;bottom:18px;transform:rotate(-7deg);
+  filter:saturate(2.4) brightness(1.2);
+  font-size:10.5px;font-weight:800;letter-spacing:.16em;color:#fecdd3;
+  border:2px solid #e11d48;border-radius:2px;padding:1px 7px;background:rgba(76,5,25,.5)}
+
+/* ══════════ dz 灾变横幅 ══════════
+   它是横条，不是卡片：整宽的血色斜纹带 + 左侧 9px 等级色块 + 五格严重度点阵。
+   点阵而不是条 —— 1..5 是**档位**，画成条会被读成「快结束了」（而且条已经有三处在用）。 */
+.tc-dzs{position:relative;display:flex;flex-direction:column;gap:5px;margin:0 0 10px}
+.tc-dz{--dl:#f59e0b;position:relative;display:grid;grid-template-columns:auto 1fr auto auto;
+  align-items:center;gap:3px 10px;padding:7px 12px;border-left:9px solid var(--dl);
+  background:repeating-linear-gradient(135deg,rgba(120,20,20,.20) 0 7px,rgba(9,11,14,.94) 7px 14px);
+  border-top:1px solid #3a1c1c;border-bottom:1px solid #3a1c1c}
+.tc-dz.lv-1{--dl:#fbbf24}.tc-dz.lv-2{--dl:#fb923c}.tc-dz.lv-3{--dl:#f97316}
+.tc-dz.lv-4{--dl:#ef4444}.tc-dz.lv-5{--dl:#e11d48}
+.tc-dz-sev{display:flex;align-items:center;gap:6px}
+.tc-dz-sev>u{width:0;height:0;display:block;border:5px solid transparent;
+  border-bottom-color:var(--dl);border-top-width:0}
+.tc-dz-lv{display:flex;gap:2px}
+.tc-dz-lv i{display:block;width:5px;height:11px;background:#2a1a1a;border:1px solid #402424}
+.tc-dz-lv i.on{background:var(--dl);border-color:var(--dl)}
+.tc-dz-name{font-size:13px;font-weight:700;color:#fecaca;letter-spacing:.04em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-dz-grd{font-size:9.5px;letter-spacing:.14em;color:#fca5a5;
+  border:1px solid rgba(248,113,113,.4);border-radius:2px;padding:1px 6px;justify-self:start;white-space:nowrap}
+.tc-dz-over{font-size:9.5px;font-weight:800;letter-spacing:.16em;color:#a8a29e;
+  border:1px solid #57534e;border-radius:2px;padding:1px 6px;white-space:nowrap}
+.tc-dz-left{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;
+  font-size:11px;color:#fcd34d;white-space:nowrap;justify-self:end}
+.tc-dz-left.miss{color:#5b4a35}
+.tc-dz-fx{grid-column:1 / -1;margin-top:3px;padding-top:3px;font-size:11px;line-height:1.5;
+  color:#c9a9a9;border-top:1px dotted rgba(248,113,113,.16)}
+.tc-dz.over{filter:saturate(.45)}
+.tc-dz.over .tc-dz-name{color:#a8a29e}
+.tc-dz.over .tc-dz-lv i.on{background:#57534e;border-color:#57534e}
+.tc-mini .tc-sh-mods{margin-top:5px;padding-top:5px}
+.tc-mini .tc-dz{padding:5px 9px;gap:2px 8px}
+.tc-mini .tc-dz-fx{font-size:10px}
+
 /* ── 尺寸切换（全局持久偏好，点击 .tc-size 在 紧凑/完整 间切换）──
    .tc-mini 置于所有基础规则与手机媒体查询之后，同级选择器下后写胜出 */
 .tc-size{position:absolute;top:7px;right:9px;z-index:5;width:20px;height:20px;
@@ -2456,6 +2763,6 @@
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();
