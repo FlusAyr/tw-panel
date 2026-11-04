@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.28.0';
+  const VERSION = '3.28.1';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -2671,8 +2671,11 @@
 /* 水位线：等宽虚格的水面 —— shelter 的识别符，缩略图里第一眼看到的是它 */
 .tc-sh-water{position:relative;height:5px;margin-top:9px;border-radius:1px;opacity:.55;
   background:repeating-linear-gradient(90deg,#0e7490 0 5px,#134e4a 5px 10px)}
-.tc-shelter.wrecked{filter:saturate(.4)}
-.tc-shelter.wrecked .tc-sh-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.22) 0 6px,rgba(6,16,20,0) 6px 12px)}
+.tc-shelter.wrecked{filter:saturate(.55)}
+.tc-shelter.wrecked .tc-sh-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.11) 0 6px,rgba(6,16,20,0) 6px 14px)}
+/* 终局态最需要读清的是那五个数字，不是纹路：给读数垫一块暗板，斜纹只留在四周 */
+.tc-shelter.wrecked .tc-sh-gauges{padding:5px 7px;border-radius:6px;background:rgba(4,10,12,.62);
+  box-shadow:inset 0 0 0 1px rgba(127,29,29,.38)}
 .tc-shelter.wrecked .tc-sh-water{opacity:.8;background:repeating-linear-gradient(90deg,#7f1d1d 0 5px,#450a0a 5px 10px)}
 /* 盖章要反向补饱和：整卡 filter 会把它一起削灰，而失效是重点 */
 .tc-sh-stamp{position:absolute;right:10px;bottom:18px;transform:rotate(-7deg);
@@ -2684,7 +2687,8 @@
    它是横条，不是卡片：整宽的血色斜纹带 + 左侧 9px 等级色块 + 五格严重度点阵。
    点阵而不是条 —— 1..5 是**档位**，画成条会被读成「快结束了」（而且条已经有三处在用）。 */
 .tc-dzs{position:relative;display:flex;flex-direction:column;gap:5px;margin:0 0 10px}
-.tc-dz{--dl:#f59e0b;position:relative;display:grid;grid-template-columns:auto 1fr auto auto;
+/* 五列不是四列：终局时多出「已平息」一枚徽章，四列会把它挤到第二行、把「余 0 回合」拆成两行 */
+.tc-dz{--dl:#f59e0b;position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;
   align-items:center;gap:3px 10px;padding:7px 12px;border-left:9px solid var(--dl);
   background:repeating-linear-gradient(135deg,rgba(120,20,20,.20) 0 7px,rgba(9,11,14,.94) 7px 14px);
   border-top:1px solid #3a1c1c;border-bottom:1px solid #3a1c1c}
