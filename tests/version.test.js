@@ -23,6 +23,10 @@
  *   正确做法：**只查落点行**，落点用锚点 pattern 定位（不写死行号，文档改了行号测试不该红）。
  *
  * 失败时必须打印**行号 + 该行原文**：只报"命中 1 处"时，两个数都在、都错，看不出真假。
+ *
+ * 造红纪律（给下一个人）：要造红就 `copy` 一份 `.bak` 到临时目录，改、跑、`copy` 回来，
+ * **比 sha256 全等**才算还原。禁止用 `git checkout --` / `git restore` 还原任何文件——
+ * 它们的语义是「回到 HEAD」，会把别人**未提交**的改动一起退回旧版（真踩过：世界书四条被退）。
  */
 'use strict';
 const fs = require('fs');
@@ -320,6 +324,121 @@ if (mt) {
       + '期望 ' + order.map((k) => TRUTH[k]).join('/') + '　实际 ' + order.map((k, i) => h.m[i + 1]).join('/')
       + '　原文=' + JSON.stringify(clip(src)));
   });
+}
+
+/* ─────────── I 跨条目同文：同一段文字被放进两个 constant:false 条目 ───────────
+ * 现场：世界书堵机甲/使魔刷数值的洞时，判据段同时写进 uid 25（机甲）与 uid 27（使魔）——
+ * 两条都是 constant:false，只在各自场景触发，合并成一条就会在最需要它的场景里缺席，
+ * 所以只能各存一份。而「各存一份」的意思就是**两份必须逐字相同**。
+ *
+ * 这正是我们咬过三次的病（HP 两种写法 / 20%·10% 两份 / 成果层级三份定义）：
+ * 复制粘贴后改一边、忘了另一边，读起来两个条目都对，跑起来两套规则。
+ *
+ * 三条纪律：
+ * 1. 锚点失效也红：找不到起始或结尾锚点 = 这段文字被改写/搬走，报「锚点失效」，不许静默跳过。
+ * 2. 报元素不报数量：只说「278 vs 271」没用，要报第一个不一致的下标与两侧原文。
+ * 3. 不写死字符数：只比两边。
+ */
+console.log('\n── 组 I · 世界书跨条目同文 ──');
+{
+  const WBK = 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-06.json';
+  const A0 = '【搜寻收益递减】';
+  const A1 = '下场清空。';
+  const IDS = ['25', '27'];
+
+  const cut = (c) => {
+    if (typeof c !== 'string') return null;
+    const i = c.indexOf(A0);
+    const j = c.indexOf(A1);
+    if (i < 0 || j < 0 || j < i) return null;
+    return c.slice(i, j + A1.length);
+  };
+
+  let ents = null, jerr = '';
+  try {
+    const j = JSON.parse(fs.readFileSync(abs(WBK), 'utf8'));
+    if (j && typeof j.entries === 'object' && j.entries !== null) ents = j.entries;
+    else jerr = 'json 里没有 entries 对象';
+  } catch (e) { jerr = e.message; }
+
+  const piece = {};
+  IDS.forEach((k) => { piece[k] = ents && ents[k] ? cut(ents[k].content) : null; });
+  const missing = IDS.filter((k) => piece[k] === null);
+  T('两处锚点都能切出「' + A0 + '…' + A1 + '」（uid ' + IDS.join(' / ') + '）',
+    missing.length === 0,
+    (jerr ? jerr + '　' : '') + (missing.length
+      ? '锚点失效：uid ' + missing.join('、') + ' 里找不到「' + A0 + '」或「' + A1 + '」'
+        + '　← 这段文字被改写了，先确认两处锚点，别把这条改成跳过'
+      : '两处长度 ' + IDS.map((k) => piece[k].length).join(' / ')));
+
+  if (missing.length === 0) {
+    const a = piece[IDS[0]];
+    const b = piece[IDS[1]];
+    let pos = -1;
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] !== b[i]) { pos = i; break; }
+    }
+    if (pos < 0 && a.length !== b.length) pos = Math.min(a.length, b.length);
+    const head = (t, at) => JSON.stringify(t.slice(Math.max(0, at - 8), at + 40));
+    T('uid ' + IDS.join(' 与 ') + ' 的「' + A0 + '」段逐字相同',
+      pos < 0,
+      pos < 0 ? '长度 ' + a.length + ' / ' + b.length
+        : '长度 ' + a.length + ' / ' + b.length + '，第一个不一致在下标 ' + pos
+          + '　uid' + IDS[0] + '=' + head(a, pos) + '　uid' + IDS[1] + '=' + head(b, pos));
+  }
+}
+
+/* ─────────── J 仓库 ↔ 工作目录：01_世界书 与 content/worldbook 必须逐字节一致 ───────────
+ * 为什么需要这一组：H 组锁「文档 ↔ 仓库 json」、I 组锁「同一文件里两段相同」，
+ * 两者都看不见「仓库 ↔ 本地工作目录」这一跳。交付位置是仓库、干活位置是 01_世界书；
+ * 只在本地改、没回灌 = 玩家从 jsDelivr 拿到旧版，而两边条目数还一样多（改的是内容不是增删），
+ * 于是 H 组、I 组全绿，**没有任何门禁会红**。真实标本：机甲/使魔刷数值洞那批，
+ * uid 24/25/26/27 四条在本地、仓库还是旧版，计数都是 30。
+ *
+ * 判据只有一条：归一 `\r\n`→`\n` 后 sha256 相等。
+ *   - 为什么归一：仓库是 CRLF、本地可能被编辑器写成 LF，行尾不是内容。
+ *   - 为什么不止比 sha：不等时要报「第一处不一致的行号」，否则人只知道不同、不知道从哪看。
+ *   - 为什么允许 SKIP：01_世界书 不是每个环境都有（CI / 别人 clone 就没有），
+ *     缺文件打印 SKIP 而不是判红——这是本文件唯一允许的 SKIP，理由写在这里。
+ *   - 枚举不写死：读 content/worldbook 目录现取（写死清单会漏掉新加的那本，见 AGENTS §7 第 18 条）。
+ */
+console.log('\n── 组 J · 仓库 ↔ 工作目录 ──');
+{
+  const LOCAL_DIR = path.join(ROOT, '..', '..', '01_世界书');
+  const REL_DIR = 'content/worldbook';
+  const normBuf = (b) => Buffer.from(b.toString('binary').replace(/\r\n/g, '\n'), 'binary');
+  const nsha = (b) => require('crypto').createHash('sha256').update(normBuf(b)).digest('hex');
+
+  let files = [];
+  try { files = fs.readdirSync(abs(REL_DIR)).filter((f) => /\.json$/i.test(f)).sort(); } catch (e) {}
+  T('仓库 worldbook 目录可枚举（' + REL_DIR + '）', files.length > 0, '枚举到 ' + files.length + ' 个 json');
+
+  let skipped = 0;
+  files.forEach((f) => {
+    const local = path.join(LOCAL_DIR, f);
+    if (!fs.existsSync(local)) {
+      skipped++;
+      T('SKIP 本地无此文件：' + f, true, '本地路径不存在（不算失败，但要让人看见少核了一本）');
+      return;
+    }
+    const rb = fs.readFileSync(abs(REL_DIR + '/' + f));
+    const lb = fs.readFileSync(local);
+    const rs = nsha(rb), ls = nsha(lb);
+    let detail = '两侧 ' + rb.length + ' / ' + lb.length + ' 字节，归一 sha16 ' + rs.slice(0, 16) + ' / ' + ls.slice(0, 16);
+    if (rs !== ls) {
+      const rl = normBuf(rb).toString('utf8').split('\n');
+      const ll = normBuf(lb).toString('utf8').split('\n');
+      let ln = -1;
+      for (let i = 0; i < Math.max(rl.length, ll.length); i++) {
+        if (rl[i] !== ll[i]) { ln = i + 1; break; }
+      }
+      const cut = (t) => (t === undefined ? '（无此行）' : JSON.stringify(clip(t)));
+      detail = '第一处不一致在第 ' + ln + ' 行　仓库=' + cut(rl[ln - 1]) + '　本地=' + cut(ll[ln - 1])
+        + '　（' + rb.length + ' / ' + lb.length + ' 字节，归一 sha16 ' + rs.slice(0, 16) + ' / ' + ls.slice(0, 16) + '）';
+    }
+    T('仓库与工作目录逐字节一致：' + f, rs === ls, detail);
+  });
+  console.log('（本组 SKIP ' + skipped + ' 个：本地没有同名文件）');
 }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
