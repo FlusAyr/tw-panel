@@ -15,6 +15,7 @@
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
@@ -33,13 +34,40 @@ ST_REPO = "https://github.com/SillyTavern/SillyTavern"
 TH_REPO = "https://github.com/N0VI028/JS-Slash-Runner"          # 酒馆助手（TavernHelper）
 DB_REPO = "https://github.com/AlbusKen/shujuku"                  # 第三方数据库插件（仅指路，不下载分发）
 
-WORLDBOOKS = [
-    ("content/worldbook/无限恐怖_v2_联机版_AI精简.json", "无限恐怖_v2_联机版_AI精简.json"),
-    ("content/worldbook/跑团用世界书_v4_联机版_AI精简.json", "跑团用世界书_v4_联机版_AI精简.json"),
+# 世界书清单**按前缀现取**，不写死文件名。
+# 理由：世界书带日期后缀、改过一次名（2026-11-06），写死清单等于"过去某一版的镜子"，
+# 改名的当天部署脚本就开始静默失败——路径不存在时 download() 只打一行 ✗，没人会红。
+WORLDBOOK_PATTERNS = [
+    ("无限恐怖", "content/worldbook/无限恐怖_v2_联机版_AI精简*.json"),
+    ("跑团用世界书", "content/worldbook/跑团用世界书_v4_联机版_AI精简*.json"),
 ]
+
+
+def resolve_worldbooks():
+    """每个前缀取文件名排序最后的那份（= 最新日期）。命中 0 份直接退出，不许静默继续。"""
+    out = []
+    for label, pat in WORLDBOOK_PATTERNS:
+        hits = sorted(glob.glob(pat))
+        if not hits:
+            log("  ✗ 找不到世界书（前缀匹配 0 份）：%s" % pat)
+            log("    → 检查 content/worldbook/ 下的实际文件名，或改 WORLDBOOK_PATTERNS 前缀")
+            raise SystemExit(2)
+        pick = hits[-1]
+        if len(hits) > 1:
+            log("  ⚠ %s 前缀命中 %d 份，取最新：%s" % (label, len(hits), os.path.basename(pick)))
+            for other in hits[:-1]:
+                log("      忽略：%s" % os.path.basename(other))
+        else:
+            log("  · %s → %s" % (label, os.path.basename(pick)))
+        # glob 在 Windows 返回反斜杠；拼 URL 必须正斜杠，否则 quote() 编成 %5C 直接 404
+        out.append((pick.replace(os.sep, "/").replace("\\", "/"), os.path.basename(pick)))
+    return out
 IMPORT_PACK = [
     ("dist/loader-script.json", "loader-script.json"),
     ("content/database/无限恐怖数据库模板_主神空间深度版.json", "无限恐怖数据库模板_主神空间深度版.json"),
+    # 正则也进导入包：玩家不用手敲中文 URL（百分号编码错了会存成 0 字节文件）
+    ("content/regex/13_去楼层数_仅显示.json", "13_去楼层数_仅显示.json"),
+    ("content/regex/隐藏远楼层消息_超10楼不发送.json", "隐藏远楼层消息_超10楼不发送.json"),
 ]
 
 DRY = False
@@ -133,7 +161,8 @@ def clone_helper(st_dir, tools):
     if os.path.isfile(os.path.join(dest, "manifest.json")):
         log("  已存在，跳过 clone：%s" % dest)
     else:
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if not DRY:                                  # dry-run 不落地：建目录树会让玩家以为「装了一半」
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
         run([tools["git"], "clone", TH_REPO, "--depth", "1", dest])
     man = os.path.join(dest, "manifest.json")
     if os.path.isfile(man):
@@ -166,17 +195,17 @@ def download(url, dest, min_bytes=1000):
         return False
 
 
-def put_worldbooks(st_dir):
+def put_worldbooks(st_dir, books):
     step("阶段 C1 · 放世界书到 data/default-user/worlds/")
     wdir = os.path.join(st_dir, "data", "default-user", "worlds")
     if not DRY:
         os.makedirs(wdir, exist_ok=True)
     ok = 0
-    for rel, name in WORLDBOOKS:
+    for rel, name in books:
         url = REPO_RAW + "/" + urllib.parse.quote(rel)
         if download(url, os.path.join(wdir, name)):
             ok += 1
-    log("  %s" % ("[dry-run] 未实际下载" if DRY else "成功 %d / %d" % (ok, len(WORLDBOOKS))))
+    log("  %s" % ("[dry-run] 未实际下载" if DRY else "成功 %d / %d" % (ok, len(books))))
     return wdir
 
 
@@ -257,7 +286,7 @@ def main():
         npm_install(st_dir, tools)
 
     clone_helper(st_dir, tools)
-    put_worldbooks(st_dir)
+    put_worldbooks(st_dir, resolve_worldbooks())
     pack = make_import_pack(base)
 
     print_next_steps(st_dir, pack)

@@ -1,0 +1,17 @@
+{
+    "id": "92c2dc7d-dceb-44c8-81e0-b50717cd66e8",
+    "scriptName": "13去楼层数",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/（第.*?楼）/gs",
+    "trimStrings": [],
+    "replaceString": "",
+    "placement": [
+        2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": null,
+    "markdownOnly": true,
+    "promptOnly": false
+}

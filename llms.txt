@@ -33,6 +33,7 @@
 - [content/entries/](https://github.com/FlusAyr/tw-panel/tree/main/content/entries)：自定义条目（超高校级幸运、魔药体系 v1.0）。
 - [content/docs/提示词_自定义血统内功创作系统.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/提示词_自定义血统内功创作系统.md)：交给创作 AI 的规范（三准则、八项功能契约、代价五不变量、七步指引、自检清单）。
 - [content/docs/酒馆状态面板系统_维护手册.md](https://github.com/FlusAyr/tw-panel/blob/main/content/docs/酒馆状态面板系统_维护手册.md)：面板系统维护手册。
+- [content/regex/](https://github.com/FlusAyr/tw-panel/tree/main/content/regex)：两个 SillyTavern 原生正则（`13_去楼层数_仅显示.json` 只改显示去掉 `（第N楼）`；`隐藏远楼层消息_超10楼不发送.json` 楼龄 ≥10 整条不显示也不发送）。装法、验收与三条坑见该目录 `README.md`；不需要酒馆助手。
 
 ## 硬约束（任何改动都不得违反）
 
