@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.32.0';
+  const VERSION = '3.33.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -71,20 +71,22 @@
      而**误报一次，玩家就学会无视黄字**（与 §7 第 27 条同一个坑）。 */
   const KILL_WORDS = ['自爆', '崩解', '瓦解', '消散', '溃散', '除名', '处决', '秒杀', '击杀', '消灭'];
 
-  /* 技能上限：三侧（玩家 / 机甲 / 使魔）同一个数。
+  /* 技能上限：玩家与「机甲 / 使魔」**不是同一个数**，别顺手改成一个。
+     玩家卡初始就有技能，9 个槽；机甲与使魔是装备 / 召唤物，5 个是它们的设计口径。
      面板只报「几个 / 上限」，**不猜哪个该删**——它不知道这个技能在玩家手里干什么用。 */
-  const SKILL_CAP = 5;
+  const SKILL_CAP_PLAYER = 9;   // 玩家 p 行 / sk 行
+  const SKILL_CAP_SUB = 5;      // 机甲 kbm / 使魔 kbf
 
-  function skillOver(n, label) {
-    if (!(n > SKILL_CAP)) return '';
-    return `<em class="tc-killwarn tc-skcap">⚠ ${label} ${n} 个，上限 ${SKILL_CAP} —— 必须删除或融合一个</em>`;
+  function skillOver(n, label, cap) {
+    if (!(n > cap)) return '';
+    return `<em class="tc-killwarn tc-skcap">⚠ ${label} ${n} 个，上限 ${cap} —— 必须删除或融合一个</em>`;
   }
 
-  /* 五个小方点：上限是「看得见的槽位」。
-     只写 `3/5` 要读数字，方点一眼就数得出还剩几个——这就是它存在的理由。 */
-  function skillPips(n) {
+  /* 小方点：上限是「看得见的槽位」，点数是 cap（玩家 9 个、机甲/使魔 5 个）。
+     只写 `3/9` 要读数字，方点一眼就数得出还剩几个——这就是它存在的理由。 */
+  function skillPips(n, cap) {
     let out = '';
-    for (let i = 0; i < SKILL_CAP; i++) out += `<s${i < n ? ' class="on"' : ''}></s>`;
+    for (let i = 0; i < cap; i++) out += `<s${i < n ? ' class="on"' : ''}></s>`;
     return out;
   }
 
@@ -106,14 +108,16 @@
     return { items: items, count: items.length };
   }
 
-  /* 三张卡（玩家 / 机甲 / 使魔）共用这一套折叠结构，只有主题 class 不同。
-     展开前一行看完：技能 · N/5 + 五个方点 + 箭头；点开才是逐条明细。 */
-  function skillFold(items, count, theme) {
+  /* 三张卡（玩家 / 机甲 / 使魔）共用这一套折叠结构，只有主题 class 与 cap 不同。
+     展开前一行看完：技能 · N/cap + cap 个方点 + 箭头；点开才是逐条明细。
+     cap 由调用方显式传入（玩家 9 / 机甲 5 / 使魔 5）——**不要给默认值**：
+     默认值会让将来新增的第四种卡悄悄套用玩家的 9。 */
+  function skillFold(items, count, theme, cap) {
     if (!count) return '';
-    const over = count > SKILL_CAP;
+    const over = count > cap;
     return `<details class="tc-fold tc-skfold ${theme}${over ? ' over' : ''}">
-        <summary><em class="tc-skfl-t">技能</em><b class="tc-skfl-n">${count}/${SKILL_CAP}${over ? ' ⚠' : ''}</b><i class="tc-skfl-pips">${skillPips(count)}</i><span class="tc-skfl-ar"></span></summary>
-        ${over ? skillOver(count, '技能') : ''}
+        <summary><em class="tc-skfl-t">技能</em><b class="tc-skfl-n">${count}/${cap}${over ? ' ⚠' : ''}</b><i class="tc-skfl-pips">${skillPips(count, cap)}</i><span class="tc-skfl-ar"></span></summary>
+        ${over ? skillOver(count, '技能', cap) : ''}
         <div class="tc-skills">${items.map(sk => `
           <div class="tc-skill">
             <b>${esc(sk.name)}</b>
@@ -202,7 +206,7 @@
       if ((m = x.match(/^能(?:\s*[:：]\s*|\s+|$)(.+)$/))) { inTag = false; o.en = mechaPair('能', m[1]); inEquip = false; continue; }
       if ((m = x.match(/^SP\s*(.+)$/i))) { inTag = false; o.sp = mechaPair('SP', m[1]); inEquip = false; continue; }
       if ((m = x.match(/^装(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inEquip = true; inTag = false; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
-      /* `技` 段：机甲 / 使魔同名的技能位（上限 SKILL_CAP）。
+      /* `技` 段：机甲 / 使魔同名的技能位（上限 SKILL_CAP_SUB）。
          `技 无` 是「确实没有」，不是名字叫「无」的技能。 */
       if ((m = x.match(/^技\s*[:：]?\s*(.*)$/)) && !/^技能?$/.test(x)) {
         inEquip = false; inTag = false;
@@ -1378,7 +1382,7 @@
       <div class="tc-kbm-attrs">${attrsHtml(m.attrs)}</div>` : '';
 
     const skU = skillUnion(m.skills, m.skillsNew);
-    const skills = skillFold(skU.items, skU.count, 'tc-skfold-kbm');
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-kbm', SKILL_CAP_SUB);
 
     /* 装备：方角内凹插槽，和伴侣卡的圆 pill 区分 */
     const equip = m.equip.length ? `
@@ -1416,7 +1420,7 @@
     const attrs = `
       <div class="tc-fam-attrs">${attrsHtml(f.attrs || [])}</div>`;
     const skU = skillUnion(f.skills, f.skillsNew);
-    const skills = skillFold(skU.items, skU.count, 'tc-skfold-fam');
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-fam', SKILL_CAP_SUB);
     const cus = (f.extra || []).length ? `
       <div class="tc-fam-cus">${f.extra.map(e => gaugeHtml(esc(e.label), e.a, e.b, 'fam-x', false, ' x')).join('')}</div>` : '';
     const tags = (f.tags || []).length ? `
@@ -1628,7 +1632,7 @@
 
   function renderPlayer(p) {
     const skU = skillUnion([], p.skills);
-    const skills = skillFold(skU.items, skU.count, 'tc-skfold-cr');
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-cr', SKILL_CAP_PLAYER);
 
     const eq = p.equip ? `
       <details class="tc-fold"><summary>装备 · ${p.equip.slots.length + (p.equip.weight ? 1 : 0)}</summary>
@@ -2578,7 +2582,7 @@
 .tc-sk-formula{display:block;text-decoration:none;font-size:10px;color:#6f8296;margin-top:1px;
   font-family:ui-monospace,Consolas,monospace;letter-spacing:.2px}
 .tc-skcap{display:block;margin:4px 0 2px}
-/* 技能折叠：一行看完（技能 · N/5 + 五个方点 + 箭头），点开才逐条 */
+/* 技能折叠：一行看完（技能 · N/cap + cap 个方点 + 箭头），点开才逐条 */
 .tc-skfold{--skc:#67e8f9}
 .tc-skfold>summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer}
 .tc-skfold>summary::-webkit-details-marker{display:none}
