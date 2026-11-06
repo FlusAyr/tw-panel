@@ -876,5 +876,73 @@
       }
     },
     "orderNo": 11
+  },
+  "sheet_ji_neng_tai_zhang": {
+    "uid": "sheet_ji_neng_tai_zhang",
+    "name": "技能台账",
+    "sourceData": {
+      "note": "全体技能总账，一个技能一行。玩家技能、机甲技能、使魔技能共用这一张表。\n\n【与状态块分工】状态块 sk 行（玩家）/ kbmsk<N>（机甲）/ kbfsk<N>（使魔）只写技能名与简述；此表管技能库——谁有、效果是什么、公式怎么算。状态块里出现的技能名，此表必须有一行。\n\n【列定义】（列号为 0 基）\n- 列0: 归属 owner（玩家技能写角色名，如 沈知；机甲技能写机甲号，如 kbm1；使魔技能写使魔号，如 kbf3）\n- 列1: 名称 name（与状态块逐字一致，同一归属内不得重名）\n- 列2: 类型 type（血统/内功/机甲装备技/使魔技/通用）\n- 列3: 效果 effect（一句话，写清做什么）\n- 列4: 公式 formula（写清怎么算，如 1D12+STR/10 ｜ 无视护甲 3 点；不许写论述性措辞）\n- 列5: CD cd（回合数或 无）\n- 列6: SP sp（数值或 无）\n- 列7: 来源 source（兑换/掉落/融合/初始）\n- 列8: 获得时间 session（第N场 或 幕间N）\n- 列9: 状态 state（在册/已删/已融合）\n- 列10: 融合去向 merged_into（已融合时写新技能名；其余写 -）\n\n【强制约束】\n1. 上限：玩家 sk ≤5 ｜ 机甲 kbm 技 ≤5 ｜ 使魔 kbf 技 ≤5（技 段简写与 kbmsk/kbfsk 取并集计数）。\n2. 第 6 个技能必须二选一：删除一个（该行状态改 已删）/ 融合一个（新技能吸收旧技能，旧技能状态改 已融合并在 融合去向 写新技能名）。两种都不做，新技能视为未获得。\n3. 台账没有的技能视为未获得：状态块写了、此表没有行 → 该技能不生效。\n4. 效果与公式必须写死数值或明确算法，禁止「强力」「大幅」这类不可核对的措辞。\n5. 状态为 已删/已融合 的行保留不删——它是上限腾挪的凭证；只有 在册 计入上限。",
+      "initNode": "开局为空；角色获得技能的当楼插入。\nSQL示例: INSERT INTO skills (owner, name, type, effect, formula, cd, sp, source, session, state, merged_into) VALUES ('沈知', '裂空斩', '血统', '对单体造成物理伤害并破甲一回合', '1D12+STR/10', '2', '8', '兑换', '幕间1', '在册', '-');"
+    },
+    "content": [
+      [
+        "row_id",
+        "归属",
+        "名称",
+        "类型",
+        "效果",
+        "公式",
+        "CD",
+        "SP",
+        "来源",
+        "获得时间",
+        "状态",
+        "融合去向"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "技能台账",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角信息-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "sqlInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 12
   }
 }

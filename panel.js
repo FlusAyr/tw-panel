@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.31.0';
+  const VERSION = '3.32.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|kbmsk[0-9]*|kbfsk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -70,6 +70,58 @@
      刻意不收「击败 / 击退 / 压制 / 重伤」：它们不必然等于死亡，收进来就会误报，
      而**误报一次，玩家就学会无视黄字**（与 §7 第 27 条同一个坑）。 */
   const KILL_WORDS = ['自爆', '崩解', '瓦解', '消散', '溃散', '除名', '处决', '秒杀', '击杀', '消灭'];
+
+  /* 技能上限：三侧（玩家 / 机甲 / 使魔）同一个数。
+     面板只报「几个 / 上限」，**不猜哪个该删**——它不知道这个技能在玩家手里干什么用。 */
+  const SKILL_CAP = 5;
+
+  function skillOver(n, label) {
+    if (!(n > SKILL_CAP)) return '';
+    return `<em class="tc-killwarn tc-skcap">⚠ ${label} ${n} 个，上限 ${SKILL_CAP} —— 必须删除或融合一个</em>`;
+  }
+
+  /* 五个小方点：上限是「看得见的槽位」。
+     只写 `3/5` 要读数字，方点一眼就数得出还剩几个——这就是它存在的理由。 */
+  function skillPips(n) {
+    let out = '';
+    for (let i = 0; i < SKILL_CAP; i++) out += `<s${i < n ? ' class="on"' : ''}></s>`;
+    return out;
+  }
+
+  /* 内联 `技` 段与新键（kbmsk / kbfsk）取**并集**。
+     只数新键，玩家就能「内联放 5 个 + 新键放 5 个」绕过上限——那不是上限，是建议。 */
+  function skillUnion(inline, extra) {
+    const seen = new Set(), items = [];
+    (extra || []).forEach(s => {
+      const nm = String(s && s.name || '').trim();
+      if (!nm || seen.has(nm)) return;
+      seen.add(nm); items.push(s);
+    });
+    (inline || []).forEach(t => {
+      const nm = String(t || '').trim();
+      if (!nm || seen.has(nm)) return;
+      seen.add(nm);
+      items.push({ name: nm, effect: '', cd: '', sp: '', formula: '' });
+    });
+    return { items: items, count: items.length };
+  }
+
+  /* 三张卡（玩家 / 机甲 / 使魔）共用这一套折叠结构，只有主题 class 不同。
+     展开前一行看完：技能 · N/5 + 五个方点 + 箭头；点开才是逐条明细。 */
+  function skillFold(items, count, theme) {
+    if (!count) return '';
+    const over = count > SKILL_CAP;
+    return `<details class="tc-fold tc-skfold ${theme}${over ? ' over' : ''}">
+        <summary><em class="tc-skfl-t">技能</em><b class="tc-skfl-n">${count}/${SKILL_CAP}${over ? ' ⚠' : ''}</b><i class="tc-skfl-pips">${skillPips(count)}</i><span class="tc-skfl-ar"></span></summary>
+        ${over ? skillOver(count, '技能') : ''}
+        <div class="tc-skills">${items.map(sk => `
+          <div class="tc-skill">
+            <b>${esc(sk.name)}</b>
+            <em>${sk.cd ? 'CD ' + esc(sk.cd) : (sk.sp ? '被动' : '')}${sk.sp ? ' · SP ' + esc(sk.sp) : ''}</em>
+            <span>${esc(sk.effect || '')}</span>${sk.formula ? `<u class="tc-sk-formula">${esc(sk.formula)}</u>` : ''}
+          </div>`).join('')}</div>
+      </details>`;
+  }
 
   /* 纯文本对账：不碰解析层，只看 st 里已有的事实。
      返回 null（不报）或 { mob, hp, max, word }。
@@ -136,7 +188,7 @@
 
   function parseMecha(v) {
     const p = seg(v);
-    const o = { name: '', type: '', typeRaw: '', hp: null, en: null, sp: null, attrs: [], equip: [], extra: [], tags: [] };
+    const o = { name: '', type: '', typeRaw: '', hp: null, en: null, sp: null, attrs: [], equip: [], extra: [], tags: [], skills: [] };
     let inEquip = false;
     let inTag = false;
     for (let i = 0; i < p.length; i++) {
@@ -150,6 +202,14 @@
       if ((m = x.match(/^能(?:\s*[:：]\s*|\s+|$)(.+)$/))) { inTag = false; o.en = mechaPair('能', m[1]); inEquip = false; continue; }
       if ((m = x.match(/^SP\s*(.+)$/i))) { inTag = false; o.sp = mechaPair('SP', m[1]); inEquip = false; continue; }
       if ((m = x.match(/^装(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inEquip = true; inTag = false; if (m[1].trim()) o.equip.push(m[1].trim()); continue; }
+      /* `技` 段：机甲 / 使魔同名的技能位（上限 SKILL_CAP）。
+         `技 无` 是「确实没有」，不是名字叫「无」的技能。 */
+      if ((m = x.match(/^技\s*[:：]?\s*(.*)$/)) && !/^技能?$/.test(x)) {
+        inEquip = false; inTag = false;
+        m[1].split(/[,，、]/).map(t => t.trim()).filter(t => t && !/^(无|—|-|暂无)$/.test(t))
+          .forEach(t => o.skills.push(t));
+        continue;
+      }
       if ((m = x.match(/^(力|敏|体|智|感|魅)[:：]?\s*(-?\d+)$/))) { o.attrs.push({ k: m[1], v: +m[2] }); inEquip = false; inTag = false; continue; }
       if ((m = x.match(/^自(?:\s*[:：]\s*|\s+|$)(.*)$/))) { inTag = true; inEquip = false; if (m[1].trim()) o.tags.push(m[1].trim()); continue; }
 
@@ -577,13 +637,17 @@
         const segs = seg(s);
         const head = segs[0] || '';
         const m = head.match(/^(\S+)[ \t]*(.*)$/);
-        const o = { name: m ? m[1] : head, effect: m ? m[2] : '', cd: '', sp: '' };
+        const o = { name: m ? m[1] : head, effect: m ? m[2] : '', cd: '', sp: '', formula: '' };
         const rest = [];
         for (let i = 1; i < segs.length; i++) {
           const t = segs[i];
           const cdm = t.match(/(?:CD|冷却)[\s:：]*([^\s｜|/]+)/i);
           const spm = t.match(/SP[\s:：]*([^\s｜|/]+)/i);
+          /* `式` 段：效果公式（`2D12+STR/10`），原文照收。
+             **可有可无**：缺了就是空串，不报错、不出 ⚠ —— 存量卡不能因为少一项突然全黄。 */
+          const fmm = t.match(/^式\s*[:：]?\s*(.*)$/);
           let used = false;
+          if (fmm && !o.formula) { o.formula = fmm[1].trim(); used = true; }
           if (cdm && !o.cd) { o.cd = cdm[1]; used = true; }
           if (spm && !o.sp) { o.sp = spm[1]; used = true; }
           if (used) continue;
@@ -1140,6 +1204,7 @@
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
+    const mskmap = new Map(), fskmap = new Map();
     const gmap = new Map();
     const shmap = new Map(), dzmap = new Map();
     const whmap = new Map(), plmap = new Map();
@@ -1165,6 +1230,8 @@
       else if (k === 'next') st.next = v;
       else if (/^p\d+$/.test(k)) pmap.set(+k.slice(1), parsePlayer(v));
       else if (/^sk\d+$/.test(k)) smap.set(+k.slice(2), parseSkills(v));
+      else if (/^kbmsk\d+$/.test(k)) mskmap.set(+k.slice(5), parseSkills(v));
+      else if (/^kbfsk\d+$/.test(k)) fskmap.set(+k.slice(5), parseSkills(v));
       else if (/^eq\d+$/.test(k)) emap.set(+k.slice(2), parseEquip(v));
       else if (/^bond\d*$/.test(k)) bmap.set(k === 'bond' ? 1 : +k.slice(4), parseBond(v));
       else if (/^foe\d*$/.test(k)) fmap.set(k === 'foe' ? 1 : +k.slice(3), parseFoe(v));
@@ -1214,8 +1281,8 @@
     st.ntrLogs = [...nlmap.keys()].sort((a, b) => a - b).map(k => nlmap.get(k));
     st.npcs = [...nmap.keys()].sort((a, b) => a - b).map(k => nmap.get(k));
     EXT_KEYS.forEach(e => { st[e.field] = [...xmap[e.field].keys()].sort((a, b) => a - b).map(i => xmap[e.field].get(i)); });
-    st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; return m; });
-    st.familiars = [...kfmap.keys()].sort((a, b) => a - b).map(i => { const f = kfmap.get(i); f.idx = i; return f; });
+    st.mechas = [...kmmap.keys()].sort((a, b) => a - b).map(i => { const m = kmmap.get(i); m.idx = i; m.skillsNew = mskmap.get(i) || []; return m; });
+    st.familiars = [...kfmap.keys()].sort((a, b) => a - b).map(i => { const f = kfmap.get(i); f.idx = i; f.skillsNew = fskmap.get(i) || []; return f; });
     st.dmgs = [...gmap.keys()].sort((a, b) => a - b).map(k => gmap.get(k));
     st.shelters = [...shmap.keys()].sort((a, b) => a - b).map(i => { const s = shmap.get(i); s.idx = i; return s; });
     st.disasters = [...dzmap.keys()].sort((a, b) => a - b).map(i => { const d = dzmap.get(i); d.idx = i; return d; });
@@ -1310,6 +1377,9 @@
     const attrs = m.attrs.length ? `
       <div class="tc-kbm-attrs">${attrsHtml(m.attrs)}</div>` : '';
 
+    const skU = skillUnion(m.skills, m.skillsNew);
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-kbm');
+
     /* 装备：方角内凹插槽，和伴侣卡的圆 pill 区分 */
     const equip = m.equip.length ? `
       <div class="tc-kbm-eq">${m.equip.map(e => `<span class="slot">${esc(e)}</span>`).join('')}</div>` : '';
@@ -1324,7 +1394,7 @@
             <b>${esc(m.name || '机体')}</b>
             ${m.typeRaw ? `<span class="tc-kbm-type ty-${m.type || 'x'}">${esc(m.typeRaw)}</span>` : ''}
           </div>
-          ${gauges}${attrs}${cus}${tags}${equip}
+          ${gauges}${attrs}${cus}${skills}${tags}${equip}
           ${dead ? '<em class="tc-kbm-stamp">已失效</em>' : ''}
         </div>
       </div>`;
@@ -1345,8 +1415,8 @@
       <div class="tc-fam-loyal"><span>忠</span><b>${f.loyal.cur}</b><div class="tc-bbar"><i class="fam-loyal" style="width:${Math.max(0, Math.min(100, f.loyal.cur))}%"></i></div></div>` : '';
     const attrs = `
       <div class="tc-fam-attrs">${attrsHtml(f.attrs || [])}</div>`;
-    const skills = (f.skills || []).length ? `
-      <div class="tc-fam-skills"><em class="tc-fam-l">技</em>${f.skills.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : '';
+    const skU = skillUnion(f.skills, f.skillsNew);
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-fam');
     const cus = (f.extra || []).length ? `
       <div class="tc-fam-cus">${f.extra.map(e => gaugeHtml(esc(e.label), e.a, e.b, 'fam-x', false, ' x')).join('')}</div>` : '';
     const tags = (f.tags || []).length ? `
@@ -1557,15 +1627,8 @@
   }
 
   function renderPlayer(p) {
-    const skills = p.skills.length ? `
-      <details class="tc-fold"><summary>技能 · ${p.skills.length}</summary>
-        <div class="tc-skills">${p.skills.map(s => `
-          <div class="tc-skill">
-            <b>${esc(s.name)}</b>
-            <em>${s.cd ? 'CD ' + esc(s.cd) : (s.sp ? '被动' : '')}${s.sp ? ' · SP ' + esc(s.sp) : ''}</em>
-            <span>${esc(s.effect)}</span>
-          </div>`).join('')}</div>
-      </details>` : '';
+    const skU = skillUnion([], p.skills);
+    const skills = skillFold(skU.items, skU.count, 'tc-skfold-cr');
 
     const eq = p.equip ? `
       <details class="tc-fold"><summary>装备 · ${p.equip.slots.length + (p.equip.weight ? 1 : 0)}</summary>
@@ -2511,6 +2574,31 @@
 .tc-fold[open] summary::before{content:'▾ '}
 
 .tc-skills{display:flex;flex-direction:column;gap:1px;margin-top:5px}
+/* 公式：查证用，不是每轮要读的东西 —— 灰、小、缩进，且不占 effect 的视觉位置 */
+.tc-sk-formula{display:block;text-decoration:none;font-size:10px;color:#6f8296;margin-top:1px;
+  font-family:ui-monospace,Consolas,monospace;letter-spacing:.2px}
+.tc-skcap{display:block;margin:4px 0 2px}
+/* 技能折叠：一行看完（技能 · N/5 + 五个方点 + 箭头），点开才逐条 */
+.tc-skfold{--skc:#67e8f9}
+.tc-skfold>summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer}
+.tc-skfold>summary::-webkit-details-marker{display:none}
+.tc-skfl-t{font-style:normal;font-size:10px;color:#94a3b8;letter-spacing:1px}
+.tc-skfl-n{font-family:ui-monospace,Consolas,monospace;font-size:11px;font-weight:700;color:var(--skc)}
+.tc-skfl-pips{display:inline-flex;gap:2px;margin-left:1px}
+.tc-skfl-pips s{display:block;width:5px;height:5px;border-radius:1px;text-decoration:none;
+  border:1px solid rgba(148,163,184,.45);background:transparent}
+.tc-skfl-pips s.on{background:var(--skc);border-color:var(--skc)}
+.tc-skfl-ar{margin-left:auto;color:#64748b;font-size:9px}
+.tc-skfl-ar::after{content:'▾'}
+details[open]>.tc-skfl-ar::after{content:'▴'}
+/* 三种主题：只换外形与主色，结构完全一致 —— 三种结构 = 三套要维护的折叠 */
+.tc-skfold-cr{border-radius:4px}
+.tc-skfold-kbm{border-radius:0;--skc:#38bdf8}
+.tc-skfold-kbm>summary{padding:2px 0;border-left:2px solid rgba(56,189,248,.5);padding-left:6px}
+.tc-skfold-fam{border-radius:6px;--skc:#34d399}
+.tc-skfold-fam>summary{padding-left:6px;border-left:2px solid rgba(52,211,153,.55)}
+.tc-skfold.over .tc-skfl-n{color:#fbbf24}
+.tc-skfold.over .tc-skfl-pips s{border-color:rgba(251,191,36,.75)}
 .tc-skill{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:4px 0;
   border-bottom:1px solid rgba(255,255,255,.04);font-size:11.5px}
 .tc-skill b{color:#c4b5fd;font-weight:600}

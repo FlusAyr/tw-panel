@@ -904,6 +904,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
     'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl', 'lk',
+    'kbmsk', 'kbfsk',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -1647,6 +1648,73 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('境 与 阶 同时出现：取 境（stage=3），并报一条明确的「不一致」',
     LK_BOTH.stage === 3 && /境\/阶 同时出现且不一致/.test((LK_BOTH.errs || []).join('|')),
     JSON.stringify({ s: LK_BOTH.stage, e: LK_BOTH.errs }));
+
+  /* ───────── 组 17 · 折叠技能卡（kbmsk / kbfsk / sk）与上限并集 ─────────
+     上限 5 若只数新键，玩家就能「内联 技 放 5 个 + kbmsk 再放 5 个」绕过它。
+     所以并集是断言，不是实现细节。 */
+  console.log('\n── 组 17 · 折叠技能卡与上限并集 ──');
+  const R = (t) => api.render(api.parseState(t));
+  const NL = '\n';
+  const foldN = (h) => (h.match(/tc-skfl-n">([^<]*)</) || [])[1];
+  const pips = (h) => {
+    const inner = (h.match(/tc-skfl-pips">([\s\S]*?)<\/i>/) || [])[1] || '';
+    return { total: (inner.match(/<s/g) || []).length, on: (inner.split('class="on"').length - 1) };
+  };
+  const isOver = (h) => /tc-skfold[^"]*over/.test(h);
+  const mk = (i) => `技${i} 效果${i} ｜ 式 F${i} ｜ CD ${i} ｜ SP ${i}`;
+  const P1 = 'p1: 我 ｜ HP 88/100';
+  const SK5 = 'sk1: ' + [1, 2, 3, 4, 5].map(mk).join(' ; ');
+  const SK6 = 'sk1: ' + [1, 2, 3, 4, 5, 6].map(mk).join(' ; ');
+  const M1 = 'kbm1: 猎隼 ｜ 型 全包 ｜ HP 120/150';
+  const MSK5 = [1, 2, 3, 4, 5].map(i => `技能${i} 效果${i} ｜ 式 F${i}`).join(' ; ');
+  const hA = R(P1 + NL + SK5);
+  const hB = R(P1 + NL + SK6);
+  T('A 玩家 5 个技能 → 标题 5/5、五个方点全亮、不报警',
+    foldN(hA) === '5/5' && pips(hA).on === 5 && !isOver(hA),
+    JSON.stringify({ n: foldN(hA), pips: pips(hA), over: isOver(hA) }));
+  T('B 玩家 6 个技能 → 标题 6/5 ⚠、黄字行出现',
+    foldN(hB) === '6/5 ⚠' && isOver(hB) && /tc-skcap/.test(hB),
+    JSON.stringify({ n: foldN(hB), over: isOver(hB), cap: /tc-skcap/.test(hB) }));
+  T('方点恰好 5 个（上限是看得见的槽位，不随技能数增长）',
+    pips(hB).total === 5 && pips(hA).total === 5,
+    JSON.stringify({ a: pips(hA).total, b: pips(hB).total }));
+
+  const hG = R(M1 + NL + 'kbmsk1: ' + MSK5);
+  T('G kbmsk1 五个 → 机甲卡 5/5、不报警、走机甲主题',
+    foldN(hG) === '5/5' && !isOver(hG) && /tc-skfold-kbm/.test(hG) && api.parseState(M1 + NL + 'kbmsk1: ' + MSK5).mechas[0].skillsNew.length === 5,
+    JSON.stringify({ n: foldN(hG), over: isOver(hG), theme: /tc-skfold-kbm/.test(hG) }));
+
+  const hH = R('kbm1: 猎隼 ｜ 型 全包 ｜ HP 120/150 ｜ 技 甲,乙,丙' + NL + 'kbmsk1: ' + MSK5);
+  T('H 内联 3 + 新键 5 → 并集 8/5 ⚠（只数新键就能绕过上限）',
+    foldN(hH) === '8/5 ⚠' && isOver(hH),
+    JSON.stringify({ n: foldN(hH), over: isOver(hH) }));
+
+  const hH2 = R('kbm1: 猎隼 ｜ 型 全包 ｜ HP 120/150 ｜ 技 技能1,乙' + NL + 'kbmsk1: ' + MSK5);
+  T('H2 同名的算一个（内联含 技能1，新键也有 技能1 → 6 不是 7）',
+    foldN(hH2) === '6/5 ⚠',
+    '实际 ' + foldN(hH2) + '（若 7/5 = 没去重）');
+
+  const stI = api.parseState('kbf1: 墨鸦 ｜ 族 兽 ｜ HP 40/60' + NL + 'kbf3: 赤瞳 ｜ 族 灵 ｜ HP 30/50' + NL + 'kbfsk3: 凝视 定身 ｜ CD 2 ｜ SP 3');
+  T('I kbfsk3 → 挂第 3 只使魔，一串都不给 1 号',
+    stI.familiars[0].skillsNew.length === 0 && stI.familiars[1].skillsNew.length === 1,
+    JSON.stringify(stI.familiars.map(f => f.skillsNew.length)));
+
+  const hJ = R([P1 + NL + SK5, M1 + NL + 'kbmsk1: ' + MSK5, 'kbf1: 墨鸦 ｜ 族 兽 ｜ HP 40/60' + NL + 'kbfsk1: 撕咬 破甲 ｜ 式 1D6'].join(NL));
+  T('J 三个键同场 → 三张卡各自成立、互不吞并（cr/kbm/fam 各一份）',
+    (hJ.match(/tc-skfold /g) || []).length === 3 && /tc-skfold-cr/.test(hJ) && /tc-skfold-kbm/.test(hJ) && /tc-skfold-fam/.test(hJ),
+    JSON.stringify({ n: (hJ.match(/tc-skfold /g) || []).length, cr: /tc-skfold-cr/.test(hJ), kbm: /tc-skfold-kbm/.test(hJ), fam: /tc-skfold-fam/.test(hJ) }));
+
+  T('K 展开后显示公式原文（式 F1）',
+    /tc-sk-formula">F1</.test(hG) && /F1/.test(hG),
+    '实际 ' + ((hG.match(/tc-sk-formula">([^<]*)</) || [])[1] || '(无)'));
+
+  T('没有技能就不出折叠区（不许留一个空壳）',
+    !/tc-skfold/.test(R(P1)) && !/tc-skfold/.test(R(M1)),
+    JSON.stringify({ player: /tc-skfold/.test(R(P1)), mecha: /tc-skfold/.test(R(M1)) }));
+
+  T('kbmsk1: 无 = 确实没有 → 不出折叠、也不留下一个名字叫「无」的技能',
+    !/tc-skfold/.test(R(M1 + NL + 'kbmsk1: 无')) && api.parseState(M1 + NL + 'kbmsk1: 无').mechas[0].skillsNew.length === 0,
+    JSON.stringify(api.parseState(M1 + NL + 'kbmsk1: 无').mechas[0].skillsNew));
 
 
 }
