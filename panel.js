@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.29.0';
+  const VERSION = '3.30.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -393,6 +393,73 @@
       /* 规格外的裸段接进 特（那里本来就是自由文字）：不丢、也不冒充别的字段 */
       o.feature = o.feature ? o.feature + ' ' + x : x;
     }
+    return o;
+  }
+
+  /* 基因锁：`名 ｜ 阶 未开|一阶~五阶 ｜ 率 N% ｜ 纹 N ｜ 锁 ±N% ｜ 成 N ｜ 次 N 结果`
+     与 `lock<N>`（锁定项）不是一件事：那个是「某项被锁死」，这个是「基因锁开到第几阶」。
+     阶 决定条的颜色，也决定属性上限映射（AGENTS §4.3）；0% 是合法值（未开锁照样写整行），
+     所以这里不许用真值判断——`率 0%` 与「没写 率」在数据上不是一回事。 */
+  const LOCK_STAGES = { '未开': 0, '一阶': 1, '二阶': 2, '三阶': 3, '四阶': 4, '五阶': 5 };
+
+  function parseGeneLock(v) {
+    const raw = String(v == null ? '' : v);
+    const p = seg(raw);
+    const o = { name: '', stageRaw: '', stage: null, rate: null, rateRaw: '', marks: null,
+      lock: null, succ: null, tries: null, outcome: '', errs: [], raw };
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+      let m;
+      if ((m = x.match(/^阶(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        o.stageRaw = t;
+        if (Object.prototype.hasOwnProperty.call(LOCK_STAGES, t)) o.stage = LOCK_STAGES[t];
+        else o.errs.push('阶 只认 未开/一阶~五阶：' + t);
+        continue;
+      }
+      if ((m = x.match(/^率(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        o.rateRaw = t;
+        const g = t.match(/^(\d+(?:\.\d+)?)\s*%?$/);
+        if (g) o.rate = +g[1];
+        else o.errs.push('率 必须是「N%」：' + t);
+        continue;
+      }
+      if ((m = x.match(/^纹(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        if (/^\d+$/.test(t)) o.marks = +t;
+        else o.errs.push('纹 必须是非负整数：' + t);
+        continue;
+      }
+      if ((m = x.match(/^锁(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        const g = t.match(/^([+-]?\d+(?:\.\d+)?)\s*%?$/);
+        if (g) o.lock = +g[1];
+        else o.errs.push('锁 必须是 ±N%：' + t);
+        continue;
+      }
+      if ((m = x.match(/^成(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        if (/^\d+$/.test(t)) o.succ = +t;
+        else o.errs.push('成 必须是非负整数：' + t);
+        continue;
+      }
+      if ((m = x.match(/^次(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const t = m[1].trim();
+        const g = t.match(/^(\d+)\s*(.*)$/);
+        if (g) { o.tries = +g[1]; if (g[2].trim()) o.outcome = o.outcome ? o.outcome + ' ' + g[2].trim() : g[2].trim(); }
+        else o.errs.push('次 必须是「N 结果」：' + t);
+        continue;
+      }
+      /* 阶 关键字省略的容错：裸段整段恰是六阶之一且还没给阶 → 当作阶 */
+      if (!o.stageRaw && Object.prototype.hasOwnProperty.call(LOCK_STAGES, x)) { o.stageRaw = x; o.stage = LOCK_STAGES[x]; continue; }
+      /* 其余裸段接进 结果（那里本来就是自由文字）：不丢、也不冒充别的字段 */
+      o.outcome = o.outcome ? o.outcome + ' ' + x : x;
+    }
+    if (o.stage == null && !o.stageRaw) o.errs.push('缺少 阶 段（未开锁也要写 阶 未开）');
+    if (o.rate == null && !o.rateRaw) o.errs.push('缺少 率 段（未开锁也要写 率 0%）');
     return o;
   }
 
@@ -1012,7 +1079,7 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -1023,6 +1090,7 @@
     const gmap = new Map();
     const shmap = new Map(), dzmap = new Map();
     const whmap = new Map(), plmap = new Map();
+    const lkmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
     const split = splitInlineKeys(text);
@@ -1060,6 +1128,7 @@
       else if (/^dz\d*$/.test(k)) dzmap.set(k === 'dz' ? 1 : +k.slice(2), parseDisaster(v));
       else if (/^wh\d*$/.test(k)) whmap.set(k === 'wh' ? 1 : +k.slice(2), parseWarehouse(v));
       else if (/^pl\d*$/.test(k)) plmap.set(k === 'pl' ? 1 : +k.slice(2), parsePlace(v));
+      else if (/^lk\d*$/.test(k)) lkmap.set(k === 'lk' ? 1 : +k.slice(2), parseGeneLock(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -1099,6 +1168,7 @@
     st.disasters = [...dzmap.keys()].sort((a, b) => a - b).map(i => { const d = dzmap.get(i); d.idx = i; return d; });
     st.warehouses = [...whmap.keys()].sort((a, b) => a - b).map(i => { const w = whmap.get(i); w.idx = i; return w; });
     st.places = [...plmap.keys()].sort((a, b) => a - b).map(i => { const p = plmap.get(i); p.idx = i; return p; });
+    st.geneLocks = [...lkmap.keys()].sort((a, b) => a - b).map(i => { const l = lkmap.get(i); l.idx = i; return l; });
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -1368,6 +1438,40 @@
           ${p.feature ? `<div class="tc-pl-ft">${esc(p.feature)}</div>` : ''}
           ${errs}
         </div>
+      </div>`;
+  }
+
+  /* 锁条：一条进度 + 四枚读数。形态上与 sh（浮筒）/ pl（左钉）都不同 ——
+     它是一条横贯的锁链，阶 换了颜色，未开是灰的、五阶是紫的。 */
+  function renderGeneLock(l) {
+    const sc = l.stage == null ? 'x' : String(l.stage);
+    const rateTxt = l.rate == null ? (l.rateRaw ? esc(l.rateRaw) : '—') : (Math.round(l.rate * 10) / 10) + '%';
+    const barHtml = l.rate == null ? '<div class="tc-lk-bar miss"></div>' : bar(l.rate, 100, 'tc-lk-fill');
+    const chips = [];
+    if (l.marks != null) {
+      const on = Math.max(0, Math.min(3, Math.round(l.marks)));
+      const pips = [0, 1, 2].map(i => `<i class="${i < on ? 'on' : ''}"></i>`).join('');
+      chips.push(`<span class="tc-lk-chip tc-lk-marks"><span class="tc-lk-pips">${pips}</span>纹 ${l.marks}</span>`);
+    } else chips.push('<span class="tc-lk-chip miss">纹 —</span>');
+    if (l.lock != null) {
+      const lc = l.lock > 0 ? 'up' : (l.lock < 0 ? 'dn' : 'zero');
+      chips.push(`<span class="tc-lk-chip ${lc}">锁 ${l.lock > 0 ? '+' : ''}${l.lock}%</span>`);
+    } else chips.push('<span class="tc-lk-chip miss">锁 —</span>');
+    if (l.succ != null) chips.push(`<span class="tc-lk-chip">成 ${l.succ}</span>`);
+    if (l.tries != null) chips.push(`<span class="tc-lk-chip">次 ${l.tries}</span>`);
+    const out = l.outcome ? `<span class="tc-lk-out">${esc(l.outcome)}</span>` : '';
+    const errs = l.errs.length
+      ? `<div class="tc-lk-err">${l.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+    return `
+      <div class="tc-lock s-${sc}">
+        <div class="tc-lk-hd">
+          <b class="tc-lk-name">${esc(l.name || '基因锁')}</b>
+          <span class="tc-lk-stage">${esc(l.stageRaw || '阶 —')}</span>
+          <b class="tc-lk-rate">${rateTxt}</b>
+        </div>
+        ${barHtml}
+        <div class="tc-lk-meta">${chips.join('')}${out}</div>
+        ${errs}
       </div>`;
   }
 
@@ -1854,6 +1958,10 @@
       st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m, false)); });
       st.familiars.forEach(f => { if (!fUsed.has(f.idx)) cards.push(renderFamiliar(f)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
+    }
+    if (st.geneLocks.length) {
+      colL.push(sect('基因锁', 'GENE LOCK'));
+      colL.push(`<div class="tc-locks">${st.geneLocks.map(renderGeneLock).join('')}</div>`);
     }
     if (st.shelters.length) {
       colL.push(sect('避难所', 'SHELTER'));
@@ -2849,6 +2957,43 @@
   .tc-defs-warn{grid-column:1 / -1;font-size:9px;font-style:normal;color:#fcd34d;letter-spacing:.02em}
   .tc-swipe-hint{display:none}                      /* 单列不需要横滑提示 */
 }
+
+.tc-locks{display:flex;flex-direction:column;gap:6px}
+.tc-lock{--lk:#64748b;position:relative;margin-top:6px;padding:8px 11px 9px;
+  border:1px solid rgba(148,163,184,.18);border-left:3px solid var(--lk);
+  border-radius:3px 9px 9px 3px;
+  background:linear-gradient(100deg,rgba(148,163,184,.08),rgba(15,23,42,.42) 62%)}
+.tc-lock.s-1{--lk:#38bdf8}
+.tc-lock.s-2{--lk:#2dd4bf}
+.tc-lock.s-3{--lk:#fbbf24}
+.tc-lock.s-4{--lk:#fb7185}
+.tc-lock.s-5{--lk:#c084fc}
+.tc-lock.s-x{--lk:#f87171}
+.tc-lk-hd{display:flex;align-items:baseline;gap:7px}
+.tc-lk-name{font-size:12.5px;color:#e2e8f0;letter-spacing:.05em}
+.tc-lk-stage{font-size:9.5px;letter-spacing:.1em;color:var(--lk);
+  border:1px solid currentColor;border-radius:3px;padding:0 4px;opacity:.9}
+.tc-lk-rate{margin-left:auto;font-family:ui-monospace,Consolas,monospace;font-size:14px;
+  font-weight:700;color:var(--lk);letter-spacing:.02em}
+.tc-lk-bar{margin-top:6px}
+.tc-lk-fill{background:var(--lk)}
+.tc-lk-bar.miss{height:5px;border-radius:3px;
+  background:repeating-linear-gradient(45deg,rgba(248,113,113,.34) 0 4px,transparent 4px 8px)}
+.tc-lk-meta{margin-top:6px;display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 9px;
+  font-size:10px;letter-spacing:.02em;color:#94a3b8}
+.tc-lk-chip{font-family:ui-monospace,Consolas,monospace}
+.tc-lk-chip.up{color:#fbbf24}
+.tc-lk-chip.dn{color:#38bdf8}
+.tc-lk-chip.zero{color:#94a3b8}
+.tc-lk-chip.miss{color:#475569}
+.tc-lk-marks{display:inline-flex;align-items:center;gap:4px}
+.tc-lk-pips{display:inline-flex;gap:2px}
+.tc-lk-pips i{display:block;width:5px;height:5px;border-radius:1px;background:transparent;
+  border:1px solid rgba(148,163,184,.55)}
+.tc-lk-pips i.on{background:var(--lk);border-color:var(--lk)}
+.tc-lk-out{color:#cbd5e1}
+.tc-lk-err{margin-top:4px;display:flex;flex-direction:column;gap:2px;
+  font-size:9.5px;font-style:normal;color:#fdba74}
 
 /* ══════════ sh 避难所卡（海上载体） ══════════
    判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、

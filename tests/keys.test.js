@@ -903,7 +903,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const EXPECTED_KEYS = [
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
-    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl',
+    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl', 'lk',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -1392,6 +1392,114 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const E3 = 'pl: 虫巢 ｜ 型 虫巢 p1: 我 ｜ HP 9/10';
   T('E 键名长的优先（pl / p1 各自命中，pl 不被拆成 p + l）',
     api.keyHits(E3).map(h => h.key).join(',') === 'pl,p1', api.keyHits(E3).map(h => h.key).join(','));
+
+  /* ══════════ 组 16 · 基因锁 lk（v3.30.0） ══════════
+     盯三件最容易静默的事：
+     ① `率 0%` 是合法值（未开锁也写整行），不许被 `if (rate)` 这类真值判断吃掉；
+     ② 率 缺失或坏值必须把原文摆到卡面，不许静默消失、也不许假装成 0%；
+     ③ 阶 换的是颜色与属性上限映射，未知阶要报出来，不能兜成「未开」。
+
+     写法上一条硬要求：**取不到数据时只能红，不能抛**。
+     造红 A（从 KEYS 里删掉 lk）第一版就死在 `geneLocks[0].name` 的 TypeError 上，
+     进程在 timeout 里崩掉、连「N 通过 / N 失败」都不打印 —— 崩掉的测试会把
+     它后面所有断言一起藏起来，看起来像「只坏了这一条」，实际是「后面的都没跑」。
+     所以下面一律用 `lkOf()` 兜一个带 errs:[] 的空壳。 */
+  console.log('\n── 组 16 · 基因锁 lk ──');
+
+  const lkOf = (st) => (st.geneLocks && st.geneLocks[0]) || { errs: [] };
+  const LK_SRC = 'lk1: 甲 ｜ 阶 三阶 ｜ 率 62% ｜ 纹 3 ｜ 锁 +12% ｜ 成 2 ｜ 次 5 险成';
+
+  const lkSt = api.parseState(LK_SRC);
+  T('lk 行进 geneLocks（不串到 places）',
+    lkSt.geneLocks.length === 1 && lkSt.places.length === 0,
+    'geneLocks=' + lkSt.geneLocks.length + ' places=' + lkSt.places.length);
+
+  const LK1 = lkOf(lkSt);
+  T('lk 六段全解析（名/阶/率/纹/锁/成/次/结果）',
+    LK1.name === '甲' && LK1.stage === 3 && LK1.rate === 62 && LK1.marks === 3
+      && LK1.lock === 12 && LK1.succ === 2 && LK1.tries === 5
+      && LK1.outcome === '险成' && (LK1.errs || []).length === 0,
+    JSON.stringify({ n: LK1.name, s: LK1.stage, r: LK1.rate, m: LK1.marks,
+      k: LK1.lock, sc: LK1.succ, t: LK1.tries, o: LK1.outcome, e: LK1.errs }));
+
+  const lkHtml = api.render(lkSt);
+  T('lk 渲染出 tc-lock，且 阶 决定 class（s-3）', /class="tc-lock s-3"/.test(lkHtml),
+    '缺 class="tc-lock s-3"');
+  T('lk 渲染出 率 与 锁 读数', />62%</.test(lkHtml) && />锁 \+12%</.test(lkHtml),
+    '率/锁读数没出现');
+  T('lk 渲染出 纹/成/次/结果',
+    />纹 3</.test(lkHtml) && />成 2</.test(lkHtml) && />次 5</.test(lkHtml) && /险成</.test(lkHtml),
+    '纹/成/次/结果没出现');
+
+  /* 率 0%：合法值 —— 必须画一条 0% 的条，不许变成 miss 斜纹 */
+  const lk0 = api.parseState('lk2: 乙 ｜ 阶 未开 ｜ 率 0% ｜ 纹 0 ｜ 锁 +0%');
+  const LK0 = lkOf(lk0);
+  const lk0Html = api.render(lk0);
+  T('率 0% 是合法值（不被真值判断吃掉）', LK0.rate === 0 && (LK0.errs || []).length === 0,
+    'rate=' + LK0.rate + ' errs=' + JSON.stringify(LK0.errs));
+  T('率 0% 画零宽条、不落 miss 斜纹',
+    /class="tc-lock s-0"/.test(lk0Html) && /tc-lk-fill" style="width:0%"/.test(lk0Html)
+      && !/tc-lk-bar miss/.test(lk0Html),
+    '零宽条没画出来或错落 miss');
+
+  /* 坏值：四个字段各报一条，且卡面显示原文 */
+  const lkBad = api.parseState('lk3: 丙 ｜ 阶 七阶 ｜ 率 六成 ｜ 纹 三 ｜ 锁 未知');
+  const LKB = lkOf(lkBad);
+  const LKB_ERRS = LKB.errs || [];
+  T('阶/率/纹/锁 四个坏值全部报进 errs（不吞）', LKB_ERRS.length === 4, JSON.stringify(LKB_ERRS));
+  const badHtml = api.render(lkBad);
+  T('坏值卡面同时显示原文（率 六成 / 阶 七阶）', /六成/.test(badHtml) && /七阶/.test(badHtml),
+    '原文没上卡面');
+  T('率 坏值时不画假进度条（落 miss 斜纹）', /tc-lk-bar miss/.test(badHtml));
+
+  /* 缺段：率 缺失不能假装 0% */
+  const lkMiss = api.parseState('lk4: 丁 ｜ 阶 二阶');
+  const LKM = lkOf(lkMiss);
+  const LKM_ERRS = LKM.errs || [];
+  T('缺 率 段必须报错（未开锁也要写 率 0%）',
+    LKM.rate === null && /率 段/.test(LKM_ERRS.join('|')), JSON.stringify(LKM_ERRS));
+
+  /* 截断：lk 在块中间不许吃掉后面的行（组 11 已通用覆盖，这条留「本键自己的现场」） */
+  const lkBlk = api.extractBlock(['scene: 车库 | 夜 | 静', LK_SRC, 'next: 继续'].join('\n'));
+  T('lk 行在块中间不截断（end=2 且 next 还在）',
+    !!lkBlk && lkBlk.end === 2 && api.parseState(lkBlk.body).next === '继续',
+    'end=' + (lkBlk && lkBlk.end));
+
+  /* 阶 关键字省略也要认（`lk5: 戊 ｜ 四阶 ｜ 率 88%`）——裸段恰是阶名才算，别把名字当阶 */
+  const lkNoKey = api.parseState('lk5: 戊 ｜ 四阶 ｜ 率 88%');
+  const LK5 = lkOf(lkNoKey);
+  T('阶 关键字可省（裸段恰为阶名时认作阶）', LK5.stage === 4, 'stage=' + LK5.stage);
+
+  /* 纹 三点阵：判据是「实心格数」，不是「有没有 tc-lk-pips 这个 class」。
+     元素在 ≠ 画对了：三个格恒在，只有数实心的才知道 纹 0 与 纹 3 画出来不一样。 */
+  const pipsOf = (html) => {
+    const m = html.match(/<span class="tc-lk-pips">([\s\S]*?)<\/span>/);
+    return m ? m[1] : null;
+  };
+  const filledOf = (seg) => (seg === null ? -1 : (seg.match(/class="on"/g) || []).length);
+  const cellsOf = (seg) => (seg === null ? -1 : (seg.match(/<i /g) || []).length);
+
+  const SEG3 = pipsOf(lkHtml);
+  T('纹 3 画三个实心格（三格全亮）',
+    cellsOf(SEG3) === 3 && filledOf(SEG3) === 3,
+    '格子=' + cellsOf(SEG3) + ' 实心=' + filledOf(SEG3));
+
+  const SEG0 = pipsOf(lk0Html);
+  T('纹 0 画三个空心格（一格不亮）',
+    cellsOf(SEG0) === 3 && filledOf(SEG0) === 0,
+    '格子=' + cellsOf(SEG0) + ' 实心=' + filledOf(SEG0));
+
+  const lk2 = api.parseState('lk4: 丁 ｜ 阶 二阶 ｜ 率 20% ｜ 纹 2 ｜ 锁 +4%');
+  const SEG2 = pipsOf(api.render(lk2));
+  T('纹 2 画两实心一空心（还差一道必开）',
+    cellsOf(SEG2) === 3 && filledOf(SEG2) === 2,
+    '格子=' + cellsOf(SEG2) + ' 实心=' + filledOf(SEG2));
+
+  T('纹 坏值不画格、也不冒充 0（落 miss 并显示原文）',
+    pipsOf(badHtml) === null && /纹 —/.test(badHtml),
+    'pips=' + (pipsOf(badHtml) === null ? 'none' : '存在') + ' 纹—=' + /纹 —/.test(badHtml));
+
+
 }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
