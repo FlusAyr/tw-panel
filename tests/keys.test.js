@@ -903,7 +903,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const EXPECTED_KEYS = [
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
-    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz',
+    'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -1103,6 +1103,295 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('dz 的识别符是「左侧 9px 等级色块 + 血色斜纹带」（横条不是卡片）',
     api.CSS.indexOf('border-left:9px solid var(--dl)') >= 0
       && api.CSS.indexOf('repeating-linear-gradient(135deg,rgba(120,20,20,.20)') >= 0);
+}
+
+{
+  /* ══════════ 组 14 · 仓储 wh / 场所 pl ══════════
+     wh 是**玩家资产的唯一载体**：这一组里最重要的一条不是配色、不是排版，是
+     「16 段输入 → 16 个名字逐个出现在输出里」。数据丢一件，玩家就会在下一回合发现东西没了，
+     而面板看起来一切正常 —— 那是最坏的一类静默降级。
+     pl 的 `型` 有兜底要求：生成引擎会造出清单外的型，遇到未知型**不许报错**（报错=把 AI 生成的东西
+     判成坏的），只许走默认色并把原词显示出来。 */
+  console.log('\n── 组 14 · 仓储 wh / 场所 pl ──');
+
+  const WH3 = '净水器×3 ｜ 军用密封声呐探头×1[备用灯油] ｜ 三棱刺×2';
+  const WH16 = ['净水器×3', '军用密封声呐探头×1[备用灯油]', '三棱刺×2', '七号电池×12',
+    '压缩饼干×24', '鱼干×5', '绳索×2', '铜铃×1', '铁钉×40', '药膏×3',
+    '火折×6', '毯子×2', '灯油×1[满]', '钉子×9', '地图×1', '信标×1'].join(' ｜ ');
+
+  /* ── 逐字段解析（失败时报是哪一段不对，不报数量） ── */
+  const w3 = api.parseWarehouse(WH3);
+  T('wh 第 1 段名称 / 件数 / 顺序', w3.items.length === 3
+    && w3.items[0].name === '净水器' && w3.items[0].qty === 3
+      && w3.items[2].name === '三棱刺' && w3.items[2].qty === 2, JSON.stringify(w3.items));
+  T('wh 名字放宽到 14 字（「军用密封声呐探头」= 8 字也必须原样保留）',
+    w3.items[1].name === '军用密封声呐探头', JSON.stringify(w3.items[1]));
+  T('wh [注] 原样（≤8 字），没有注的那件是空串不是 undefined',
+    w3.items[1].note === '备用灯油' && w3.items[0].note === '', JSON.stringify(w3.items.map(i => i.note)));
+  T('wh 名字含中文数字不被吃掉（三棱刺 / 七号电池）',
+    w3.items[2].name === '三棱刺' && api.parseWarehouse(WH16).items[3].name === '七号电池');
+  T('wh 正常行不产生解析报错', w3.errs.length === 0, JSON.stringify(w3.errs));
+
+  const w16 = api.parseWarehouse(WH16);
+  T('wh 16 段满：段数 16、首件与末件都在',
+    w16.items.length === 16 && w16.items[0].name === '净水器' && w16.items[15].name === '信标',
+    w16.items.length + ' 段');
+
+  /* ── 名字 / 注不许丢字（「铁钉×60 锅」那类怀疑的正面回答） ──
+     只数件数不够：切名字时多吃一个或少吃一个，件数照样对。
+     判据取「名字 + ×件数 在原文里连写的那个位置」——吃字后 `水桶×4` 就再也对不上原文的 `淡水桶×4`。 */
+  const escRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nameLoss = w16.items.filter(it => it.qty != null &&
+    !new RegExp('(?:^|[\\s｜|，,、·])' + escRe(it.name) + '\\s*[×xX*]\\s*' + it.qty).test(WH16)).map(it => it.name + '×' + it.qty);
+  T('每件名字都能在原始行里逐字找到（按「名字+×件数」连写的位置对，不按包含关系）',
+    nameLoss.length === 0, '对不上原文：' + JSON.stringify(nameLoss));
+
+  const noteLoss = [];
+  for (const it of w16.items) {
+    if (!it.note) continue;
+    /* 注被吃进名字，是「名字丢字」的另一种长相：`铁钉[锈]` 不能解成名字带锈 */
+    if (it.name.indexOf(it.note) >= 0) { noteLoss.push(it.name + ' 把注吃进名字：' + it.note); continue; }
+    if (!new RegExp('[\\[［【]' + escRe(it.note) + '[\\]］】]').test(WH16)) {
+      noteLoss.push(it.name + ' 的注在原文找不到：' + it.note);
+    }
+  }
+  T('每件 [注] 都能在原文找到，且没被吃进名字里',
+    noteLoss.length === 0, JSON.stringify(noteLoss));
+
+  const wNone = api.parseWarehouse('无');
+  T('wh: 无 = 空仓（0 件且不报错，不是「一件叫 无 的东西」）',
+    wNone.items.length === 0 && wNone.errs.length === 0, JSON.stringify(wNone));
+
+  /* 坏段：**收下 + 报原文**。扔掉一段等于把玩家的东西弄丢，比报错更糟。 */
+  const wBad = api.parseWarehouse('鱼干 ｜ 净水器×0 ｜ 铁钉×40');
+  T('wh 缺 ×件数 的段照样收下（不丢），并报原文片段',
+    wBad.items.length === 3 && wBad.items[0].name === '鱼干' && wBad.items[0].qty === null
+      && /鱼干/.test(wBad.errs.join('⏐')), JSON.stringify(wBad.items) + ' / ' + JSON.stringify(wBad.errs));
+  T('wh ×0 报「必须是正整数」且件数画 —（不把这一件抹掉）',
+    wBad.errs.some(e => /净水器×0/.test(e)) && wBad.items[1].qty === null,
+    JSON.stringify(wBad.errs));
+
+  const w17 = api.parseWarehouse(WH16 + ' ｜ 备用桨×1');
+  T('wh 超 16 段：仍然全部保留（17 件），只在 errs 里说明', w17.items.length === 17
+    && w17.errs.some(e => /超过 16/.test(e)), w17.items.length + ' 件 / ' + JSON.stringify(w17.errs));
+
+  /* ── pl：六型映射 / 未知型兜底 / 存 0 / 特 ── */
+  const PL6 = ['市场', '遗迹', '营地', '险地', '浮标', '船队'];
+  const plTypes = PL6.map((t, i) => api.parsePlace('地点' + i + ' ｜ 型 ' + t + ' ｜ 存 ' + (i + 1)));
+  const typeMiss = PL6.filter((t, i) => ['market', 'ruin', 'camp', 'peril', 'buoy', 'fleet'][i] !== plTypes[i].type);
+  T('pl 六型映射（市场/遗迹/营地/险地/浮标/船队）', typeMiss.length === 0,
+    '映射错：' + JSON.stringify(typeMiss.map((t, i) => t + '→' + plTypes[i].type)));
+
+  const plU = api.parsePlace('虫窟 ｜ 型 虫巢 ｜ 存 0 ｜ 特 壁面在呼吸');
+  T('pl 清单外的型不报错（报错=把生成引擎造的东西判成坏的）', plU.errs.length === 0, JSON.stringify(plU.errs));
+  T('pl 未知型保留原词并落到默认色 t-x', plU.type === '' && plU.typeRaw === '虫巢', JSON.stringify({ t: plU.type, raw: plU.typeRaw }));
+  T('pl 存 0 合法且严格等于 0（不许真值判断）', plU.store === 0, String(plU.store));
+  T('pl 特 原样', plU.feature === '壁面在呼吸', JSON.stringify(plU.feature));
+  const plBare = api.parsePlace('营地遗址 ｜ 营地 ｜ 存 2 ｜ 特 有人住');
+  T('pl 型 关键字省略时裸段「营地」当型', plBare.type === 'camp' && plBare.typeRaw === '营地', JSON.stringify(plBare));
+  const plBad = api.parsePlace('远岸 ｜ 型 市场 ｜ 存 三 ｜ 特 卖东西');
+  T('pl 存 非数字报错带原文（三）', /存 必须是非负整数：三/.test(plBad.errs.join('⏐')), plBad.errs.join('⏐'));
+
+  /* ── 三行并存：pl1/pl2/pl3 各自成卡、按编号排序 ── */
+  const stPl = api.parseState(['scene: 码头', 'pl: 甲 ｜ 型 市场 ｜ 存 3 ｜ 特 一',
+    'pl2: 乙 ｜ 型 遗迹 ｜ 存 1 ｜ 特 二', 'pl3: 丙 ｜ 型 险地 ｜ 存 0 ｜ 特 三', 'next: 走'].join('\n'));
+  T('pl1..pl3 三行并存且按编号排序',
+    stPl.places.length === 3 && stPl.places.map(p => p.name).join('') === '甲乙丙',
+    JSON.stringify(stPl.places.map(p => p.name)));
+
+  /* ── 截断锁：入口必须是 extractBlock（§7 第 20 条），parseState 结构上看不见这类 bug ── */
+  const mix = ['scene: 夜航 ｜ 甲板', 'wh: ' + WH16, 'pl: 虫窟 ｜ 型 虫巢 ｜ 存 0 ｜ 特 会动',
+    'p1: 我 ｜ HP 9/10', 'next: 收帆'].join('\n');
+  const mixBlk = api.extractBlock(mix);
+  T('wh/pl 插在状态块中间不吞后续行（extractBlock.end 指到 next）',
+    !!mixBlk && mixBlk.start === 0 && mixBlk.end === 4,
+    'start=' + (mixBlk && mixBlk.start) + ' end=' + (mixBlk && mixBlk.end));
+  const mixSt = api.parseState(mixBlk.body);
+  T('插在中间时后面的 p1 / next 仍然被解析到',
+    mixSt.players.length === 1 && mixSt.next === '收帆',
+    'players=' + mixSt.players.length + ' next=' + JSON.stringify(mixSt.next));
+  T('插在中间时 wh 与 pl 也都解到了（不是牺牲它们换通过）',
+    mixSt.warehouses.length === 1 && mixSt.places.length === 1,
+    'wh=' + mixSt.warehouses.length + ' pl=' + mixSt.places.length);
+
+  /* ── 渲染：wh 的**不丢项**是这一组的硬断言 ── */
+  const stWh = api.parseState(['scene: 夜航', 'sh: 潮汐屿 ｜ 型 浮岛 ｜ 舱 7/12', 'wh: ' + WH16, 'next: 收帆'].join('\n'));
+  const whHtml = api.render(stWh);
+  const missingItems = stWh.warehouses[0].items.filter(it => whHtml.indexOf(it.name) < 0).map(it => it.name);
+  T('16 段满 → 输出里 16 个物品名逐个出现（点名缺哪件，不报数量）',
+    missingItems.length === 0 && stWh.warehouses[0].items.length === 16, '缺：' + JSON.stringify(missingItems));
+  T('>8 件折成两列（DOM 一件不少，列由 CSS 轨道给）',
+    whHtml.indexOf('class="tc-wh many"') >= 0 &&
+    /\.tc-wh\.many \.tc-wh-list\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/.test(api.CSS));
+  T('占用 N/M：N=件数、M=舱当前×2（舱 7/12 → 14）',
+    /class="tc-wh-occ[^"]*">16<u>\/14<\/u>/.test(whHtml),
+    (whHtml.match(/tc-wh-occ[^>]*>[^<]*<u>[^<]*/) || [''])[0]);
+  T('没有 sh 时容量画 — 而不是编一个数',
+    /class="tc-wh-occ">3<u>\/—<\/u>/.test(api.render(api.parseState('wh: ' + WH3))),
+    (api.render(api.parseState('wh: ' + WH3)).match(/tc-wh-occ[^>]*>[^<]*<u>[^<]*/) || [''])[0]);
+  T('每件一行：名 + ×数（数量右对齐元素点名）',
+    /<span class="tc-wh-n">净水器<\/span>\s*<em class="tc-wh-x">×3<\/em>/.test(whHtml),
+    (whHtml.match(/tc-wh-i">[\s\S]{0,90}/) || [''])[0]);
+  T('注画成独立的小字元素，且带方括号（照契约的记法显示：不带括号会分不清哪几个字是名字）',
+    whHtml.indexOf('<i class="tc-wh-note">[备用灯油]</i>') >= 0,
+    (whHtml.match(/tc-wh-note">[^<]*/) || [''])[0]);
+  T('注与名字之间留出空隙（不是靠空格猜，是 padding）',
+    /\.tc-wh-note\{[^}]*padding-left:5px/.test(api.CSS));
+  const whEmptyHtml = api.render(api.parseState('wh: 无'));
+  T('空仓画「空仓」，不出空的清单容器',
+    whEmptyHtml.indexOf('class="tc-wh-empty">空仓<') >= 0 && whEmptyHtml.indexOf('class="tc-wh-list"') < 0);
+  T('wh 坏段在卡面上可见（报错必须画得出来）',
+    api.render(api.parseState('wh: 鱼干 ｜ 净水器×0')).indexOf('class="tc-wh-err"') >= 0);
+
+  /* ── 渲染：pl 分色、倒计时角标、未知型 ── */
+  const plHtml = api.render(api.parseState(['scene: 码头', 'pl: 锈锚市场 ｜ 型 市场 ｜ 存 3 ｜ 特 卖淡水',
+    'pl2: 虫窟 ｜ 型 虫巢 ｜ 存 0 ｜ 特 壁面在呼吸'].join('\n')));
+  const plClsMiss = ['market', 'ruin', 'camp', 'peril', 'buoy', 'fleet']
+    .filter(t => api.CSS.indexOf('.tc-pl.t-' + t + '{--pc:') < 0);
+  T('pl 六型各有一条配色规则（点名缺哪一型）', plClsMiss.length === 0, '缺：' + JSON.stringify(plClsMiss));
+  T('pl 市场卡带 t-market 与 型 原词', /class="tc-pl t-market"[\s\S]{0,300}<span class="tc-pl-type">市场<\/span>/.test(plHtml));
+  T('pl 未知型走 t-x 且原词「虫巢」照常显示',
+    /class="tc-pl t-x"[\s\S]{0,300}<span class="tc-pl-type">虫巢<\/span>/.test(plHtml) && plHtml.indexOf('虫巢') >= 0);
+  T('pl 存 N 是角标；存 0 划掉并标「存 0」',
+    plHtml.indexOf('<b class="tc-pl-store">存 3</b>') >= 0
+      && plHtml.indexOf('<b class="tc-pl-store gone">存 0</b>') >= 0);
+  T('pl 没写 存 时画「存 —」，不冒充 0',
+    api.render(api.parseState('pl: 荒野 ｜ 型 遗迹 ｜ 特 什么都没有')).indexOf('class="tc-pl-store miss">存 —<') >= 0);
+  T('pl 特 画成小字摘要', plHtml.indexOf('<div class="tc-pl-ft">卖淡水</div>') >= 0);
+
+  /* ── 负向：纯基础块不许冒出这两张卡 ── */
+  const baseHtml = api.render(api.parseState(['scene: 天台', 'p1: 我 ｜ HP 10/10', 'next: 上前'].join('\n')));
+  T('没有 wh/pl 行时不出这两张卡（不许画空壳）',
+    baseHtml.indexOf('tc-wh') < 0 && baseHtml.indexOf('tc-pl') < 0);
+
+  /* ── 量级：这两张是辅助信息，形状要比避难所轻（不给渐变外环） ── */
+  const whRule = (api.CSS.match(/\.tc-wh\{[^}]*\}/) || [''])[0];
+  const plRule = (api.CSS.match(/\.tc-pl\{[^}]*\}/) || [''])[0];
+  T('wh 是扁平清单（无渐变外环 = 比 shelter 轻一档）',
+    whRule !== '' && whRule.indexOf('linear-gradient') < 0 && api.CSS.indexOf('.tc-wh-list{') >= 0, whRule);
+  T('pl 的识别符是「3px 型色左钉」（不是 shelter 的圆角浮筒）',
+    /border-left:3px solid var\(--pc\)/.test(plRule), plRule);
+  T('wh/pl 也不进 EXT_KEYS', REG.every(e => e.key !== 'wh' && e.key !== 'pl'),
+    'EXT_KEYS 里的键：' + JSON.stringify(REG.map(e => e.key)));
+
+  /* ── 两列不许串行：这几条 CSS 是「每件待在自己格子里」的前提，缺一条就会读错归属 ──
+     只挂 minmax 不够：CJK 名字本来就能断行，`overflow-wrap:anywhere` 又把 min-content
+     压到 1 字，`1fr` 的自动下限才不至于撑破。所以「可折行」和「minmax(0,·)」都得在。 */
+  const manyRule = (api.CSS.match(/\.tc-wh\.many \.tc-wh-list\{[^}]*\}/) || [''])[0];
+  const itemRule = (api.CSS.match(/\.tc-wh-i\{[^}]*\}/) || [''])[0];
+  const nameRule = (api.CSS.match(/\.tc-wh-n\{[^}]*\}/) || [''])[0];
+  T('wh 两列的轨道是 minmax(0,1fr)（不是 1fr：1fr 的自动下限会被长字的 min-content 撑开）',
+    /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(manyRule), manyRule);
+  T('wh 每件自己 min-width:0（允许被压窄，不许顶宽）',
+    /min-width:0/.test(itemRule), itemRule);
+  T('wh 名字可随处折行（overflow-wrap:anywhere 两列才不互相挤）',
+    /overflow-wrap:anywhere/.test(nameRule), nameRule);
+  /* 只查 wh 自己那一段 CSS：别的卡（.tc-ak / .tc-kbm-gl …）用 ellipsis 是它们的既有设计 */
+  const whCss = api.CSS.slice(api.CSS.indexOf('.tc-whs{'), api.CSS.indexOf('.tc-pls{'));
+  T('wh 不许用 ellipsis 收尾（那是把字丢了，比串行更坏）',
+    whCss.length > 0 && whCss.indexOf('text-overflow') < 0, 'wh 段 CSS 长度 ' + whCss.length);
+  T('wh ≤360 退回单列（宁可变高，不许两列挤成一团）',
+    /@media \(max-width:360px\)\{\.tc-wh\.many \.tc-wh-list\{grid-template-columns:minmax\(0,1fr\)\}\}/.test(api.CSS));
+}
+
+{
+  /* ══════════ 组 15 · 行内键切分（整块挤成一行时的抢救通道） ══════════
+     实战事故：AI 把 `sh:` `cr1:` `dz:` `p1:` `sk1:` `eq1:` `result:` `world:` `next:`
+     全写在同一行、用空格隔开。逐行解析只认第一个键，其余全丢 → 一张卡都不渲染，
+     玩家看到的是一整块原始文本（全白）。
+     这条通道的判据不是「修好了没有」，是两件同时成立：
+       ① 该拆的拆开（9 个键都解到、卡片画出来）；
+       ② 不该拆的**一个字都不动**（单键行的正文里提到 `next:` 是自然中文，误拆等于吃正文）。
+     `segs` 是「切出了几段」，0/1 表示没切——所以「没切」也要被断言，不能只测会切的那半。 */
+  console.log('\n── 组 15 · 行内键切分 ──');
+
+  /* ── A 正常多行块：回归，不许有副作用 ── */
+  const NORMAL = ['scene: 第三环·夜里两点 ｜ 甲板',
+    'sh: 潮汐屿 ｜ 型 浮岛 ｜ 耐久 268/400 ｜ 舱 7/12 ｜ 防 12',
+    'p1: 我 ｜ HP 88/100',
+    'next: 收帆'].join('\n');
+  const nBlk = api.extractBlock(NORMAL);
+  T('A 正常块 extractBlock.body 与原文逐字节相同（切分不改结构）',
+    !!nBlk && nBlk.body === NORMAL, 'len ' + (nBlk && nBlk.body.length) + ' vs ' + NORMAL.length);
+  const nSp = api.splitInlineKeys(NORMAL);
+  T('A 正常块不触发切分（segs === 0，行数不变）',
+    nSp.segs === 0 && nSp.lines.length === 4, 'segs=' + nSp.segs + ' lines=' + nSp.lines.length);
+  const nSt = api.parseState(NORMAL);
+  T('A 正常块 parseState 不带 inlineSplit 标记', nSt.inlineSplit === undefined, String(nSt.inlineSplit));
+  T('A 正常块卡面没有切分警告', api.render(nSt).indexOf('tc-split') < 0);
+
+  /* ── B 用户截图里那串真实原文：9 个键挤成一行 ── */
+  const ONE = 'sh: 潮汐屿 ｜ 型 浮岛 ｜ 耐久 268/400 ｜ 舱 7/12 ｜ 防 12 '
+    + 'cr1: 幸运LP 12/12 dz: 海上风暴 ｜ 级 3 ｜ 余 4 ｜ 效 每回合 耐久 -15 '
+    + 'p1: 我 ｜ HP 88/100 sk1: 操舵 3 eq1: 锈刀 result: 抢到半舱 food '
+    + 'world: 赤潮北上 next: 收帆';
+  const oneHits = api.keyHits(ONE).map(h => h.key);
+  T('B 单行里认出 9 个键且顺序不乱',
+    oneHits.join(',') === 'sh,cr1,dz,p1,sk1,eq1,result,world,next', oneHits.join(','));
+  const oneBlk = api.extractBlock(ONE);
+  T('B 切分发生在解析层：extractBlock 仍把它当成一行（end === 0）',
+    !!oneBlk && oneBlk.end === 0, 'end=' + (oneBlk && oneBlk.end));
+  const oneSt = api.parseState(oneBlk.body);
+  T('B 解析出 9 段（inlineSplit === 9）', oneSt.inlineSplit === 9, String(oneSt.inlineSplit));
+  const nineMiss = [];
+  if (oneSt.shelters.length !== 1) nineMiss.push('sh');
+  if (oneSt.disasters.length !== 1) nineMiss.push('dz');
+  if (oneSt.players.length !== 1) nineMiss.push('p1');
+  if (!(oneSt.players[0] && oneSt.players[0].skills.length)) nineMiss.push('sk1');
+  if (!(oneSt.players[0] && oneSt.players[0].equip)) nineMiss.push('eq1');
+  if (!(oneSt.players[0] && oneSt.players[0].crRow)) nineMiss.push('cr1');
+  if (!oneSt.result) nineMiss.push('result');
+  if (!oneSt.world) nineMiss.push('world');
+  if (oneSt.next !== '收帆') nineMiss.push('next');
+  T('B 九个键逐个解到（点名缺哪个键，不报数量）', nineMiss.length === 0, '缺：' + JSON.stringify(nineMiss));
+  const oneHtml = api.render(oneSt);
+  T('B 卡面显式标注「此行缺换行，已自动切分（9 段）」（不许静默修好）',
+    oneHtml.indexOf('<div class="tc-split">⚠ 此行缺换行，已自动切分（9 段）</div>') >= 0,
+    (oneHtml.match(/tc-split[\s\S]{0,40}/) || [''])[0]);
+  T('B 切完之后真的画出卡片（不是标了警告却还是空卡）',
+    oneHtml.indexOf('class="tc-shelter') >= 0 && oneHtml.indexOf('class="tc-dz ') >= 0);
+  T('B result / world / next 三条尾部字段原样保留',
+    oneSt.result === '抢到半舱 food' && oneSt.world === '赤潮北上' && oneSt.next === '收帆',
+    JSON.stringify([oneSt.result, oneSt.world, oneSt.next]));
+
+  /* ── C 防误伤：单键行的正文里提到 next: ── */
+  const C1 = 'world: 频道里有人念了句「next: 该走了」，像是玩笑';
+  const c1 = api.splitInlineKeys(C1);
+  T('C 引号里的 next: 不触发切分（正文在「谈论」键，不是在用它）',
+    c1.segs === 0 && c1.lines.length === 1 && c1.lines[0] === C1, 'segs=' + c1.segs);
+  /* 同一条的另一个时刻：把引号拿掉，它就该切了 —— 否则上面那条可能只是「永远不切」的假绿 */
+  const C2 = 'world: 频道里有人念了句 next: 该走了，像是玩笑';
+  const c2 = api.splitInlineKeys(C2);
+  T('C 对照：同一句去掉引号后确实会切（证明上一条不是恒不切的假绿）',
+    c2.segs === 2 && c2.lines.length === 2, 'segs=' + c2.segs + ' lines=' + JSON.stringify(c2.lines));
+  const C3 = 'next: 记住 next 才是下一步';
+  T('C 正文提到键名但没有冒号 → 不切', api.splitInlineKeys(C3).segs === 0);
+  const C4 = 'next: 收帆';
+  T('C 单键正常行 → 不切', api.splitInlineKeys(C4).segs === 0);
+
+  /* ── D 切不出来的乱码：原样返回，不崩 ── */
+  const D1 = 'foo: bar baz: qux 这次真的没有状态键';
+  const d1 = api.splitInlineKeys(D1);
+  T('D 没有任何已知键 → 原样返回（不猜、不丢段）',
+    d1.segs === 0 && d1.lines.length === 1 && d1.lines[0] === D1, 'segs=' + d1.segs);
+  let dCrash = null;
+  try { const stD = api.parseState(D1); api.render(stD); } catch (e) { dCrash = String(e && e.message); }
+  T('D 乱码行走完整条链路不抛错', dCrash === null, String(dCrash));
+  const D2 = 'xx yy next: 收帆 zz';
+  T('D 只有 1 个已知键 → 不切（单键行一律不碰）', api.splitInlineKeys(D2).segs === 0);
+
+  /* ── E 边界：全角冒号、键前有前置文字、键名长短 ── */
+  const E1 = 'scene：天台 next：收帆';
+  const e1 = api.splitInlineKeys(E1);
+  T('E 全角冒号也认（scene：/ next：）',
+    e1.segs === 2 && api.parseState(e1.lines.join('\n')).next === '收帆', 'segs=' + e1.segs);
+  const E2 = '（状态） sh: 潮汐屿 ｜ 型 浮岛 next: 收帆';
+  const e2 = api.splitInlineKeys(E2);
+  T('E 第一个键之前的文字自己成一段，不被并进第一个键',
+    e2.lines[0] === '（状态）' && e2.lines[1].indexOf('sh:') === 0, JSON.stringify(e2.lines));
+  const E3 = 'pl: 虫巢 ｜ 型 虫巢 p1: 我 ｜ HP 9/10';
+  T('E 键名长的优先（pl / p1 各自命中，pl 不被拆成 p + l）',
+    api.keyHits(E3).map(h => h.key).join(',') === 'pl,p1', api.keyHits(E3).map(h => h.key).join(','));
 }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');

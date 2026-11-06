@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.28.0';
+  const VERSION = '3.29.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -315,6 +315,83 @@
       }
       /* 规格外的裸段：接着写进 效（这一段本来就是自由文字），不丢、也不冒充别的字段 */
       o.effect = o.effect ? o.effect + ' ' + x : x;
+    }
+    return o;
+  }
+
+  /* ── 仓储 wh ──
+     `名×数[注]` 一段一件，段数 0..16，空仓写 `wh: 无`。
+     这一行是**玩家资产的唯一载体**：解析的第一原则是「一件都不能丢」，好看排第二——
+     所以认不出 `×数` 的段不跳过，原样收成一件（qty=null）再报原文；
+     名字与注的长度不设限（内容侧是骰池生成，AI 会造「军用密封声呐探头」这种组合词），
+     长度约束交给内容侧，渲染器只负责把它完整画出来。 */
+  const WH_MAX = 16;
+
+  function parseWarehouse(v) {
+    const raw = String(v == null ? '' : v);
+    const p = seg(raw);
+    const o = { items: [], errs: [], raw };
+    for (const s0 of p) {
+      const x = s0.trim();
+      if (!x) continue;
+      /* 空仓的几种写法。只在「还没有任何一件」时生效：`无` 出现在第 3 段不能清空前两件 */
+      if (!o.items.length && /^(无|—|－|-|暂无|空|none)$/i.test(x)) continue;
+
+      const m = x.match(/^(.+?)\s*[×xX*]\s*(\d+)\s*(?:[[［【]([^\]］】]*)[\]］】])?$/);
+      if (m) {
+        const name = m[1].trim();
+        const qty = +m[2];
+        const note = (m[3] || '').trim();
+        /* `×0` 不是「没有」，是写错了：件数收下为 null 并报原文，不把这一件抹掉 */
+        if (qty > 0) o.items.push({ name, qty, note });
+        else { o.items.push({ name, qty: null, note }); o.errs.push('件数必须是正整数：' + x); }
+        continue;
+      }
+      o.items.push({ name: x, qty: null, note: '' });
+      o.errs.push('缺 ×件数：' + x);
+    }
+    if (o.items.length > WH_MAX) {
+      o.errs.push('超过 ' + WH_MAX + ' 段（' + o.items.length + '）：全部照常显示，不截断');
+    }
+    return o;
+  }
+
+  /* ── 场所 pl ──
+     四段固定：名称 / 型 / 存 N / 特 一句。`型` 命中六类就走对应配色；
+     **清单外的型不报错**（生成引擎一定会造出没列过的型），走灰色兜底并把原词显示出来——
+     报错等于把 AI 生成的东西判成坏的，玩家会以为是自己写错了。 */
+  const PLACE_TYPES = { '市场': 'market', '遗迹': 'ruin', '营地': 'camp', '险地': 'peril', '浮标': 'buoy', '船队': 'fleet' };
+
+  function parsePlace(v) {
+    const raw = String(v == null ? '' : v);
+    const p = seg(raw);
+    const o = { name: '', type: '', typeRaw: '', store: null, feature: '', errs: [], raw };
+    for (let i = 0; i < p.length; i++) {
+      const x = p[i].trim();
+      if (!x) continue;
+      if (!o.name && i === 0) { o.name = x; continue; }
+
+      let m;
+      if ((m = x.match(/^型(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        o.typeRaw = m[1].trim();
+        o.type = PLACE_TYPES[o.typeRaw] || '';
+        continue;
+      }
+      if ((m = x.match(/^存(?:\s*[:：]\s*|\s+|$)(.+)$/))) {
+        const s = m[1].trim();
+        /* `存 0` 合法（本回合后消失）：不许用真值判断 */
+        if (/^\d+$/.test(s)) o.store = +s;
+        else o.errs.push('存 必须是非负整数：' + s);
+        continue;
+      }
+      if ((m = x.match(/^特(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        if (m[1].trim()) o.feature = o.feature ? o.feature + ' ' + m[1].trim() : m[1].trim();
+        continue;
+      }
+      /* 型 关键字省略的容错：裸段整段恰是六型之一且还没给型 → 当作型 */
+      if (!o.typeRaw && PLACE_TYPES[x]) { o.typeRaw = x; o.type = PLACE_TYPES[x]; continue; }
+      /* 规格外的裸段接进 特（那里本来就是自由文字）：不丢、也不冒充别的字段 */
+      o.feature = o.feature ? o.feature + ' ' + x : x;
     }
     return o;
   }
@@ -859,10 +936,83 @@
     return o;
   }
 
+  /* ══════════ 行内键切分（抢救通道）══════════
+     AI 偶尔把整块状态挤成一行：`sh: … ｜ 型 … cr1: … p1: … next: 收帆`。
+     逐行解析只认第一个键、其余全被丢掉，玩家看到的是一整块不渲染的原文——
+     这类「撞到就全白」不许只靠世界书自觉。
+
+     只在**同一行出现 ≥2 个行首形态的已知键**时才动手：
+     单键行一律不碰（正文里写一句「下一步 next: 出发」是很自然的中文，误切会吃掉正文）。
+     切分点只认「键名 + 可选编号 + 冒号」，冒号全角半角都认；
+     键与键之间是空格、` ｜ `、逗号还是别的，一概不假设——按位置切，不按分隔符切。
+     切不起来（一行里只有 1 个键、或一个键都没有）就原样返回：不猜、不丢段。 */
+  const KEY_BASES = (() => {
+    const bases = [];
+    String(KEYS).split('|').forEach((f) => {
+      const b = f.trim().replace(/\[0-9\][*+]?$/, '');
+      if (/^[a-z]+$/i.test(b) && bases.indexOf(b) < 0) bases.push(b);
+    });
+    bases.sort((a, b) => b.length - a.length);   /* 长的排前面：pl 不许被 p 抢头 */
+    return bases;
+  })();
+  const KEY_AT = new RegExp('(?:^|[^A-Za-z0-9_])(' + KEY_BASES.join('|') + ')([0-9]*)\\s*[:：]', 'gi');
+
+  /* 位置在不在引号里：正文里「有人念了句『next: 该走了』」是在**谈论**这个键，
+     不是在用它。引号里的命中一律不参与切分——这是「防误伤」唯一能自动判的形态。 */
+  function insideQuote(line, pos) {
+    let a = 0, b = 0, c = 0, d = 0;
+    for (let i = 0; i < pos; i++) {
+      const ch = line[i];
+      if (ch === '「') a++; else if (ch === '」') a = Math.max(0, a - 1);
+      else if (ch === '『') b++; else if (ch === '』') b = Math.max(0, b - 1);
+      else if (ch === '“') c++; else if (ch === '”') c = Math.max(0, c - 1);
+      else if (ch === '"') d = d ? 0 : 1;
+    }
+    return !!(a || b || c || d);
+  }
+
+  /* 一行里所有「键 + 编号 + 冒号」的起始位置。m[0] 开头那个分隔字符不属于键名，
+     所以要按 indexOf 把偏移找回来——直接拿 m.index 会把前一个空格算进键里。 */
+  function keyHits(line) {
+    const hits = [];
+    KEY_AT.lastIndex = 0;
+    let m;
+    while ((m = KEY_AT.exec(line))) {
+      const at = m.index + m[0].indexOf(m[1] + m[2]);
+      if (!insideQuote(line, at)) hits.push({ at, key: m[1] + m[2] });
+      if (KEY_AT.lastIndex <= at) KEY_AT.lastIndex = at + 1;   /* 防空转 */
+    }
+    return hits;
+  }
+
+  /* 返回 { lines, segs }：segs 是切出了几段（0/1 = 没切）。 */
+  function splitInlineKeys(text) {
+    const src = String(text == null ? '' : text).split(/\r?\n/);
+    const out = [];
+    let segs = 0;
+    for (const line of src) {
+      const hits = keyHits(line);
+      if (hits.length < 2) { out.push(line); continue; }
+      const pieces = [];
+      const head = line.slice(0, hits[0].at).trim();   /* 第一个键之前若有文字，自己成一段，不并进第一个键 */
+      if (head) pieces.push(head);
+      for (let i = 0; i < hits.length; i++) {
+        const from = hits[i].at;
+        const to = i + 1 < hits.length ? hits[i + 1].at : line.length;
+        const piece = line.slice(from, to).trim();
+        if (piece) pieces.push(piece);
+      }
+      if (pieces.length < 2) { out.push(line); continue; }   /* 切了个寂寞就还原 */
+      segs += pieces.length;
+      for (const piece of pieces) out.push(piece);
+    }
+    return { lines: out, segs };
+  }
+
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -872,9 +1022,12 @@
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const gmap = new Map();
     const shmap = new Map(), dzmap = new Map();
+    const whmap = new Map(), plmap = new Map();
     const xmap = {}; EXT_KEYS.forEach(e => { xmap[e.field] = new Map(); });
     const checks = [];
-    const rec = recoverMobLines(String(text).split(/\r?\n/));
+    const split = splitInlineKeys(text);
+    const rec = recoverMobLines(split.lines);
+    if (split.segs > 1) st.inlineSplit = split.segs;   /* 卡面要标出来：我们切了，但 AI 写错了 */
 
     for (const raw of rec.lines) {
       const line = raw.trim();
@@ -905,6 +1058,8 @@
       else if (/^dmg\d*$/.test(k)) gmap.set(k === 'dmg' ? 1 : +k.slice(3), parseDmg(v));
       else if (/^sh\d*$/.test(k)) shmap.set(k === 'sh' ? 1 : +k.slice(2), parseShelter(v));
       else if (/^dz\d*$/.test(k)) dzmap.set(k === 'dz' ? 1 : +k.slice(2), parseDisaster(v));
+      else if (/^wh\d*$/.test(k)) whmap.set(k === 'wh' ? 1 : +k.slice(2), parseWarehouse(v));
+      else if (/^pl\d*$/.test(k)) plmap.set(k === 'pl' ? 1 : +k.slice(2), parsePlace(v));
       else if (extHit(k)) { const h = extHit(k); xmap[h.e.field].set(h.num, parseNpc(v)); }
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
@@ -942,6 +1097,8 @@
     st.dmgs = [...gmap.keys()].sort((a, b) => a - b).map(k => gmap.get(k));
     st.shelters = [...shmap.keys()].sort((a, b) => a - b).map(i => { const s = shmap.get(i); s.idx = i; return s; });
     st.disasters = [...dzmap.keys()].sort((a, b) => a - b).map(i => { const d = dzmap.get(i); d.idx = i; return d; });
+    st.warehouses = [...whmap.keys()].sort((a, b) => a - b).map(i => { const w = whmap.get(i); w.idx = i; return w; });
+    st.places = [...plmap.keys()].sort((a, b) => a - b).map(i => { const p = plmap.get(i); p.idx = i; return p; });
     st.mobs = [...mmap.keys()].sort((a, b) => a - b).map(k => mmap.get(k));
     if (rec.mobs.length) st.mobs = st.mobs.concat(rec.mobs);
     return st;
@@ -1155,6 +1312,62 @@
         ${left}
         ${d.effect ? `<div class="tc-dz-fx">${esc(d.effect)}</div>` : ''}
         ${errs}
+      </div>`;
+  }
+
+  /* 仓储卡：**清单卡，不是条卡**。
+     它是「你现在有什么」的账本，不是「还剩多少」的读数——所以一行一件、数量右对齐，
+     不画条（条回答的是比例，账本回答的是有无）。
+     硬约束：**一件都不许丢**。9 件以上折成两列只是为了不把卡拉成一条长鞭，
+     折列用的是 CSS 多列（同一批 DOM 节点），不是「取前 8 件」——所以窄屏会掉成一列，
+     但永远不会少一行。 */
+  function renderWarehouse(w, cap) {
+    const used = w.items.length;
+    const many = used > 8;
+    const capTxt = cap == null ? '—' : cap;
+    const rows = w.items.map(it => `
+      <div class="tc-wh-i">
+        <span class="tc-wh-n">${esc(it.name)}</span>
+        ${it.qty == null ? '<em class="tc-wh-x miss">×—</em>' : `<em class="tc-wh-x">×${it.qty}</em>`}
+        ${it.note ? `<i class="tc-wh-note">[${esc(it.note)}]</i>` : ''}
+      </div>`).join('');
+    const errs = w.errs.length ? `
+      <div class="tc-wh-err">${w.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+    const full = cap != null && used > cap ? ' over' : '';
+    return `
+      <div class="tc-wh${many ? ' many' : ''}">
+        <div class="tc-wh-in">
+          <div class="tc-wh-hd">
+            <em class="tc-wh-lab">占用</em>
+            <b class="tc-wh-occ${full}">${used}<u>/${capTxt}</u></b>
+          </div>
+          ${used ? `<div class="tc-wh-list">${rows}</div>` : '<div class="tc-wh-empty">空仓</div>'}
+          ${errs}
+        </div>
+      </div>`;
+  }
+
+  /* 场所卡：一行一个地点，按 型 分色 + `存 N` 倒计时角标 + `特` 一句小字摘要。
+     量级比避难所轻一档：它是路过的背景，不是你要盯着的读数。 */
+  function renderPlace(p) {
+    const type = p.type || 'x';
+    const cls = ['tc-pl', 't-' + type];
+    const store = p.store == null
+      ? '<b class="tc-pl-store miss">存 —</b>'
+      : (p.store <= 0 ? '<b class="tc-pl-store gone">存 0</b>' : `<b class="tc-pl-store">存 ${p.store}</b>`);
+    const errs = p.errs.length ? `
+      <div class="tc-pl-err">${p.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+    return `
+      <div class="${cls.join(' ')}">
+        <div class="tc-pl-in">
+          <div class="tc-pl-hd">
+            <b class="tc-pl-name">${esc(p.name || '场所')}</b>
+            ${p.typeRaw ? `<span class="tc-pl-type">${esc(p.typeRaw)}</span>` : ''}
+            ${store}
+          </div>
+          ${p.feature ? `<div class="tc-pl-ft">${esc(p.feature)}</div>` : ''}
+          ${errs}
+        </div>
       </div>`;
   }
 
@@ -1591,6 +1804,13 @@
     const out = [];
     const sect = (zh, en) => `<div class="tc-sect"><i></i><b>${esc(zh)}</b><em>${en}</em></div>`;
 
+    /* ── 行内键切分标记：**不许静默修好**。
+          我们只是不让它白屏；AI 把整块写成一行这件事必须被玩家看见，
+          否则下一次它还会这么写、而且没人知道面板在替它兜。 ── */
+    if (st.inlineSplit) {
+      out.push(`<div class="tc-split">⚠ 此行缺换行，已自动切分（${st.inlineSplit} 段）</div>`);
+    }
+
     /* ── 顶部指令栏 ── */
     out.push(`<div class="tc-cmdbar">
       ${scene[0] ? `<span class="tc-time"><u></u>${esc(scene[0])}</span>` : ''}
@@ -1639,6 +1859,13 @@
       colL.push(sect('避难所', 'SHELTER'));
       colL.push(`<div class="tc-shelters">${st.shelters.map(renderShelter).join('')}</div>`);
     }
+    /* ── 仓储：容量 M 从同一栋的 舱 取（舱当前 ×2）——仓储不是独立空间，它装在船里 ── */
+    if (st.warehouses.length) {
+      const hold = st.shelters.length ? st.shelters[0].hold : null;
+      const cap = hold && hold.max > 0 ? hold.cur * 2 : null;
+      colL.push(sect('仓储', 'HOLD'));
+      colL.push(`<div class="tc-whs">${st.warehouses.map(w => renderWarehouse(w, cap)).join('')}</div>`);
+    }
     if (st.bonds.length) {
       colL.push(sect('羁绊', 'BONDS'));
       colL.push(`<div class="tc-bonds">${st.bonds.map(renderBond).join('')}</div>`);
@@ -1666,6 +1893,11 @@
     if (st.ntrLogs.length) {
       colR.push(sect('暗流 · 事件轴', 'UNDERCURRENT'));
       colR.push(`<div class="tc-nls">${st.ntrLogs.map(renderNtrLog).join('')}</div>`);
+    }
+    /* 场所排在右栏末尾：它是「周围有什么」，不是威胁也不是队员 */
+    if (st.places.length) {
+      colR.push(sect('场所', 'PLACES'));
+      colR.push(`<div class="tc-pls">${st.places.map(renderPlace).join('')}</div>`);
     }
     if (st.npcs.length) {
       colL.push(sect('在场人物', 'CONTACTS'));
@@ -1852,6 +2084,12 @@
   background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.013) 3px 4px)}
 .tc-wrap *{box-sizing:border-box;white-space:normal}
 
+/* ── 行内键切分提示：AI 把整块写成一行时，面板拆完还要当面说一句 ──
+   用琥珀黄（与 .tc-dmg-warn 同一套「我们兜住了但这是错的」语气），虚线左边框，
+   不用红色：红是「战斗失败」，这里是「格式错」，别把两件事混成一个信号。 */
+.tc-split{display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:5px 10px;
+  border:1px dashed rgba(251,191,36,.42);border-left:3px solid #fbbf24;border-radius:6px;
+  background:rgba(251,191,36,.07);color:#fcd34d;font-size:11.5px;letter-spacing:.02em}
 /* ── 顶部指令栏 ── */
 .tc-cmdbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px 14px;
   background:linear-gradient(180deg,rgba(125,211,252,.10),rgba(125,211,252,.02));
@@ -2671,8 +2909,11 @@
 /* 水位线：等宽虚格的水面 —— shelter 的识别符，缩略图里第一眼看到的是它 */
 .tc-sh-water{position:relative;height:5px;margin-top:9px;border-radius:1px;opacity:.55;
   background:repeating-linear-gradient(90deg,#0e7490 0 5px,#134e4a 5px 10px)}
-.tc-shelter.wrecked{filter:saturate(.4)}
-.tc-shelter.wrecked .tc-sh-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.22) 0 6px,rgba(6,16,20,0) 6px 12px)}
+.tc-shelter.wrecked{filter:saturate(.55)}
+.tc-shelter.wrecked .tc-sh-in{background-image:repeating-linear-gradient(45deg,rgba(244,63,94,.11) 0 6px,rgba(6,16,20,0) 6px 14px)}
+/* 终局态最需要读清的是那五个数字，不是纹路：给读数垫一块暗板，斜纹只留在四周 */
+.tc-shelter.wrecked .tc-sh-gauges{padding:5px 7px;border-radius:6px;background:rgba(4,10,12,.62);
+  box-shadow:inset 0 0 0 1px rgba(127,29,29,.38)}
 .tc-shelter.wrecked .tc-sh-water{opacity:.8;background:repeating-linear-gradient(90deg,#7f1d1d 0 5px,#450a0a 5px 10px)}
 /* 盖章要反向补饱和：整卡 filter 会把它一起削灰，而失效是重点 */
 .tc-sh-stamp{position:absolute;right:10px;bottom:18px;transform:rotate(-7deg);
@@ -2684,7 +2925,8 @@
    它是横条，不是卡片：整宽的血色斜纹带 + 左侧 9px 等级色块 + 五格严重度点阵。
    点阵而不是条 —— 1..5 是**档位**，画成条会被读成「快结束了」（而且条已经有三处在用）。 */
 .tc-dzs{position:relative;display:flex;flex-direction:column;gap:5px;margin:0 0 10px}
-.tc-dz{--dl:#f59e0b;position:relative;display:grid;grid-template-columns:auto 1fr auto auto;
+/* 五列不是四列：终局时多出「已平息」一枚徽章，四列会把它挤到第二行、把「余 0 回合」拆成两行 */
+.tc-dz{--dl:#f59e0b;position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;
   align-items:center;gap:3px 10px;padding:7px 12px;border-left:9px solid var(--dl);
   background:repeating-linear-gradient(135deg,rgba(120,20,20,.20) 0 7px,rgba(9,11,14,.94) 7px 14px);
   border-top:1px solid #3a1c1c;border-bottom:1px solid #3a1c1c}
@@ -2713,6 +2955,78 @@
 .tc-mini .tc-sh-mods{margin-top:5px;padding-top:5px}
 .tc-mini .tc-dz{padding:5px 9px;gap:2px 8px}
 .tc-mini .tc-dz-fx{font-size:10px}
+
+/* ══════════ wh 仓储 / pl 场所 ══════════
+   这两张是**辅助信息**，量级要比避难所轻一档：没有渐变外环、没有锈纹、没有水位线。
+   做法是「扁」——一条 1px 暗边 + 一行一件的清单；缩略图里它们应该是两片安静的方块，
+   而避难所仍然是那张带环带纹的卡。 */
+
+/* 清单卡：不画条。折列用 CSS 多列，DOM 节点不增不减 —— 窄屏掉成单列，但一件不少。 */
+.tc-whs{display:flex;flex-direction:column;gap:5px}
+.tc-wh{position:relative;border:1px solid rgba(148,163,184,.20);border-radius:6px;
+  background:rgba(12,19,31,.60)}
+.tc-wh-in{padding:6px 9px 7px}
+.tc-wh-hd{display:flex;align-items:baseline;gap:6px;margin-bottom:5px}
+.tc-wh-lab{font-style:normal;font-size:9.5px;letter-spacing:.16em;color:#64748b}
+.tc-wh-occ{margin-left:auto;font-family:ui-monospace,Consolas,monospace;
+  font-variant-numeric:tabular-nums;font-size:11px;color:#cbd5e1}
+.tc-wh-occ u{text-decoration:none;color:#475569}
+.tc-wh-occ.over{color:#fca5a5}
+.tc-wh-occ.over u{color:#7f1d1d}
+/* 每件一行：名（可换行、绝不截断）+ 数量（右对齐、不缩）+ 可选注 */
+.tc-wh-list{display:grid;grid-template-columns:minmax(0,1fr);gap:1px 14px}
+/* 两列只在够宽时开：minmax(0,…) 让每格按自己的宽度换行，长名字绝不越过列线
+   （用 1fr 等于 minmax(auto,1fr)，单元格会被长字的 min-content 撑宽、溢出到隔壁那一列，
+   读起来像注挂错了人——这比不好看严重）。不用 ellipsis：那是把字丢了。
+   ≤360 干脆退回单列，宁可变长也不让两列挤成一团。 */
+.tc-wh.many .tc-wh-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tc-wh-i{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;
+  min-width:0;overflow-wrap:anywhere;
+  gap:0 5px;padding:1px 0;border-bottom:1px dotted rgba(148,163,184,.10)}
+@media (max-width:360px){.tc-wh.many .tc-wh-list{grid-template-columns:minmax(0,1fr)}}
+/* 两列时给左列一条极淡的列线：数量贴着谁的右缘，就只属于谁，扫一眼不会读串 */
+@media (min-width:361px){.tc-wh.many .tc-wh-i:nth-child(odd){
+  padding-right:9px;border-right:1px solid rgba(148,163,184,.10)}}
+.tc-wh-n{font-size:11px;color:#e2e8f0;line-height:1.5;
+  overflow-wrap:anywhere;word-break:break-word}
+.tc-wh-x{font-style:normal;font-family:ui-monospace,Consolas,monospace;
+  font-variant-numeric:tabular-nums;font-size:11px;font-weight:700;color:#7dd3fc;
+  justify-self:end;white-space:nowrap}
+.tc-wh-x.miss{color:#64748b}
+.tc-wh-note{font-style:normal;font-size:9.5px;color:#94a3b8;white-space:nowrap;padding-left:5px}
+.tc-wh-empty{font-size:10.5px;color:#475569;letter-spacing:.1em;padding:1px 0 2px}
+.tc-wh-err{margin-top:4px;display:flex;flex-direction:column;gap:2px}
+.tc-wh-err em,.tc-pl-err em{font-style:normal;font-size:9.5px;color:#fdba74;
+  border-left:2px solid #b45309;padding-left:6px;line-height:1.4}
+
+/* 场所卡：一条 3px 型色左钉 + 名称 / 型词 / 倒计时角标 + 一句摘要 */
+.tc-pls{display:flex;flex-direction:column;gap:4px}
+.tc-pl{--pc:#94a3b8;position:relative;border:1px solid rgba(148,163,184,.18);
+  border-left:3px solid var(--pc);border-radius:5px;
+  background:linear-gradient(90deg,rgba(148,163,184,.06),rgba(10,16,26,.5))}
+.tc-pl.t-market{--pc:#fbbf24}
+.tc-pl.t-ruin{--pc:#94a3b8}
+.tc-pl.t-camp{--pc:#4ade80}
+.tc-pl.t-peril{--pc:#f87171}
+.tc-pl.t-buoy{--pc:#38bdf8}
+.tc-pl.t-fleet{--pc:#a78bfa}
+.tc-pl-in{padding:5px 8px 6px}
+.tc-pl-hd{display:flex;align-items:baseline;gap:6px}
+.tc-pl-name{font-size:12px;color:#e2e8f0;letter-spacing:.04em;
+  overflow-wrap:anywhere;min-width:0}
+.tc-pl-type{font-size:9.5px;letter-spacing:.1em;color:var(--pc);
+  border:1px solid currentColor;border-radius:2px;padding:0 5px;opacity:.85;white-space:nowrap}
+.tc-pl-store{margin-left:auto;font-family:ui-monospace,Consolas,monospace;
+  font-variant-numeric:tabular-nums;font-size:10.5px;color:#fcd34d;white-space:nowrap}
+.tc-pl-store.gone{color:#a8a29e;text-decoration:line-through;opacity:.8}
+.tc-pl-store.miss{color:#475569}
+.tc-pl-ft{margin-top:3px;font-size:10px;line-height:1.45;color:#94a3b8;
+  border-top:1px dotted rgba(148,163,184,.14);padding-top:3px}
+.tc-pl-err{margin-top:4px;display:flex;flex-direction:column;gap:2px}
+.tc-mini .tc-wh-in{padding:5px 7px 6px}
+.tc-mini .tc-wh-n{font-size:10.5px}
+.tc-mini .tc-pl-in{padding:4px 7px 5px}
+.tc-mini .tc-pl-ft{font-size:9.5px}
 
 /* ── 尺寸切换（全局持久偏好，点击 .tc-size 在 紧凑/完整 间切换）──
    .tc-mini 置于所有基础规则与手机媒体查询之后，同级选择器下后写胜出 */
@@ -2763,6 +3077,6 @@
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();
