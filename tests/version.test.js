@@ -250,8 +250,8 @@ if (mt) {
 {
   const readUtf8 = (rel) => fs.readFileSync(abs(rel), 'utf8');
   const WB = {
-    kb: 'content/worldbook/无限恐怖_v2_联机版_AI精简.json',
-    tuan: 'content/worldbook/跑团用世界书_v4_联机版_AI精简.json',
+    kb: 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-06.json',
+    tuan: 'content/worldbook/跑团用世界书_v4_联机版_AI精简_2026-11-06.json',
   };
   const TRUTH = {};
   Object.keys(WB).forEach((k) => {
@@ -272,8 +272,8 @@ if (mt) {
     ['AGENTS.md', /无限恐怖 v2（(\d+) 条目）、跑团用 v4（(\d+) 条目）/, ['kb', 'tuan'], '仓库地图'],
     ['llms.txt', /主世界书，(\d+) 条目/, ['kb'], '入口索引·无限恐怖'],
     ['llms.txt', /通用规则层，(\d+) 条目/, ['tuan'], '入口索引·跑团用'],
-    ['content/README.md', /`无限恐怖_v2_联机版_AI精简\.json` \| (\d+) 条目/, ['kb'], '下载表·无限恐怖'],
-    ['content/README.md', /`跑团用世界书_v4_联机版_AI精简\.json` \| (\d+) 条目/, ['tuan'], '下载表·跑团用'],
+    ['content/README.md', /`无限恐怖_v2_联机版_AI精简_\d{4}-\d{2}-\d{2}\.json` \| (\d+) 条目/, ['kb'], '下载表·无限恐怖'],
+    ['content/README.md', /`跑团用世界书_v4_联机版_AI精简_\d{4}-\d{2}-\d{2}\.json` \| (\d+) 条目/, ['tuan'], '下载表·跑团用'],
     ['AGENT_DEPLOY.md', /条目数应为 \*\*(\d+)\*\*（无限恐怖）和 \*\*(\d+)\*\*（跑团用）/, ['kb', 'tuan'], '玩家校验动作'],
     ['AGENT_DEPLOY.md', /条目数 (\d+) \/ (\d+)/, ['kb', 'tuan'], '验收表'],
     [DOC, /当前世界卡（世界书格式，(\d+) 条目）/, ['kb'], '§条目表·无限恐怖'],
