@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.30.1';
+  const VERSION = '3.30.2';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -1448,32 +1448,54 @@
     const sc = l.stage == null ? 'x' : String(l.stage);
     const rateTxt = l.rate == null ? (l.rateRaw ? esc(l.rateRaw) : '—') : (Math.round(l.rate * 10) / 10) + '%';
     const barHtml = l.rate == null ? '<div class="tc-lk-bar miss"></div>' : bar(l.rate, 100, 'tc-lk-fill');
-    const chips = [];
+    const errs = l.errs || [];
+
+    /* 错误：标题右端一枚 `⚠ N`（全文进 title，鼠标停上去能看），
+       底部只留一行、最多列两条 —— 高度不随错误条数变，但一条都不会被藏掉。 */
+    const warn = errs.length
+      ? `<span class="tc-lk-warn" title="${esc(errs.join(' / '))}">&#9888; ${errs.length}</span>` : '';
+
+    const cells = [];
+
+    /* 纹：三点阵紧贴它自己的数字（三点阵是给人看的，数字是数据，两个都要） */
     if (l.marks != null) {
       const on = Math.max(0, Math.min(3, Math.round(l.marks)));
       const pips = [0, 1, 2].map(i => `<i class="${i < on ? 'on' : ''}"></i>`).join('');
-      chips.push(`<span class="tc-lk-chip tc-lk-marks"><span class="tc-lk-pips">${pips}</span>纹 ${l.marks}</span>`);
-    } else chips.push('<span class="tc-lk-chip miss">纹 —</span>');
+      cells.push(`<span class="tc-lk-cell"><i class="tc-lk-k">纹</i><span class="tc-lk-pips">${pips}</span><b class="tc-lk-v">${l.marks}</b></span>`);
+    } else cells.push('<span class="tc-lk-cell miss"><i class="tc-lk-k">纹</i><b class="tc-lk-v">—</b></span>');
+
+    /* 锁：能到 ±30%，所以只有非 0 才占视觉权重；+0% 淡显但仍然写着 */
     if (l.lock != null) {
       const lc = l.lock > 0 ? 'up' : (l.lock < 0 ? 'dn' : 'zero');
-      chips.push(`<span class="tc-lk-chip ${lc}">锁 ${l.lock > 0 ? '+' : ''}${l.lock}%</span>`);
-    } else chips.push('<span class="tc-lk-chip miss">锁 —</span>');
-    if (l.succ != null) chips.push(`<span class="tc-lk-chip">成 ${l.succ}</span>`);
-    if (l.tries != null) chips.push(`<span class="tc-lk-chip">次 ${l.tries}</span>`);
-    else if (l.noTry) chips.push('<span class="tc-lk-chip">次 无</span>');
-    const out = l.outcome ? `<span class="tc-lk-out">${esc(l.outcome)}</span>` : '';
-    const errs = l.errs.length
-      ? `<div class="tc-lk-err">${l.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';
+      cells.push(`<span class="tc-lk-cell ${lc}"><i class="tc-lk-k">锁</i><b class="tc-lk-v">${l.lock > 0 ? '+' : ''}${l.lock}%</b></span>`);
+    } else cells.push('<span class="tc-lk-cell miss"><i class="tc-lk-k">锁</i><b class="tc-lk-v">—</b></span>');
+
+    /* 成 · 次：同一性质（判定结果），中间一个 `·` 而不是彻底并成一段 */
+    if (l.succ != null) cells.push(`<span class="tc-lk-cell"><i class="tc-lk-k">成</i><b class="tc-lk-v">${l.succ}</b></span>`);
+    if (l.tries != null) {
+      const out = l.outcome ? `<em class="tc-lk-out">${esc(l.outcome)}</em>` : '';
+      cells.push(`<span class="tc-lk-cell"><i class="tc-lk-k">次</i><b class="tc-lk-v">${l.tries}</b>${out}</span>`);
+    } else if (l.noTry) {
+      cells.push('<span class="tc-lk-cell"><i class="tc-lk-k">次</i><b class="tc-lk-v">无</b></span>');
+    }
+
+    let errLine = '';
+    if (errs.length) {
+      const shown = errs.slice(0, 2).map(e => `<em>${esc(e)}</em>`).join('<span class="tc-lk-sep">·</span>');
+      const more = errs.length > 2 ? `<span class="tc-lk-sep">·</span><em>＋${errs.length - 2}</em>` : '';
+      errLine = `<div class="tc-lk-err">${shown}${more}</div>`;
+    }
+
     return `
       <div class="tc-lock s-${sc}">
         <div class="tc-lk-hd">
-          <b class="tc-lk-name">${esc(l.name || '基因锁')}</b>
           <span class="tc-lk-stage">${esc(l.stageRaw || '阶 —')}</span>
-          <b class="tc-lk-rate">${rateTxt}</b>
+          <b class="tc-lk-name">${esc(l.name || '基因锁')}</b>
+          <b class="tc-lk-rate">${rateTxt}</b>${warn}
         </div>
         ${barHtml}
-        <div class="tc-lk-meta">${chips.join('')}${out}</div>
-        ${errs}
+        <div class="tc-lk-meta">${cells.join('')}</div>
+        ${errLine}
       </div>`;
   }
 
@@ -2971,31 +2993,40 @@
 .tc-lock.s-4{--lk:#fb7185}
 .tc-lock.s-5{--lk:#c084fc}
 .tc-lock.s-x{--lk:#f87171}
-.tc-lk-hd{display:flex;align-items:baseline;gap:7px}
-.tc-lk-name{font-size:12.5px;color:#e2e8f0;letter-spacing:.05em}
-.tc-lk-stage{font-size:9.5px;letter-spacing:.1em;color:var(--lk);
-  border:1px solid currentColor;border-radius:3px;padding:0 4px;opacity:.9}
-.tc-lk-rate{margin-left:auto;font-family:ui-monospace,Consolas,monospace;font-size:14px;
-  font-weight:700;color:var(--lk);letter-spacing:.02em}
-.tc-lk-bar{margin-top:6px}
+.tc-lk-hd{display:flex;align-items:center;gap:6px}
+.tc-lk-stage{flex:0 0 auto;font-size:9px;letter-spacing:.08em;color:var(--lk);
+  border:1px solid currentColor;border-radius:3px;padding:1px 4px;opacity:.95}
+.tc-lk-name{min-width:0;font-size:12.5px;color:#e2e8f0;letter-spacing:.05em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-lk-rate{margin-left:auto;flex:0 0 auto;font-family:ui-monospace,Consolas,monospace;
+  font-size:19px;line-height:1;font-weight:700;color:var(--lk);
+  font-variant-numeric:tabular-nums}
+.tc-lk-warn{flex:0 0 auto;font-size:8.5px;letter-spacing:.04em;color:#fca5a5;
+  border:1px solid rgba(248,113,113,.45);border-radius:3px;padding:0 3px;cursor:help}
+.tc-lk-bar{margin-top:7px}
 .tc-lk-fill{background:var(--lk)}
 .tc-lk-bar.miss{height:5px;border-radius:3px;
   background:repeating-linear-gradient(45deg,rgba(248,113,113,.34) 0 4px,transparent 4px 8px)}
-.tc-lk-meta{margin-top:6px;display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 9px;
+.tc-lk-meta{margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;
   font-size:10px;letter-spacing:.02em;color:#94a3b8}
-.tc-lk-chip{font-family:ui-monospace,Consolas,monospace}
-.tc-lk-chip.up{color:#fbbf24}
-.tc-lk-chip.dn{color:#38bdf8}
-.tc-lk-chip.zero{color:#94a3b8}
-.tc-lk-chip.miss{color:#475569}
-.tc-lk-marks{display:inline-flex;align-items:center;gap:4px}
+.tc-lk-cell{display:inline-flex;align-items:center;gap:4px}
+.tc-lk-k{font-style:normal;font-size:9px;letter-spacing:.06em;color:#64748b}
+.tc-lk-v{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;font-weight:700;
+  color:#e2e8f0;font-variant-numeric:tabular-nums}
+.tc-lk-cell.up .tc-lk-v{color:#fbbf24}
+.tc-lk-cell.dn .tc-lk-v{color:#38bdf8}
+.tc-lk-cell.zero .tc-lk-v{color:#94a3b8;opacity:.55}
+.tc-lk-cell.miss .tc-lk-v{color:#475569}
+.tc-lk-dot{color:#334155;font-size:10px}
 .tc-lk-pips{display:inline-flex;gap:2px}
 .tc-lk-pips i{display:block;width:5px;height:5px;border-radius:1px;background:transparent;
   border:1px solid rgba(148,163,184,.55)}
 .tc-lk-pips i.on{background:var(--lk);border-color:var(--lk)}
-.tc-lk-out{color:#cbd5e1}
-.tc-lk-err{margin-top:4px;display:flex;flex-direction:column;gap:2px;
-  font-size:9.5px;font-style:normal;color:#fdba74}
+.tc-lk-out{font-style:normal;font-size:9.5px;color:#cbd5e1;letter-spacing:.02em}
+.tc-lk-err{margin-top:5px;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;
+  font-size:9.5px;font-style:normal;letter-spacing:.02em;color:#fdba74;line-height:1.45}
+.tc-lk-err em{font-style:normal}
+.tc-lk-sep{color:#475569}
 
 /* ══════════ sh 避难所卡（海上载体） ══════════
    判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、

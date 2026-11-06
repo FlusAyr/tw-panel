@@ -1422,14 +1422,18 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     JSON.stringify({ n: LK1.name, s: LK1.stage, r: LK1.rate, m: LK1.marks,
       k: LK1.lock, sc: LK1.succ, t: LK1.tries, o: LK1.outcome, e: LK1.errs }));
 
+  /* 卡面结构会变（v3.30.2 重排过），但「人读到的字」不该变 ——
+     所以这几条断言看的是去掉标签后的文本，不是某个 class 里的片段。 */
+  const textOf = (html) => String(html).replace(/<[^>]*>/g, '').replace(/\s+/g, '');
   const lkHtml = api.render(lkSt);
   T('lk 渲染出 tc-lock，且 阶 决定 class（s-3）', /class="tc-lock s-3"/.test(lkHtml),
     '缺 class="tc-lock s-3"');
-  T('lk 渲染出 率 与 锁 读数', />62%</.test(lkHtml) && />锁 \+12%</.test(lkHtml),
-    '率/锁读数没出现');
+  T('lk 渲染出 率 与 锁 读数', /62%/.test(textOf(lkHtml)) && /锁\+12%/.test(textOf(lkHtml)),
+    '读到的字=' + textOf(lkHtml));
   T('lk 渲染出 纹/成/次/结果',
-    />纹 3</.test(lkHtml) && />成 2</.test(lkHtml) && />次 5</.test(lkHtml) && /险成</.test(lkHtml),
-    '纹/成/次/结果没出现');
+    /纹3/.test(textOf(lkHtml)) && /成2/.test(textOf(lkHtml))
+      && /次5/.test(textOf(lkHtml)) && /险成/.test(textOf(lkHtml)),
+    '读到的字=' + textOf(lkHtml));
 
   /* 率 0%：合法值 —— 必须画一条 0% 的条，不许变成 miss 斜纹 */
   const lk0 = api.parseState('lk2: 乙 ｜ 阶 未开 ｜ 率 0% ｜ 纹 0 ｜ 锁 +0%');
@@ -1496,8 +1500,8 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     '格子=' + cellsOf(SEG2) + ' 实心=' + filledOf(SEG2));
 
   T('纹 坏值不画格、也不冒充 0（落 miss 并显示原文）',
-    pipsOf(badHtml) === null && /纹 —/.test(badHtml),
-    'pips=' + (pipsOf(badHtml) === null ? 'none' : '存在') + ' 纹—=' + /纹 —/.test(badHtml));
+    pipsOf(badHtml) === null && /纹—/.test(textOf(badHtml)),
+    'pips=' + (pipsOf(badHtml) === null ? 'none' : '存在') + ' 读到的字=' + textOf(badHtml));
 
   /* 次 无：本轮没判过是常态（长休/整备/行军都不掷），不许挂错误条；
      但放宽只针对「无 / — / -」三个写法，别的乱写仍然要红。 */
@@ -1505,9 +1509,9 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const LKN = lkOf(lkNone);
   const lkNoneHtml = api.render(lkNone);
   T('次 无 是合法写法（errs 空、tries=null、卡面显示「次 无」）',
-    (LKN.errs || []).length === 0 && LKN.tries === null && /次 无</.test(lkNoneHtml),
+    (LKN.errs || []).length === 0 && LKN.tries === null && /次无/.test(textOf(lkNoneHtml)),
     'errs=' + JSON.stringify(LKN.errs) + ' tries=' + LKN.tries
-      + ' 卡面=' + /次 无</.test(lkNoneHtml));
+      + ' 读到的字=' + textOf(lkNoneHtml));
 
   const lkDash = api.parseState('lk7: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 —');
   const lkHyphen = api.parseState('lk8: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 -');
@@ -1516,6 +1520,28 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     '—→' + JSON.stringify(lkOf(lkDash).errs) + ' -→' + JSON.stringify(lkOf(lkHyphen).errs));
 
   const lkBadTry = api.parseState('lk9: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 五');
+
+  /* 卡面重排（v3.30.2）：错误不占整行、纹锁成分三段、锁 +0% 淡显。
+     这三条盯的都是「版面被谁占掉」，不是数值对错 —— 数值那几条在上面。 */
+  const warnOf = (html) => {
+    const m = String(html).match(/<span class="tc-lk-warn" title="([^"]*)"/);
+    return m ? m[1] : null;
+  };
+  const BAD_TITLE = warnOf(badHtml);
+  const errEmCount = (String(badHtml).match(/<div class="tc-lk-err">[\s\S]*?<\/div>/) || [''])[0]
+    .split('<em>').length - 1;
+  T('错误收成标题右端 ⚠ 标记（全文进 title，不再独占整行）',
+    BAD_TITLE !== null && /六成/.test(BAD_TITLE) && /七阶/.test(BAD_TITLE) && errEmCount <= 3,
+    'title=' + (BAD_TITLE === null ? '无' : BAD_TITLE) + ' 行内条数=' + errEmCount);
+
+  const cellCount = (String(lkHtml).match(/class="tc-lk-cell/g) || []).length;
+  T('纹/锁/成/次 各自成段（4 个 tc-lk-cell，不连排）', cellCount === 4, '格子数=' + cellCount);
+
+  const lkZero = api.parseState('lk1: 沈知 ｜ 阶 未开 ｜ 率 0% ｜ 纹 0 ｜ 锁 +0% ｜ 成 0');
+  T('锁 +0% 淡显（zero 态），非 0 才占视觉权重',
+    /class="tc-lk-cell zero"/.test(api.render(lkZero)) && /class="tc-lk-cell up"/.test(lkHtml),
+    'zero=' + /class="tc-lk-cell zero"/.test(api.render(lkZero))
+      + ' up=' + /class="tc-lk-cell up"/.test(lkHtml));
   T('次 五 仍然报错（放宽没连坏值一起放过）',
     /次 必须是「N 结果」/.test((lkOf(lkBadTry).errs || []).join('|')),
     JSON.stringify(lkOf(lkBadTry).errs));
