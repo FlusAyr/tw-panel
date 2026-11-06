@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.30.0';
+  const VERSION = '3.30.1';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -406,7 +406,7 @@
     const raw = String(v == null ? '' : v);
     const p = seg(raw);
     const o = { name: '', stageRaw: '', stage: null, rate: null, rateRaw: '', marks: null,
-      lock: null, succ: null, tries: null, outcome: '', errs: [], raw };
+      lock: null, succ: null, tries: null, noTry: false, outcome: '', errs: [], raw };
     for (let i = 0; i < p.length; i++) {
       const x = p[i].trim();
       if (!x) continue;
@@ -448,6 +448,7 @@
       }
       if ((m = x.match(/^次(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
         const t = m[1].trim();
+        if (/^(无|—|-)$/.test(t)) { o.noTry = true; o.tries = null; continue; }
         const g = t.match(/^(\d+)\s*(.*)$/);
         if (g) { o.tries = +g[1]; if (g[2].trim()) o.outcome = o.outcome ? o.outcome + ' ' + g[2].trim() : g[2].trim(); }
         else o.errs.push('次 必须是「N 结果」：' + t);
@@ -1459,6 +1460,7 @@
     } else chips.push('<span class="tc-lk-chip miss">锁 —</span>');
     if (l.succ != null) chips.push(`<span class="tc-lk-chip">成 ${l.succ}</span>`);
     if (l.tries != null) chips.push(`<span class="tc-lk-chip">次 ${l.tries}</span>`);
+    else if (l.noTry) chips.push('<span class="tc-lk-chip">次 无</span>');
     const out = l.outcome ? `<span class="tc-lk-out">${esc(l.outcome)}</span>` : '';
     const errs = l.errs.length
       ? `<div class="tc-lk-err">${l.errs.map(e => `<em>${esc(e)}</em>`).join('')}</div>` : '';

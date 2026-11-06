@@ -1499,6 +1499,27 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     pipsOf(badHtml) === null && /纹 —/.test(badHtml),
     'pips=' + (pipsOf(badHtml) === null ? 'none' : '存在') + ' 纹—=' + /纹 —/.test(badHtml));
 
+  /* 次 无：本轮没判过是常态（长休/整备/行军都不掷），不许挂错误条；
+     但放宽只针对「无 / — / -」三个写法，别的乱写仍然要红。 */
+  const lkNone = api.parseState('lk6: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 无');
+  const LKN = lkOf(lkNone);
+  const lkNoneHtml = api.render(lkNone);
+  T('次 无 是合法写法（errs 空、tries=null、卡面显示「次 无」）',
+    (LKN.errs || []).length === 0 && LKN.tries === null && /次 无</.test(lkNoneHtml),
+    'errs=' + JSON.stringify(LKN.errs) + ' tries=' + LKN.tries
+      + ' 卡面=' + /次 无</.test(lkNoneHtml));
+
+  const lkDash = api.parseState('lk7: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 —');
+  const lkHyphen = api.parseState('lk8: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 -');
+  T('次 — 与 次 - 与 次 无 等价（三个写法都不报错）',
+    (lkOf(lkDash).errs || []).length === 0 && (lkOf(lkHyphen).errs || []).length === 0,
+    '—→' + JSON.stringify(lkOf(lkDash).errs) + ' -→' + JSON.stringify(lkOf(lkHyphen).errs));
+
+  const lkBadTry = api.parseState('lk9: 沈知 ｜ 阶 四阶 ｜ 率 69% ｜ 纹 0 ｜ 锁 +0% ｜ 成 4 ｜ 次 五');
+  T('次 五 仍然报错（放宽没连坏值一起放过）',
+    /次 必须是「N 结果」/.test((lkOf(lkBadTry).errs || []).join('|')),
+    JSON.stringify(lkOf(lkBadTry).errs));
+
 
 }
 

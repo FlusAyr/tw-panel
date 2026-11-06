@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.30.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.30.1　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.30.0** | 渲染器唯一源文件，≈1.9k 行 |
+| `panel.js` | **v3.30.1** | 渲染器唯一源文件，≈1.9k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -98,6 +98,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.28.1** 沉没卡压暗：`sh` 卡 `wrecked` 终局态不再压成一团——整卡饱和 .4→.55、斜纹 .22→.11 且间隔放宽，给五项读数垫一块暗板（斜纹只留四周），`耐久 0/200` 重新读得出来；`dz` 横幅由四列改五列（`auto minmax(0,1fr) auto auto auto`），终局多出的「已平息」徽章不再把「余 0 回合」挤成两行。纯 CSS，解析与文案零改动。
 - **v3.29.0** 仓储与场所两键 + 行内多键：新增 `wh<N>`（避难所仓储，槽位与容量条）与 `pl<N>`（场所/贸易点，声望与产出），各自独立主题，均不进 `EXT_KEYS`；解析支持一行内写多个键（按引号外的 `:` 切分，`"`/`'` 内的冒号不切）；`keys` 断言数见 `run_all` 当次输出。
 - **v3.30.0** 基因锁行进面板：新增 `lk<N>`（`KEYS` 前缀 + 独立解析与独立卡，**不进 `EXT_KEYS`**），卡片走 `tc-lock`，按阶位五级配色、裂纹用三点阵、锁定加值为负时显青色；世界书侧同步 `uid14` 状态块清单加 `lk` 行、`uid4` 判定后必写 `lk` 行、`lk` 与 `check` 的顺序约束（先写 check 再写 lk，不一致以 check 为准重写 lk），以及老存档 `p` 行 `开锁 ±N%` 的迁移句；`keys` 306。
+- **v3.30.1** `次 无` 补丁：基因锁卡在「次」字段缺失时不再整行渲染成空壳，缺值显示 `—` 并保留阶色与纹点；`panel.js` 本版仅此一处，无新键、无解析改动；`keys` 306。
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
 ## 5. 发版 SOP（命令级，照抄即可）
