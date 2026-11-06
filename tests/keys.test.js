@@ -1610,6 +1610,40 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     JSON.stringify(LK_BAD_J.errs));
 
   const LK_BOTH = lkOf(api.parseState('lk4: 丁 ｜ 境 三阶 ｜ 阶 四阶 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5%'));
+  /* ── 死核对账（v3.31.0）：结果/世界文字说「没了」，但敌人 HP 还 > 0 ──
+     判据是「有没有那条警告」（class tc-killwarn），不是「文本里有没有 ⚠」——
+     ⚠ 在 lk 卡上也用，是同一个撞车（§7 第 27 条）。 */
+  const MOB_ALIVE = 'mob1: 畸变体甲 ｜ 精英 ｜ HP 80/80';
+  const MOB_DEAD = 'mob1: 畸变体甲 ｜ 精英 ｜ HP 0/80';
+  const KW = (src) => api.render(api.parseState(src));
+  const hasKill = (src) => /class="[^"]*tc-killwarn/.test(KW(src));
+
+  T('A 有 mob hp>0 + result 含「自爆」→ 出警告，且点名谁/HP/还需扣多少',
+    hasKill(MOB_ALIVE + '\nresult: 畸变体甲自爆')
+      && /畸变体甲 HP 80\/80，还需扣 80/.test(KW(MOB_ALIVE + '\nresult: 畸变体甲自爆')),
+    '警告条=' + hasKill(MOB_ALIVE + '\nresult: 畸变体甲自爆'));
+
+  T('B 有 mob hp==0 + result 含「自爆」→ 不报（HP 到 0 之后自爆是合法的）',
+    !hasKill(MOB_DEAD + '\nresult: 畸变体甲自爆'),
+    '警告条=' + hasKill(MOB_DEAD + '\nresult: 畸变体甲自爆'));
+
+  /* C 是这四条里最重要的一条：**没有敌人时，任何「死」字都不该被解释成击杀**。
+     「死」是叙事词，不是数据；把叙事词当数据判，就是拿一句散文去起诉玩家。 */
+  T('C 无 mob 行 + world 含「击杀」→ 不报（没有敌人就没得判，误报会训练人无视黄字）',
+    !hasKill('world: 你击杀了窗口外的守卫')
+      && !hasKill('result: 秒杀\nworld: 全场溃散'),
+    '警告条=' + hasKill('world: 你击杀了窗口外的守卫'));
+
+  T('D 有 mob hp>0 + result 干净 → 不报',
+    !hasKill(MOB_ALIVE + '\nresult: 你打中了它的肩膀'),
+    '警告条=' + hasKill(MOB_ALIVE + '\nresult: 你打中了它的肩膀'));
+
+  T('警告认的是「活着的那个」，不是「第一个 mob」（死的不许替活的背锅）',
+    /畸变体甲 HP 0\/80/.test(KW('mob1: 畸变体甲 ｜ 精英 ｜ HP 0/80\nmob2: 畸变体乙 ｜ 小兵 ｜ HP 30/60\nresult: 畸变体乙瓦解'))
+      === false
+      && /畸变体乙 HP 30\/60，还需扣 30/.test(KW('mob1: 畸变体甲 ｜ 精英 ｜ HP 0/80\nmob2: 畸变体乙 ｜ 小兵 ｜ HP 30/60\nresult: 畸变体乙瓦解')),
+    '点名=' + (/畸变体乙 HP 30\/60/.test(KW('mob1: 畸变体甲 ｜ 精英 ｜ HP 0/80\nmob2: 畸变体乙 ｜ 小兵 ｜ HP 30/60\nresult: 畸变体乙瓦解')) ? '乙' : '错'));
+
   T('境 与 阶 同时出现：取 境（stage=3），并报一条明确的「不一致」',
     LK_BOTH.stage === 3 && /境\/阶 同时出现且不一致/.test((LK_BOTH.errs || []).join('|')),
     JSON.stringify({ s: LK_BOTH.stage, e: LK_BOTH.errs }));

@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.30.4';
+  const VERSION = '3.31.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -63,6 +63,27 @@
 
   /* 无键名 mob 裸文本识别（「变异体甲 精英 80/80」式——AI 抄面板/联机同步丢格式时兜底） */
   const MOB_GRADE_SRC = 'BOSS[^\\s|｜]*|Boss[^\\s|｜]*|头目|首领|精英|小兵|杂兵';
+
+  /* 「终结词」：模型在 HP 还没扣到 0 时最常拿来收尾的几个词。
+     为什么是这几个 —— 它们都在声称「这个敌人已经没了」，而规则里唯一合法的
+     「没了」是 dmg 行把 HP 扣到 0（`【死亡闸】` 写过两遍没人听，所以改成让卡面当场说话）。
+     刻意不收「击败 / 击退 / 压制 / 重伤」：它们不必然等于死亡，收进来就会误报，
+     而**误报一次，玩家就学会无视黄字**（与 §7 第 27 条同一个坑）。 */
+  const KILL_WORDS = ['自爆', '崩解', '瓦解', '消散', '溃散', '除名', '处决', '秒杀', '击杀', '消灭'];
+
+  /* 纯文本对账：不碰解析层，只看 st 里已有的事实。
+     返回 null（不报）或 { mob, hp, max, word }。
+     三条不报的理由都是「没得判就别判」：没有 mob 行时，世界里根本没有敌人这个概念。 */
+  function killWarnOf(st) {
+    const mobs = st.mobs || [];
+    const alive = mobs.filter(m => typeof m.hp === 'number' && m.hp > 0);
+    if (!alive.length) return null;                    /* 无敌人 / 全归零 → 不判 */
+    const txt = String(st.result || '') + ' ' + String(st.world || '');
+    const word = KILL_WORDS.find(w => txt.includes(w));
+    if (!word) return null;
+    const m = alive[0];
+    return { mob: m.name || '未命名目标', hp: m.hp, max: m.hpMax, word: word };
+  }
   const MOB_PLAIN_A = new RegExp('^(.{1,24}?)\\s*(' + MOB_GRADE_SRC + ')\\s+([0-9?]+\\s*\\/\\s*[0-9?]+)\\s*$');
   const isStateLine = (l) => LINE_RE.test(l) || MOB_PLAIN_A.test(l);
 
@@ -1964,6 +1985,8 @@
   }
 
   function render(st) {
+    /* 死核对账（v3.31.0）：结果/世界文字说了「没了」，但敌人 HP 还 > 0。 */
+    st.killWarn = killWarnOf(st);
     const scene = seg(st.scene);
     const out = [];
     const sect = (zh, en) => `<div class="tc-sect"><i></i><b>${esc(zh)}</b><em>${en}</em></div>`;
@@ -2092,6 +2115,13 @@
 
     /* ── 战场日志（时间线） ── */
     const log = [];
+    if (st.killWarn) {
+      const k = st.killWarn;
+      /* 「还差多少」= 还得扣掉多少 HP 才算死，不是 max-hp（满血时那是 0，读起来像「已经死了」） */
+      const gap = (typeof k.hp === 'number') ? `，还需扣 ${k.hp}` : '';
+      log.push(`<div class="tc-dmg-warn tc-killwarn">⚠ 目标 HP 未归零，却写了「${esc(k.word)}」——` +
+        `死亡只能由 dmg 行把 HP 扣到 0：${esc(k.mob)} HP ${k.hp}${typeof k.max === 'number' ? '/' + k.max : ''}${gap}</div>`);
+    }
     if (st.result) log.push(`<div class="tc-line tc-result"><b>🎯 行动结果</b><span>${esc(st.result)}</span></div>`);
     if (st.world && !/^(无|—|-)$/.test(String(st.world).trim())) {
       log.push(`<div class="tc-line tc-world"><b>🌊 世界涟漪</b><span>${esc(st.world)}</span></div>`);
@@ -2760,6 +2790,9 @@
   box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dk,#f43f5e) 90%,#fff)}
 .tc-dmg-warn{grid-column:1 / -1;font-style:normal;font-size:10px;color:#fbbf24;margin-top:3px;
   border-left:2px solid #b45309;padding-left:6px;background:rgba(120,53,15,.16)}
+/* 死核对账条：同一个形状，只是它在日志里独占一行 */
+.tc-killwarn{display:block;margin:0 0 6px;padding:5px 8px;font-size:11px;line-height:1.5;
+  border-left:2px solid #fbbf24;background:rgba(120,53,15,.22)}
 .tc-dmg-meta{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:5px;font-size:10px;color:#6f8296}
 .tc-dmg-meta u{text-decoration:none;color:#4f6376;margin-right:3px}
 /* 七种性质各一色系（顺序 = 由外到内：撕裂红 / 钝击橙 / 穿刺青 / 灼烧金 / 腐蚀绿 / 精神紫 / 真实白） */
