@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.30.3';
+  const VERSION = '3.30.4';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -405,7 +405,8 @@
   function parseGeneLock(v) {
     const raw = String(v == null ? '' : v);
     const p = seg(raw);
-    const o = { name: '', stageRaw: '', stage: null, stageSeen: false, rate: null, rateRaw: '', marks: null,
+    const o = { name: '', stageRaw: '', stage: null, stageSeen: false, rate: null, rateRaw: '',
+      marks: null, marksRaw: '', marksLegacy: null,
       lock: null, succ: null, tries: null, noTry: false, outcome: '', errs: [], raw };
     for (let i = 0; i < p.length; i++) {
       const x = p[i].trim();
@@ -444,10 +445,23 @@
         else o.errs.push('率 必须是「N%」：' + t);
         continue;
       }
+      /* 纹 是**累计百分比**（旧规则是「道数 0-3」，v3.30.4 改）：
+         `纹 12%` 主写法；`纹 2` 是旧存档，按 2×10% = 20% 折算并留一条轻提示——
+         把 20% 静默当成 2% 会让玩家的成功率差 10 倍，所以提示必须出现。 */
       if ((m = x.match(/^纹(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
         const t = m[1].trim();
-        if (/^\d+$/.test(t)) o.marks = +t;
-        else o.errs.push('纹 必须是非负整数：' + t);
+        o.marksRaw = t;
+        if (/^-?\d+(?:\.\d+)?\s*%$/.test(t)) {                    /* 百分比：主写法 */
+          const n = parseFloat(t);
+          o.marks = n;
+          /* >100% 不是错误：一次失败最多加 60%，68 + 60 = 128% 是规则内的正常路径。
+             判它错等于告诉玩家「你打得太狠，系统报错了」；更坏的是 ⚠ 一旦常态出现，
+             就没人看了（这次改名的起因就是五张卡全带 ⚠）。 */
+          if (n < 0) o.errs.push('纹 不能是负数：' + t);
+        } else if (/^\d+$/.test(t)) {                                /* 旧写法：道数 × 10% */
+          o.marksLegacy = +t;
+          o.marks = +t * 10;
+        } else o.errs.push('纹 必须是百分比「N%」（旧写法 0-3 道也认）：' + t);
         continue;
       }
       if ((m = x.match(/^锁(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
@@ -1474,11 +1488,16 @@
 
     const cells = [];
 
-    /* 纹：三点阵紧贴它自己的数字（三点阵是给人看的，数字是数据，两个都要） */
+    /* 纹：累计百分比 → 数字 + 40px 小进度条（三点阵表达不了 100% 的进度，已废）。
+       ≥100% 时条填满并加一句「→ 下次必开」；旧写法（N 道）留一行轻提示，不是错误。 */
     if (l.marks != null) {
-      const on = Math.max(0, Math.min(3, Math.round(l.marks)));
-      const pips = [0, 1, 2].map(i => `<i class="${i < on ? 'on' : ''}"></i>`).join('');
-      cells.push(`<span class="tc-lk-cell"><i class="tc-lk-k">纹</i><span class="tc-lk-pips">${pips}</span><b class="tc-lk-v">${l.marks}</b></span>`);
+      const pct = Math.max(0, Math.min(100, l.marks));
+      const mbar = `<span class="tc-lk-mbar" title="纹 ${pct}%"><i style="width:${pct}%"></i></span>`;
+      const legacy = l.marksLegacy != null
+        ? `<em class="tc-lk-note">旧写法 纹 ${l.marksLegacy}，按 ${l.marks}% 计</em>` : '';
+      const must = l.marks >= 100
+        ? `<em class="tc-lk-note must">${l.marks > 100 ? '已满 · 下次必开' : '&rarr; 下次必开'}</em>` : '';
+      cells.push(`<span class="tc-lk-cell"><i class="tc-lk-k">纹</i><b class="tc-lk-v">${Math.round(l.marks * 10) / 10}%</b>${mbar}${legacy}${must}</span>`);
     } else cells.push('<span class="tc-lk-cell miss"><i class="tc-lk-k">纹</i><b class="tc-lk-v">—</b></span>');
 
     /* 锁：能到 ±30%，所以只有非 0 才占视觉权重；+0% 淡显但仍然写着 */
@@ -3035,10 +3054,11 @@
 .tc-lk-cell.zero .tc-lk-v{color:#94a3b8;opacity:.55}
 .tc-lk-cell.miss .tc-lk-v{color:#475569}
 .tc-lk-dot{color:#334155;font-size:10px}
-.tc-lk-pips{display:inline-flex;gap:2px}
-.tc-lk-pips i{display:block;width:5px;height:5px;border-radius:1px;background:transparent;
-  border:1px solid rgba(148,163,184,.55)}
-.tc-lk-pips i.on{background:var(--lk);border-color:var(--lk)}
+.tc-lk-mbar{display:inline-block;width:40px;height:4px;border-radius:2px;
+  background:rgba(148,163,184,.22);overflow:hidden;vertical-align:middle}
+.tc-lk-mbar i{display:block;height:100%;background:var(--lk);border-radius:2px}
+.tc-lk-note{font-style:normal;font-size:8.5px;color:#94a3b8;letter-spacing:0}
+.tc-lk-note.must{color:var(--lk);font-weight:700}
 .tc-lk-out{font-style:normal;font-size:9.5px;color:#cbd5e1;letter-spacing:.02em}
 .tc-lk-err{margin-top:5px;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;
   font-size:9.5px;font-style:normal;letter-spacing:.02em;color:#fdba74;line-height:1.45}

@@ -1407,7 +1407,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   console.log('\n── 组 16 · 基因锁 lk ──');
 
   const lkOf = (st) => (st.geneLocks && st.geneLocks[0]) || { errs: [] };
-  const LK_SRC = 'lk1: 甲 ｜ 境 三阶 ｜ 率 62% ｜ 纹 3 ｜ 锁 +12% ｜ 成 2 ｜ 次 5 险成';
+  const LK_SRC = 'lk1: 甲 ｜ 境 三阶 ｜ 率 62% ｜ 纹 30% ｜ 锁 +12% ｜ 成 2 ｜ 次 5 险成';
 
   const lkSt = api.parseState(LK_SRC);
   T('lk 行进 geneLocks（不串到 places）',
@@ -1416,7 +1416,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
 
   const LK1 = lkOf(lkSt);
   T('lk 六段全解析（名/境/率/纹/锁/成/次/结果）',
-    LK1.name === '甲' && LK1.stage === 3 && LK1.rate === 62 && LK1.marks === 3
+    LK1.name === '甲' && LK1.stage === 3 && LK1.rate === 62 && LK1.marks === 30
       && LK1.lock === 12 && LK1.succ === 2 && LK1.tries === 5
       && LK1.outcome === '险成' && (LK1.errs || []).length === 0,
     JSON.stringify({ n: LK1.name, s: LK1.stage, r: LK1.rate, m: LK1.marks,
@@ -1431,7 +1431,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('lk 渲染出 率 与 锁 读数', /62%/.test(textOf(lkHtml)) && /锁\+12%/.test(textOf(lkHtml)),
     '读到的字=' + textOf(lkHtml));
   T('lk 渲染出 纹/成/次/结果',
-    /纹3/.test(textOf(lkHtml)) && /成2/.test(textOf(lkHtml))
+    /纹30%/.test(textOf(lkHtml)) && /成2/.test(textOf(lkHtml))
       && /次5/.test(textOf(lkHtml)) && /险成/.test(textOf(lkHtml)),
     '读到的字=' + textOf(lkHtml));
 
@@ -1474,34 +1474,73 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   const LK5 = lkOf(lkNoKey);
   T('阶 关键字可省（裸段恰为阶名时认作阶）', LK5.stage === 4, 'stage=' + LK5.stage);
 
-  /* 纹 三点阵：判据是「实心格数」，不是「有没有 tc-lk-pips 这个 class」。
-     元素在 ≠ 画对了：三个格恒在，只有数实心的才知道 纹 0 与 纹 3 画出来不一样。 */
-  const pipsOf = (html) => {
-    const m = html.match(/<span class="tc-lk-pips">([\s\S]*?)<\/span>/);
-    return m ? m[1] : null;
+  /* 纹 是**累计百分比**（v3.30.4 起）。旧规则是「道数 0-3」，三点阵表达不了 100% 的进度，
+     已改成 40px 小进度条。判据一律取「条宽」与「提示元素在不在」，不取字面——
+     因为坏值那条错误的文案里本来就含「旧写法」三个字（`纹 必须是百分比「N%」（旧写法 0-3 道也认）`），
+     拿文字去认提示会假绿：坏值卡也会「看起来有旧写法提示」。 */
+  const mbarOf = (html) => {
+    const m = String(html).match(/class="tc-lk-mbar"[^>]*><i style="width:(\d+(?:\.\d+)?)%/);
+    return m ? +m[1] : null;
   };
-  const filledOf = (seg) => (seg === null ? -1 : (seg.match(/class="on"/g) || []).length);
-  const cellsOf = (seg) => (seg === null ? -1 : (seg.match(/<i /g) || []).length);
+  const hasNote = (html) => /class="tc-lk-note"/.test(html);         /* 旧写法提示 */
+  const hasMust = (html) => /class="tc-lk-note must"/.test(html);    /* → 下次必开 */
 
-  const SEG3 = pipsOf(lkHtml);
-  T('纹 3 画三个实心格（三格全亮）',
-    cellsOf(SEG3) === 3 && filledOf(SEG3) === 3,
-    '格子=' + cellsOf(SEG3) + ' 实心=' + filledOf(SEG3));
+  T('纹 30% 解析成 30，进度条 30%（主写法，带 %）',
+    lkOf(lkSt).marks === 30 && mbarOf(lkHtml) === 30,
+    'marks=' + lkOf(lkSt).marks + ' bar=' + mbarOf(lkHtml));
 
-  const SEG0 = pipsOf(lk0Html);
-  T('纹 0 画三个空心格（一格不亮）',
-    cellsOf(SEG0) === 3 && filledOf(SEG0) === 0,
-    '格子=' + cellsOf(SEG0) + ' 实心=' + filledOf(SEG0));
+  const lkP100 = api.parseState('lk4: 丁 ｜ 境 五阶 ｜ 率 97% ｜ 纹 100% ｜ 锁 -8%');
+  T('纹 100%：条填满 + 追加「→ 下次必开」，且不报错',
+    mbarOf(api.render(lkP100)) === 100 && hasMust(api.render(lkP100))
+      && (lkOf(lkP100).errs || []).length === 0,
+    'bar=' + mbarOf(api.render(lkP100)) + ' must=' + hasMust(api.render(lkP100))
+      + ' errs=' + JSON.stringify(lkOf(lkP100).errs));
 
-  const lk2 = api.parseState('lk4: 丁 ｜ 阶 二阶 ｜ 率 20% ｜ 纹 2 ｜ 锁 +4%');
-  const SEG2 = pipsOf(api.render(lk2));
-  T('纹 2 画两实心一空心（还差一道必开）',
-    cellsOf(SEG2) === 3 && filledOf(SEG2) === 2,
-    '格子=' + cellsOf(SEG2) + ' 实心=' + filledOf(SEG2));
+  const lkOld = api.parseState('lk5: 戊 ｜ 境 三阶 ｜ 率 62% ｜ 纹 2 ｜ 锁 +4%');
+  T('纹 2（旧写法）折算 20%：出「旧写法」提示、不报错（静默按 2% 会让概率差 10 倍）',
+    lkOf(lkOld).marks === 20 && lkOf(lkOld).marksLegacy === 2 && hasNote(api.render(lkOld))
+      && (lkOf(lkOld).errs || []).length === 0,
+    JSON.stringify({ m: lkOf(lkOld).marks, lg: lkOf(lkOld).marksLegacy,
+      note: hasNote(api.render(lkOld)), e: lkOf(lkOld).errs }));
 
-  T('纹 坏值不画格、也不冒充 0（落 miss 并显示原文）',
-    pipsOf(badHtml) === null && /纹—/.test(textOf(badHtml)),
-    'pips=' + (pipsOf(badHtml) === null ? 'none' : '存在') + ' 读到的字=' + textOf(badHtml));
+  T('纹 0（旧写法）折算 0%：条零宽仍然画（0 是合法值，不是缺失）',
+    mbarOf(api.render(lk0)) === 0 && hasNote(api.render(lk0)),
+    'bar=' + mbarOf(api.render(lk0)));
+
+  /* 单错夹具：只坏 纹，错的原文才能落在卡面上（四错夹具里第 3 条被「＋2」折进 ⚠ 的 title） */
+  const lkBadMark = api.parseState('lk8: 辛 ｜ 境 三阶 ｜ 率 62% ｜ 纹 三');
+  const lbmHtml = api.render(lkBadMark);
+  T('纹 三（坏值）：落 errs 一条、不画条、数字位落 —、原文上卡面',
+    (lkOf(lkBadMark).errs || []).length === 1
+      && mbarOf(lbmHtml) === null && /纹—/.test(textOf(lbmHtml))
+      && /：三/.test(textOf(lbmHtml)),
+    'errs=' + JSON.stringify(lkOf(lkBadMark).errs) + ' bar=' + mbarOf(lbmHtml)
+      + ' 读到的字=' + textOf(lbmHtml).slice(0, 80));
+
+  T('多条错误时只有前两条上卡面，其余折进 ⚠ 的 title（卡高不随错误条数变）',
+    /＋2/.test(textOf(badHtml)) && /class="tc-lk-warn"[^>]*title="[^"]*纹 必须是百分比/.test(badHtml),
+    '读到的字=' + textOf(badHtml).slice(0, 60));
+
+  const lk120 = api.parseState('lk9: 壬 ｜ 境 四阶 ｜ 率 55% ｜ 纹 120% ｜ 锁 +0%');
+  const lk150 = api.parseState('lk6: 己 ｜ 境 三阶 ｜ 率 62% ｜ 纹 150% ｜ 锁 +0%');
+  T('纹 120%：errs 为空（>100% 是规则内的正常路径，不是坏值）、数字显 120%、条 100%、出必开提示',
+    (lkOf(lk120).errs || []).length === 0 && lkOf(lk120).marks === 120
+      && mbarOf(api.render(lk120)) === 100 && hasMust(api.render(lk120))
+      && /纹120%/.test(textOf(api.render(lk120))),
+    JSON.stringify({ e: lkOf(lk120).errs, m: lkOf(lk120).marks,
+      bar: mbarOf(api.render(lk120)), must: hasMust(api.render(lk120)) }));
+
+  T('纹 150%：数字照显 150%，进度条封顶 100%',
+    lkOf(lk150).marks === 150 && mbarOf(api.render(lk150)) === 100
+      && /纹150%/.test(textOf(api.render(lk150))),
+    'marks=' + lkOf(lk150).marks + ' bar=' + mbarOf(api.render(lk150))
+      + ' 读到的字=' + textOf(api.render(lk150)).slice(0, 60));
+
+  const lkNoMark = api.parseState('lk7: 庚 ｜ 境 二阶 ｜ 率 40% ｜ 锁 +0%');
+  T('无 纹 段：不出条、不出提示（缺省不是 0%）',
+    mbarOf(api.render(lkNoMark)) === null && !hasNote(api.render(lkNoMark))
+      && /纹—/.test(textOf(api.render(lkNoMark))),
+    'bar=' + mbarOf(api.render(lkNoMark)) + ' 读到的字=' + textOf(api.render(lkNoMark)).slice(0, 60));
 
   /* 次 无：本轮没判过是常态（长休/整备/行军都不掷），不许挂错误条；
      但放宽只针对「无 / — / -」三个写法，别的乱写仍然要红。 */
