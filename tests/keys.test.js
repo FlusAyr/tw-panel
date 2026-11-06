@@ -1727,6 +1727,42 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     !/tc-skfold/.test(R(M1 + NL + 'kbmsk1: 无')) && api.parseState(M1 + NL + 'kbmsk1: 无').mechas[0].skillsNew.length === 0,
     JSON.stringify(api.parseState(M1 + NL + 'kbmsk1: 无').mechas[0].skillsNew));
 
+  /* ───────── 组 18 · 读数几何契约（A 进度条化）─────────
+     ★ 几何（getBoundingClientRect）在 node 里量不到 —— 这里钉的是几何的**输入**：
+       条的填充百分比 + 「三行数值落在同一列」的 CSS 契约。浏览器实测另记，不进 CI。
+     读的是 style="width:N%" 的真实值，不是「卡里有个条就算过」——后者会被任意一条替答
+       （§7 第 23 条：结果代理来源）。 */
+  console.log('\n── 组 18 · 读数几何契约 ──');
+  const pctOf = (h, cls) => {
+    const m = h.match(new RegExp('class="' + cls + '" style="width:([\\d.]+)%"'));
+    return m ? parseFloat(m[1]) : null;
+  };
+  /* p 行的 HP/SP/负重 是**按序取前三个裸比值**（`HP 100/100` 这种带前缀的不认，会掉进 status） */
+  const VIT = 'p1: 我 ｜ 100/100 ｜ 8/97 ｜ 11/20';
+  const stV = api.parseState(VIT);
+  const hV = api.render(stV);
+  const hpPct = pctOf(hV, 'hp'), spPct = pctOf(hV, 'sp'), wtPct = pctOf(hV, 'wt');
+
+  T('① 满与不满靠条长区分：满格 100%，8/97 约 8.2%（< 50%）',
+    hpPct === 100 && spPct !== null && spPct < 50 && Math.abs(spPct - 8.2) < 1,
+    JSON.stringify({
+      hp: hpPct, sp: spPct, wt: wtPct,
+      parsed: [stV.players[0].hp, stV.players[0].sp, stV.players[0].weight]
+    }));
+
+  T('② 三行数值同一竖线（一列）：.tc-vit 三列 + >b 落 v 列；负重更细更淡（3px / .72）',
+    /\.tc-vit\{[^}]*grid-template-areas:"k bar v"/.test(api.CSS)
+      && /\.tc-vit>b\{[^}]*grid-area:v/.test(api.CSS)
+      && /\.tc-vit>\.tc-bar\{[^}]*grid-area:bar[^}]*height:5px/.test(api.CSS)
+      && /\.tc-vit:has\(>\.tc-bar>i\.wt\)\{opacity:\.72\}/.test(api.CSS)
+      && /\.tc-vit:has\(>\.tc-bar>i\.wt\)>\.tc-bar\{height:3px\}/.test(api.CSS),
+    JSON.stringify({
+      areas: /grid-template-areas:"k bar v"/.test(api.CSS),
+      vcol: /\.tc-vit>b\{[^}]*grid-area:v/.test(api.CSS),
+      bar5: /\.tc-vit>\.tc-bar\{[^}]*height:5px/.test(api.CSS),
+      wt3: /i\.wt\)>\.tc-bar\{height:3px\}/.test(api.CSS)
+    }));
+
 
 }
 

@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.33.0';
+  const VERSION = '3.34.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -2540,10 +2540,17 @@
 .tc-attr.ov .tc-at{color:var(--gold)}
 .tc-attr.ov .tc-ak{color:#d0a94a}
 
-.tc-vitals{display:flex;flex-direction:column;gap:3px}
-.tc-vit{display:grid;grid-template-columns:56px 1fr;gap:2px 8px;align-items:center;font-size:11.5px}
-.tc-vit>span{color:var(--dim);font-size:10px;white-space:nowrap}
-.tc-vit>b{text-align:right;font-weight:600}
+.tc-vitals{display:flex;flex-direction:column;gap:4px}
+/* v3.34.0 三读数改「一行三列」：标签 / 条 / 数值，条在中间、数值贴右缘。
+   分级手段是「高度 + 淡出」——HP/SP 5px，负重 3px + 0.72。
+   别顺手把它们统一成一样粗：那样就退回「三枚一样重」，正是用户说别扭的原因。 */
+.tc-vit{display:grid;grid-template-columns:42px 1fr 64px;grid-template-areas:"k bar v";gap:2px 8px;align-items:center;font-size:11.5px}
+.tc-vit>span{grid-area:k;color:var(--dim);font-size:10px;white-space:nowrap}
+.tc-vit>b{grid-area:v;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.tc-vit>.tc-bar{grid-area:bar;height:5px;border-radius:2px}
+/* 负重是次一级的量。用 :has(i.wt) 定位而不是 :last-child——负重缺失时 :last-child 会误伤 SP 那行。 */
+.tc-vit:has(>.tc-bar>i.wt){opacity:.72}
+.tc-vit:has(>.tc-bar>i.wt)>.tc-bar{height:3px}
 .tc-bar{grid-column:2;height:6px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden}
 .tc-bar i{display:block;height:100%;border-radius:2px;position:relative;overflow:hidden}
 .tc-bar i.hp{background:linear-gradient(90deg,#7f1d1d,#ef4444 60%,#f87171)}
@@ -3118,9 +3125,9 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   .tc-attr .tc-at{justify-self:start}              /* 值紧邻标签，不排到右边缘去跨列对齐 */
   .tc-at::before{content:"= ";font-size:9px}       /* 保留 '= '：基础值与总值并排时，没有它就只是两个裸数字 */
   /* 读数：数值不参与换行计算，永远在条的上方同一行右侧 */
-  .tc-vit{grid-template-columns:52px 1fr;gap:1px 6px}
-  .tc-vit>b{grid-column:2;text-align:right}
-  .tc-vit>.tc-bar{grid-column:1 / -1}
+  /* 窄屏沿用 A 的一行三列，只把标签列与数值列收窄——
+     旧的「数值一行、条下一行通栏」是两行，比现在高。 */
+  .tc-vit{grid-template-columns:36px 1fr 54px;gap:1px 6px}
   /* 机甲 / 使魔读数：标签列收窄，数字仍等宽三位 */
   .tc-kbm-g{grid-template-columns:38px 32px 1fr}
   .tc-kbm-sub{grid-template-columns:1fr}
