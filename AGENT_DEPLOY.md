@@ -121,11 +121,11 @@ ls public/scripts/extensions/third-party/JS-Slash-Runner/manifest.json
 cd SillyTavern
 mkdir -p data/default-user/worlds
 
-curl -L -o "data/default-user/worlds/无限恐怖_v2_联机版_AI精简.json" \
-  "https://raw.githubusercontent.com/FlusAyr/tw-panel/main/content/worldbook/%E6%97%A0%E9%99%90%E6%81%90%E6%80%96_v2_%E8%81%94%E6%9C%BA%E7%89%88_AI%E7%B2%BE%E7%AE%80.json"
+curl -L -o "data/default-user/worlds/无限恐怖_v2_联机版_AI精简_2026-11-06.json" \
+  "https://raw.githubusercontent.com/FlusAyr/tw-panel/main/content/worldbook/%E6%97%A0%E9%99%90%E6%81%90%E6%80%96_v2_%E8%81%94%E6%9C%BA%E7%89%88_AI%E7%B2%BE%E7%AE%80_2026-11-06.json"
 
-curl -L -o "data/default-user/worlds/跑团用世界书_v4_联机版_AI精简.json" \
-  "https://raw.githubusercontent.com/FlusAyr/tw-panel/main/content/worldbook/%E8%B7%91%E5%9B%A2%E7%94%A8%E4%B8%96%E7%95%8C%E4%B9%A6_v4_%E8%81%94%E6%9C%BA%E7%89%88_AI%E7%B2%BE%E7%AE%80.json"
+curl -L -o "data/default-user/worlds/跑团用世界书_v4_联机版_AI精简_2026-11-06.json" \
+  "https://raw.githubusercontent.com/FlusAyr/tw-panel/main/content/worldbook/%E8%B7%91%E5%9B%A2%E7%94%A8%E4%B8%96%E7%95%8C%E4%B9%A6_v4_%E8%81%94%E6%9C%BA%E7%89%88_AI%E7%B2%BE%E7%AE%80_2026-11-06.json"
 ```
 
 放好**必须在界面里选中才生效**（文件在磁盘上 ≠ 已启用）：
