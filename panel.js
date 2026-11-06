@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.30.2';
+  const VERSION = '3.30.3';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -405,18 +405,35 @@
   function parseGeneLock(v) {
     const raw = String(v == null ? '' : v);
     const p = seg(raw);
-    const o = { name: '', stageRaw: '', stage: null, rate: null, rateRaw: '', marks: null,
+    const o = { name: '', stageRaw: '', stage: null, stageSeen: false, rate: null, rateRaw: '', marks: null,
       lock: null, succ: null, tries: null, noTry: false, outcome: '', errs: [], raw };
     for (let i = 0; i < p.length; i++) {
       const x = p[i].trim();
       if (!x) continue;
       if (!o.name && i === 0) { o.name = x; continue; }
       let m;
-      if ((m = x.match(/^阶(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
-        const t = m[1].trim();
-        o.stageRaw = t;
-        if (Object.prototype.hasOwnProperty.call(LOCK_STAGES, t)) o.stage = LOCK_STAGES[t];
-        else o.errs.push('阶 只认 未开/一阶~五阶：' + t);
+      /* 境 是主字段名；阶 是旧写法（v3.30.3 之前，与 lock 行的 阶 撞名被模型抄串过），
+         只保留兼容，不鼓励。两者同时出现时**以 境 为准**；值不一致才报一条明确的重复警告，
+         一致则静默 —— 同一个值写两遍不是错误，报出来只会训练人忽略 ⚠。 */
+      if ((m = x.match(/^(境|阶)(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
+        const key = m[1];
+        const t = m[2].trim();
+        const known = Object.prototype.hasOwnProperty.call(LOCK_STAGES, t);
+        if (!o.stageSeen) {
+          o.stageRaw = t;
+          o.stageSeen = true;
+          if (known) o.stage = LOCK_STAGES[t];
+          else o.errs.push(key + ' 只认 未开/一阶~五阶：' + t);
+          continue;
+        }
+        if (key === '境') {                                     /* 境 后到：覆盖，值不同才报 */
+          if (t !== o.stageRaw) o.errs.push('境/阶 同时出现且不一致（用 境）：境 ' + t + ' vs 阶 ' + o.stageRaw);
+          o.stageRaw = t;
+          o.stage = known ? LOCK_STAGES[t] : null;
+          if (!known) o.errs.push('境 只认 未开/一阶~五阶：' + t);
+          continue;
+        }
+        if (t !== o.stageRaw) o.errs.push('境/阶 同时出现且不一致（用 境）：境 ' + o.stageRaw + ' vs 阶 ' + t);
         continue;
       }
       if ((m = x.match(/^率(?:\s*[:：]\s*|\s+|$)(.*)$/))) {
@@ -454,12 +471,12 @@
         else o.errs.push('次 必须是「N 结果」：' + t);
         continue;
       }
-      /* 阶 关键字省略的容错：裸段整段恰是六阶之一且还没给阶 → 当作阶 */
+      /* 境/阶 关键字省略的容错：裸段整段恰是六阶之一且还没给境 → 当作境 */
       if (!o.stageRaw && Object.prototype.hasOwnProperty.call(LOCK_STAGES, x)) { o.stageRaw = x; o.stage = LOCK_STAGES[x]; continue; }
       /* 其余裸段接进 结果（那里本来就是自由文字）：不丢、也不冒充别的字段 */
       o.outcome = o.outcome ? o.outcome + ' ' + x : x;
     }
-    if (o.stage == null && !o.stageRaw) o.errs.push('缺少 阶 段（未开锁也要写 阶 未开）');
+    if (o.stage == null && !o.stageRaw) o.errs.push('缺少 境 段（未开锁也要写 境 未开）');
     if (o.rate == null && !o.rateRaw) o.errs.push('缺少 率 段（未开锁也要写 率 0%）');
     return o;
   }
@@ -1489,7 +1506,7 @@
     return `
       <div class="tc-lock s-${sc}">
         <div class="tc-lk-hd">
-          <span class="tc-lk-stage">${esc(l.stageRaw || '阶 —')}</span>
+          <span class="tc-lk-stage">境 ${esc(l.stageRaw || '—')}</span>
           <b class="tc-lk-name">${esc(l.name || '基因锁')}</b>
           <b class="tc-lk-rate">${rateTxt}</b>${warn}
         </div>

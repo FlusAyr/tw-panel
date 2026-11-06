@@ -1407,7 +1407,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   console.log('\n── 组 16 · 基因锁 lk ──');
 
   const lkOf = (st) => (st.geneLocks && st.geneLocks[0]) || { errs: [] };
-  const LK_SRC = 'lk1: 甲 ｜ 阶 三阶 ｜ 率 62% ｜ 纹 3 ｜ 锁 +12% ｜ 成 2 ｜ 次 5 险成';
+  const LK_SRC = 'lk1: 甲 ｜ 境 三阶 ｜ 率 62% ｜ 纹 3 ｜ 锁 +12% ｜ 成 2 ｜ 次 5 险成';
 
   const lkSt = api.parseState(LK_SRC);
   T('lk 行进 geneLocks（不串到 places）',
@@ -1415,7 +1415,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     'geneLocks=' + lkSt.geneLocks.length + ' places=' + lkSt.places.length);
 
   const LK1 = lkOf(lkSt);
-  T('lk 六段全解析（名/阶/率/纹/锁/成/次/结果）',
+  T('lk 六段全解析（名/境/率/纹/锁/成/次/结果）',
     LK1.name === '甲' && LK1.stage === 3 && LK1.rate === 62 && LK1.marks === 3
       && LK1.lock === 12 && LK1.succ === 2 && LK1.tries === 5
       && LK1.outcome === '险成' && (LK1.errs || []).length === 0,
@@ -1426,7 +1426,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
      所以这几条断言看的是去掉标签后的文本，不是某个 class 里的片段。 */
   const textOf = (html) => String(html).replace(/<[^>]*>/g, '').replace(/\s+/g, '');
   const lkHtml = api.render(lkSt);
-  T('lk 渲染出 tc-lock，且 阶 决定 class（s-3）', /class="tc-lock s-3"/.test(lkHtml),
+  T('lk 渲染出 tc-lock，且 境 决定 class（s-3）', /class="tc-lock s-3"/.test(lkHtml),
     '缺 class="tc-lock s-3"');
   T('lk 渲染出 率 与 锁 读数', /62%/.test(textOf(lkHtml)) && /锁\+12%/.test(textOf(lkHtml)),
     '读到的字=' + textOf(lkHtml));
@@ -1545,6 +1545,35 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('次 五 仍然报错（放宽没连坏值一起放过）',
     /次 必须是「N 结果」/.test((lkOf(lkBadTry).errs || []).join('|')),
     JSON.stringify(lkOf(lkBadTry).errs));
+
+  /* ── 境 / 阶 ────────────────────────────────────────────────
+     背景：lk 行的 阶 与 lock 行的 阶（四阶初/中/高）撞名又相邻，
+     模型会把上一行原样抄进下一行，五张卡全 ⚠。改名 境。
+     兼容只针对**键名**，值（未开/一阶~五阶）的枚举校验一点没松。 */
+
+  const LK_J = lkOf(api.parseState('lk1: 甲 ｜ 境 四阶 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5% ｜ 成 2 ｜ 次 45 成功'));
+  T('境 四阶：解析成功、不报错', LK_J.stage === 4 && (LK_J.errs || []).length === 0,
+    JSON.stringify({ s: LK_J.stage, e: LK_J.errs }));
+
+  const lkJhtml = api.render(api.parseState('lk1: 甲 ｜ 境 四阶 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5% ｜ 成 2 ｜ 次 45 成功'));
+  T('境 四阶：卡面标签写「境」（人读到的字里同时有 境 和 四阶）',
+    /境/.test(textOf(lkJhtml)) && /四阶/.test(textOf(lkJhtml)) && !/阶—/.test(textOf(lkJhtml)),
+    '读到的字=' + textOf(lkJhtml).slice(0, 80));
+
+  const LK_OLD = lkOf(api.parseState('lk2: 乙 ｜ 阶 四阶 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5% ｜ 成 2 ｜ 次 45 成功'));
+  T('阶 四阶（旧写法）：仍能解析，旧存档不崩（兼容的是键名，不是放宽值）',
+    LK_OLD.stage === 4 && (LK_OLD.errs || []).length === 0,
+    JSON.stringify({ s: LK_OLD.stage, e: LK_OLD.errs }));
+
+  const LK_BAD_J = lkOf(api.parseState('lk3: 丙 ｜ 境 四阶初 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5%'));
+  T('境 四阶初：仍然报错（改名没顺手把枚举放宽）',
+    /境 只认 未开\/一阶~五阶/.test((LK_BAD_J.errs || []).join('|')),
+    JSON.stringify(LK_BAD_J.errs));
+
+  const LK_BOTH = lkOf(api.parseState('lk4: 丁 ｜ 境 三阶 ｜ 阶 四阶 ｜ 率 62% ｜ 纹 1 ｜ 锁 +5%'));
+  T('境 与 阶 同时出现：取 境（stage=3），并报一条明确的「不一致」',
+    LK_BOTH.stage === 3 && /境\/阶 同时出现且不一致/.test((LK_BOTH.errs || []).join('|')),
+    JSON.stringify({ s: LK_BOTH.stage, e: LK_BOTH.errs }));
 
 
 }
