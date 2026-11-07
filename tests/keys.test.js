@@ -2225,6 +2225,43 @@ console.log('\n组 22 · 卡巴拉/源质');
     })(), {});
 }
 
+// ── 组 26 · 溢出伤害不算算错，但仍要说出来 ──────────────────────────────
+// 目标只剩 25 血挨 38 点，`血 25→0` 是唯一正确写法；判成 mismatch 会让每次击杀都出黄字，
+// 而「⚠ 一旦常态出现就不再是信号」。判据只认「打到 0 且伤害 > 剩余血量」。
+// 反向也要钉死：`伤 38 ｜ 血 100→75` 是真算错，不许因为加了溢出判据就放过。
+{
+  const api = makeApi(SRC);
+  const NL = String.fromCharCode(10);
+  const one = (dmgLine) => {
+    const st = api.parseState('scene: 测' + NL + 'p1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1' + NL + dmgLine + NL + 'next: a');
+    return { d: st.dmgs[0], html: api.render(st) };
+  };
+  const OVER = one('dmg1: 甲→乙 ｜ 因 链锯剑·横扫 ｜ 算 1D8+2 ｜ 伤 穿刺·头颈 ·38 ｜ 血 25→0 ｜ 判 命中');
+  T('溢出伤害不算算错（38 打 25 血 → mismatch false）',
+    OVER.d.mismatch === false && OVER.d.overflow === 13 && OVER.d.delta === 25,
+    { got: { mismatch: OVER.d.mismatch, overflow: OVER.d.overflow, delta: OVER.d.delta } });
+  T('溢出仍要说出来（tc-dmg-over 且写着 溢出 13）',
+    /class="tc-dmg-over"/.test(OVER.html) && /溢出 13/.test(OVER.html.replace(/<[^>]+>/g, '')),
+    { got: (OVER.html.match(/class="tc-dmg-over"[^>]*>([^<]*)/) || [])[1] || '(无)' });
+  T('溢出时不再出「数值对不上」黄字',
+    !/class="tc-dmg-warn"/.test(OVER.html), {});
+
+  const BAD = one('dmg1: 甲→乙 ｜ 因 链锯剑·横扫 ｜ 算 1D8+2 ｜ 伤 穿刺·头颈 ·38 ｜ 血 100→75 ｜ 判 命中');
+  T('非溢出的 delta≠amount 仍是算错（38 打 100 血写成 100→75）',
+    BAD.d.mismatch === true && BAD.d.overflow === 0, { got: { mismatch: BAD.d.mismatch, overflow: BAD.d.overflow } });
+  T('算错时黄字还在，且没有溢出条', /class="tc-dmg-warn"/.test(BAD.html) && !/class="tc-dmg-over"/.test(BAD.html), {});
+
+  const OK = one('dmg1: 甲→乙 ｜ 因 链锯剑·横扫 ｜ 算 1D8+2 ｜ 伤 穿刺·头颈 ·38 ｜ 血 100→62 ｜ 判 命中');
+  T('算对的正常一击：不错、无溢出条、无黄字',
+    OK.d.mismatch === false && OK.d.overflow === 0 &&
+    !/class="tc-dmg-over"/.test(OK.html) && !/class="tc-dmg-warn"/.test(OK.html), {});
+
+  const EXACT = one('dmg1: 甲→乙 ｜ 因 链锯剑·横扫 ｜ 算 1D8+2 ｜ 伤 穿刺·头颈 ·25 ｜ 血 25→0 ｜ 判 命中');
+  T('恰好打死（伤 25 打 25 血）不算溢出，条也不出',
+    EXACT.d.mismatch === false && EXACT.d.overflow === 0 && !/class="tc-dmg-over"/.test(EXACT.html),
+    { got: { mismatch: EXACT.d.mismatch, overflow: EXACT.d.overflow } });
+}
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

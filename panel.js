@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.38.0';
+  const VERSION = '3.38.1';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -1166,7 +1166,7 @@
     const o = {
       from: '', to: '', cause: '', calc: '', kindRaw: '', kind: '', part: '',
       amount: null, hpBefore: null, hpAfter: null, verdictRaw: '', verdict: '',
-      extra: [], mismatch: false, delta: null,
+      extra: [], mismatch: false, delta: null, overflow: 0,
     };
     seg(v).forEach((piece, i) => {
       const x = String(piece).trim();
@@ -1203,7 +1203,18 @@
       o.extra.push(x);
     });
     if (o.hpBefore != null && o.hpAfter != null) o.delta = o.hpBefore - o.hpAfter;
-    if (o.amount != null && o.delta != null) o.mismatch = o.delta !== o.amount;
+    if (o.amount != null && o.delta != null) {
+      /* 溢出伤害：目标只剩 before 血、挨了 amount 点，`血 before→0` 是唯一正确写法。
+         这时 delta 必然小于 amount，但模型没算错——报成「算错」会让每次击杀都出一条黄字，
+         而 §7 第 27 条写着「⚠ 一旦常态出现就不再是信号」。
+         判据只认「打到 0 且伤害大于剩余血量」；其余任何 delta≠amount 仍算算错。 */
+      if (o.hpAfter === 0 && o.amount > o.hpBefore) {
+        o.overflow = o.amount - o.hpBefore;
+        o.mismatch = false;
+      } else {
+        o.mismatch = o.delta !== o.amount;
+      }
+    }
     return o;
   }
 
@@ -2542,6 +2553,10 @@
       </div>`;
     }
 
+    const over = d.overflow > 0
+      ? `<i class="tc-dmg-over">溢出 ${d.overflow}（伤 ${d.amount}／实扣 ${d.delta}）</i>`
+      : '';
+
     const warn = d.mismatch
       ? `<i class="tc-dmg-warn">数值对不上：血 −${d.delta}／伤 ${d.amount}（模型算错了，按上面显示原样核对）</i>`
       : '';
@@ -2564,6 +2579,7 @@
         <span class="tags">${d.kindRaw ? `<b class="kind">${esc(d.kindRaw)}</b>` : ''}${d.part ? `<span class="part">${esc(d.part)}</span>` : ''}</span>
       </div>
       ${hp}
+      ${over}
       ${warn}
       ${meta.length ? `<div class="tc-dmg-meta">${meta.join('')}</div>` : ''}
     </div>`;
@@ -3422,6 +3438,9 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dk,#f43f5e) 90%,#fff)}
 .tc-dmg-warn{grid-column:1 / -1;font-style:normal;font-size:10px;color:#fbbf24;margin-top:3px;
   border-left:2px solid #b45309;padding-left:6px;background:rgba(120,53,15,.16)}
+/* 溢出伤害：不是错误，是「打穿了多少」。用中性青灰，别用黄——黄是「我们兜住了但这是错的」 */
+.tc-dmg-over{grid-column:1 / -1;font-style:normal;font-size:10px;color:#7dd3fc;margin-top:3px;
+  border-left:2px solid #0e7490;padding-left:6px;background:rgba(14,116,144,.14)}
 /* 死核对账条：同一个形状，只是它在日志里独占一行 */
 .tc-killwarn{display:block;margin:0 0 6px;padding:5px 8px;font-size:11px;line-height:1.5;
   border-left:2px solid #fbbf24;background:rgba(120,53,15,.22)}
