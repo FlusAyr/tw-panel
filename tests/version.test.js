@@ -254,7 +254,7 @@ if (mt) {
 {
   const readUtf8 = (rel) => fs.readFileSync(abs(rel), 'utf8');
   const WB = {
-    kb: 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-06.json',
+    kb: 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-07.json',
     tuan: 'content/worldbook/跑团用世界书_v4_联机版_AI精简_2026-11-06.json',
   };
   const TRUTH = {};
@@ -341,7 +341,7 @@ if (mt) {
  */
 console.log('\n── 组 I · 世界书跨条目同文 ──');
 {
-  const WBK = 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-06.json';
+  const WBK = 'content/worldbook/无限恐怖_v2_联机版_AI精简_2026-11-07.json';
   const A0 = '【搜寻收益递减】';
   const A1 = '下场清空。';
   const IDS = ['25', '27'];
