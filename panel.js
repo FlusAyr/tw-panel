@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.38.1';
+  const VERSION = '3.38.3';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -99,6 +99,11 @@
      刻意不收「击败 / 击退 / 压制 / 重伤」：它们不必然等于死亡，收进来就会误报，
      而**误报一次，玩家就学会无视黄字**（与 §7 第 27 条同一个坑）。 */
   const KILL_WORDS = ['自爆', '崩解', '瓦解', '消散', '溃散', '除名', '处决', '秒杀', '击杀', '消灭'];
+  /* hp>0 时的「战斗已结束」语义词。与 KILL_WORDS 合并去重（处决/秒杀两边都有，落一处）。
+     只收「必然等于战斗结束」的词——重伤/重创/断肢/崩解姿势这类能继续打的一个都不进表：
+     误报一次，玩家就学会无视黄字。 */
+  const END_WORDS = ['处决', '斩首', '秒杀', '终结', '任人宰割', '只剩一口气', '倒地不起'];
+  const END_ALL = KILL_WORDS.concat(END_WORDS.filter(w => KILL_WORDS.indexOf(w) < 0));
 
   /* 技能上限：玩家与「机甲 / 使魔」**不是同一个数**，别顺手改成一个。
      玩家卡初始就有技能，9 个槽；机甲与使魔是装备 / 召唤物，5 个是它们的设计口径。
@@ -164,10 +169,64 @@
     const alive = mobs.filter(m => typeof m.hp === 'number' && m.hp > 0);
     if (!alive.length) return null;                    /* 无敌人 / 全归零 → 不判 */
     const txt = String(st.result || '') + ' ' + String(st.world || '');
-    const word = KILL_WORDS.find(w => txt.includes(w));
+    const word = END_ALL.find(w => txt.includes(w));
     if (!word) return null;
     const m = alive[0];
-    return { mob: m.name || '未命名目标', hp: m.hp, max: m.hpMax, word: word };
+    const boss = /BOSS|Boss|首领|头目/.test(String(m.grade || '')) || /\bboss\b/i.test(String(m.cls || ''));
+    const pct = (typeof m.hpMax === 'number' && m.hpMax > 0 && typeof m.hp === 'number')
+      ? Math.round(m.hp / m.hpMax * 100) : null;
+    return { mob: m.name || '未命名目标', hp: m.hp, max: m.hpMax, word: word, boss: boss, pct: pct };
+  }
+  /* 弱点加成只有在「已暴露/核心」且「这一刀真打中」时才算得对。
+     判据只解释不改写：卡面上的数与文案照原样，黄字在旁边说一句。 */
+  function weakWarnOf(st) {
+    const out = [];
+    const mobs = st.mobs || [];
+    if (!mobs.length) return out;
+    const byName = {};
+    mobs.forEach(function (m) { if (m && m.name) byName[String(m.name).trim()] = m; });
+    const OK = ['hit', 'crit', 'break'];
+    (st.dmgs || []).forEach(function (d) {
+      const claim = /弱点/.test(String(d.cause || '') + ' ' + String(d.calc || ''));
+      if (!claim) return;
+      const tgt = byName[String(d.to || '').trim()];
+      if (!tgt) return;                        /* 打的是玩家/使魔而不是本层 mob → 不判 */
+      if (tgt.weakState === '未暴露') {
+        out.push({ why: 'hidden', mob: tgt.name, hp: tgt.hp, max: tgt.hpMax, verdict: d.verdictRaw || '' });
+      } else if (d.verdict && OK.indexOf(d.verdict) < 0) {
+        out.push({ why: 'miss', mob: tgt.name, verdict: d.verdictRaw || d.verdict });
+      }
+    });
+    return out;
+  }
+  /* B 类：状态位与 HP 自洽性。`濒死` 是 HP 区间的结论（1-19%），不是叙事词——
+     用词表判它，会在「合法写成濒死」的地方报警（§7 第 23 条的坑）。 */
+  const HP_BANDS = function (pct) {
+    if (pct >= 80) return '健康';
+    if (pct >= 60) return '轻伤';
+    if (pct >= 40) return '中伤';
+    if (pct >= 20) return '重伤';
+    if (pct >= 1) return '濒死';
+    return '死亡';
+  };
+  function stateWarnOf(st) {
+    const out = [];
+    (st.mobs || []).forEach(function (m) {
+      if (!m) return;
+      const sts = (m.status || []).join('|');
+      const hasNear = sts.indexOf('濒死') >= 0;
+      const hasDown = sts.indexOf('已击破') >= 0;
+      const hp = m.hp, max = m.hpMax;
+      const pct = (typeof hp === 'number' && typeof max === 'number' && max > 0) ? Math.round(hp / max * 100) : null;
+      if (hasNear && pct != null && pct > 19) {
+        out.push({ why: 'near-high', mob: m.name, hp: hp, max: max, pct: pct });
+      } else if (hasNear && hp === 0) {
+        out.push({ why: 'near-zero', mob: m.name, hp: hp, max: max, pct: pct });
+      } else if (hasDown && typeof hp === 'number' && hp > 0) {
+        out.push({ why: 'down-alive', mob: m.name, hp: hp, max: max, pct: pct });
+      }
+    });
+    return out;
   }
   const MOB_PLAIN_A = new RegExp('^(.{1,24}?)\\s*(' + MOB_GRADE_SRC + ')\\s+([0-9?]+\\s*\\/\\s*[0-9?]+)\\s*$');
   const isStateLine = (l) => LINE_RE.test(l) || MOB_PLAIN_A.test(l);
@@ -1058,7 +1117,13 @@
       if ((m = x.match(/^[🛡盾]\s*(.*)$/u))) { const t = m[1].trim(); if (t && !o.armor) o.armor = t; continue; }
       if ((m = x.match(/^[🎯◎]\s*(.*)$/u))) { const t = m[1].trim(); if (t && !o.target) o.target = t; o.sawTarget = true; continue; }
       if ((m = x.match(/^[➤▸→]\s*(.*)$/u))) { const t = m[1].trim(); if (t && !o.intent) o.intent = t; continue; }
-      if ((m = x.match(/^弱点\s*(.*)$/))) { o.weak = m[1].trim(); continue; }
+      if ((m = x.match(/^弱点\s*(.*)$/))) {
+        o.weak = m[1].trim();
+        /* `弱点 火·未暴露` / `·已暴露` / `·核心`；没有 ·状态 的老写法保持原样显示（老卡 0 变化） */
+        const wm = o.weak.match(/^(.+?)\s*[·・.]\s*(未暴露|已暴露|核心)$/);
+        if (wm) { o.weakNature = wm[1].trim(); o.weakState = wm[2]; }
+        continue;
+      }
       if ((m = x.match(/^护甲\s*(.*)$/))) { o.armor = m[1].trim(); continue; }
       if ((m = x.match(/^状态\s*(.*)$/))) { o.status = m[1].split(/[,，、]/).map(t => t.trim()).filter(Boolean); continue; }
       if ((m = x.match(/^目标\s*(.*)$/))) { o.target = m[1].trim(); o.sawTarget = true; continue; }
@@ -1301,7 +1366,17 @@
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map(), crSeen = new Map();
-    const kblm = new Map(), yzm = new Map();
+    const bmaps = {}; BLOOD_KEYS.forEach(function (e) { bmaps[e.key] = new Map(); });
+    const bloodHit = function (k, v) {
+      for (let i = 0; i < BLOOD_KEYS.length; i++) {
+        const e = BLOOD_KEYS[i];
+        if (new RegExp('^' + e.key + '\\d*$').test(k)) {
+          bmaps[e.key].set(k === e.key ? 1 : +k.slice(e.key.length), e.parse(v));
+          return true;
+        }
+      }
+      return false;
+    };
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const mskmap = new Map(), fskmap = new Map();
     const gmap = new Map();
@@ -1352,8 +1427,7 @@
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
       else if (/^ti\d+$/.test(k)) tim.set(+k.slice(2), parseTi(v));
-      else if (/^kbl\d*$/.test(k)) kblm.set(k === 'kbl' ? 1 : +k.slice(3), parseKbl(v));
-      else if (/^yz\d*$/.test(k)) yzm.set(k === 'yz' ? 1 : +k.slice(2), parseYz(v));
+      else if (bloodHit(k, v)) { /* 血统 / 内功：键名与解析器都由 BLOOD_KEYS 决定 */ }
       else if (/^cr\d+$/.test(k)) {
         const cn = +k.slice(2), row = parseCr(v);
         crm.set(cn, row);                                  /* 语义不变：同号后者覆盖前者 */
@@ -1389,8 +1463,30 @@
       row.owner = (pmap.get(i) || {}).name || '';
       return row;
     });
-    st.kbls = hook(kblm);
-    st.yzs = hook(yzm);
+    BLOOD_KEYS.forEach(function (e) { st[e.field] = hook(bmaps[e.key]); });
+    /* 独立字段是唯一出处：同号 kbl/yz 在场时，cr 里那几段不再当资源显示。
+       按「同号」过滤——否则两人同场会「甲的血统吞乙的资源」。
+       旧卡（没有同号 kbl/yz）原样保留，不报警：旧写法不是错。 */
+    const CR_BLOOD_SEGS = ['卡巴拉天平', '卡巴拉解析', '卡巴拉质点'];
+    (st.players || []).forEach(function (p) {
+      const n = p.idx || 1;
+      const hasK = (st.kbls || []).some(function (r) { return (r.n || 1) === n; });
+      const hasY = (st.yzs || []).some(function (r) { return (r.n || 1) === n; });
+      if (!hasK && !hasY) return;
+      const krow = (st.kbls || []).filter(function (r) { return (r.n || 1) === n; })[0] || null;
+      /* 只滤「这一行确实带了新写法」的段：kbl 有 天 才滤 卡巴拉天平，有 析 才滤 卡巴拉解析；
+         质点段是 v3.37 前的旧写法，一律滤掉。否则旧卡（cr 写天平、kbl 不写天）会被滤成空。 */
+      const kills = [];
+      if (krow && krow.hasScale) kills.push('卡巴拉天平');
+      if (krow && krow.hasParse) kills.push('卡巴拉解析');
+      kills.push('卡巴拉质点');
+      p.crRow = (p.crRow || []).filter(function (r) {
+        const nm = String(r.name || '').trim();
+        if (hasK && kills.indexOf(nm) >= 0) return false;
+        if (hasY && (nm.indexOf('源质·') === 0 || nm.indexOf('源质・') === 0 || nm.indexOf('源质.') === 0 || nm === '源质扭曲')) return false;
+        return true;
+      });
+    });
     st.crOrphans = [...crSeen.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b)
       .map(i => ({ n: i, segs: crSeen.get(i)[crSeen.get(i).length - 1].length }));
     st.bonds = [...bmap.keys()].sort((a, b) => a - b).map(k => bmap.get(k));
@@ -1821,8 +1917,36 @@
     return KBL_EN2CN[t] || KBL_EN2CN[t.replace(/'/g, '')] || t;
   };
 
+  /* ── 血统 / 内功：自带结构化状态一律自建键行，不进 cr ──
+     加一套新体系 = 这里加一行 + 写一个 render + 一组 CSS 变量；解析分派、截断锁、挂载主干都不用改。
+     kind 只能是 血统 / 内功——它决定技能位口径（见 bloodCapLine）。 */
+  const BLOOD_KEYS = [
+    { key: 'kbl', field: 'kbls', cls: 'tc-kbls', name: '卡巴拉 · 生命之树', kind: '血统', sect: 'KABBALAH',
+      parse: parseKbl,
+      render: function (r, o, sc, e) { return renderKbl(r, o, sc || bloodScale(r, null), e); } },
+    { key: 'yz', field: 'yzs', cls: 'tc-yzs', name: '源质 · 六元', kind: '内功', sect: 'SEPHIRAH',
+      parse: parseYz,
+      render: function (r, o, sc, e) { return renderYz(r, o, sc, e); } }
+  ];
+  function crOfPlayer(st, n) {
+    const p = ((st && st.players) || [])[((n || 1) - 1)];
+    return (p && p.crRow) || [];
+  }
+  /* 技能位口径：血统按阶（低阶/中阶不限），内功按主被动 */
+  function bloodCapLine(e) {
+    return e && e.kind === '内功' ? '技能位 主动≤4 · 被动≤1' : '技能位 B3 · A4 · S5（低阶不限）';
+  }
+  /* 天平 / 解析：kbl 行是唯一权威；没有这两段的旧卡回落到 cr 行（不报警） */
+  function bloodScale(k, crRow) {
+    const legacy = kblScale(crRow || []);
+    const warns = [];
+    if (!k.hasScale) warns.push.apply(warns, legacy.warns.filter(w => w.indexOf('天平') === 0));
+    if (!k.hasParse) warns.push.apply(warns, legacy.warns.filter(w => w.indexOf('解析') === 0));
+    return { bal: k.hasScale ? k.scale : legacy.bal, parse: k.hasParse ? k.parsed : legacy.parse, warns: warns };
+  }
+
   function parseKbl(v) {
-    const o = { tree: '', stage: '', solved: [], inversed: [], usedRaw: '', bad: [], unknown: [], errs: [], warns: [], actRaw: '', raw: String(v || '') };
+    const o = { tree: '', stage: '', solved: [], inversed: [], usedRaw: '', bad: [], unknown: [], errs: [], warns: [], actRaw: '', hasScale: false, scale: null, hasParse: false, parsed: null, raw: String(v || '') };
     String(v || '').split(/[｜|]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
       const m = seg.match(/^([^\s:：]{1,6})\s*[:：]?\s*([\s\S]*)$/);
       if (!m) return;
@@ -1833,6 +1957,33 @@
       else if (k === '逆') o.inversed = nameList(val).map(kblNorm);
       else if (k === '激') o.actRaw = val;                  /* 槽数面板按阶算，不采信写法 */
       else if (k === '用') o.usedRaw = val;                  /* 面板重算，不采信写法 */
+      else if (k === '天') {
+        const mm = String(val).match(/^([+\-\u2212]?\s*\d+)$/);
+        if (!mm) o.errs.push('天 只认 ±N：' + val);
+        else {
+          o.hasScale = true;
+          const neg = /[-−]/.test(mm[1]);
+          let n = +mm[1].replace(/[+\-\u2212\s]/g, '');
+          if (neg) n = -n;
+          /* 越界夹住 + 说清：指针用夹住后的值算，卡面显示模型写的原文 */
+          if (n > KBL_SCALE_MAX || n < -KBL_SCALE_MAX) {
+            const shown = n > 0 ? '+' + KBL_SCALE_MAX : '-' + KBL_SCALE_MAX;
+            o.warns.push('天平越界：天 ' + val + ' —— 超出 \u221210~+10，按 ' + shown + ' 显示');
+            n = Math.max(-KBL_SCALE_MAX, Math.min(KBL_SCALE_MAX, n));
+          }
+          o.scale = n;
+        }
+      }
+      else if (k === '析') {
+        const mm = String(val).match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (!mm) o.errs.push('析 只认 a/b：' + val);
+        else {
+          o.hasParse = true;
+          o.parsed = { n: +mm[1], cap: +mm[2] };
+          /* 上限不由面板猜（上限在平衡六档）：只校验 a ≤ b，其余照模型显示 */
+          if (+mm[1] > +mm[2]) o.warns.push('解析超次数：析 ' + val + ' —— 超出 ' + (+mm[1] - +mm[2]) + ' 次');
+        }
+      }
       else o.unknown.push(seg);
     });
     /* 名字写错：照原样显示 + 黄字，不落 errs（用户可能自创体系） */
@@ -2043,7 +2194,7 @@
       '<div class="kb-srow kb-skewrow">' + skew + '</div>' + rest + '</div>';
   }
 
-  function renderKbl(k, owner, sc) {
+  function renderKbl(k, owner, sc, entry) {
     const grade = gradeOf(k.stage);
     const ss = grade === 'SS' || grade === 'SSS';
     const sss = grade === 'SSS';
@@ -2055,7 +2206,8 @@
     const cls = `tc-kbl grade-${grade} ${open ? 'open' : 'closed'}${ss ? ' dual' : ''}${sss ? ' full' : ''}`;
     return `<div class="${cls}" data-fold="${esc((owner || 'p1') + '|kbl')}" data-grade="${grade}">` +
       `<div class="kf-hd" role="button" tabindex="0">` +
-        `<b>${sss ? '完整卡巴拉' : '卡巴拉'}</b>` +
+        `<b>${esc(entry ? entry.name : (sss ? '完整卡巴拉' : '卡巴拉'))}</b>` +
+        `<i class="kb-kind">${esc(entry ? entry.kind : '血统')}</i>` +
         `<i class="kb-tree">树 ${esc(k.tree || '正')}</i>` +
         `<i class="kb-stage">阶 ${esc(k.stage || '—')}</i>` +
         (k.actRaw ? `<i class="kb-act${(!k.actInf && isFinite(k.actCap) && k.actN > k.actCap) ? ' over' : ''}">激 ${k.actInf ? '∞' : (k.actN + '/' + (isFinite(k.actCap) ? k.actCap : '∞'))}</i>` : '') +
@@ -2064,7 +2216,7 @@
         (ss ? `<span class="kf-seal">${grade}</span>` : '') +
         `<span class="kf-ar" aria-hidden="true"></span>` +
       `</div>` +
-      `<div class="kf-body">${scaleHtml(k, sc)}<div class="kb-tree-wrap">${kblSvg(k, grade)}</div>${warn}</div>` +
+      `<div class="kf-body"><div class="kb-cap">${esc(bloodCapLine(entry))}</div>${scaleHtml(k, sc)}<div class="kb-tree-wrap">${kblSvg(k, grade)}</div>${warn}</div>` +
       `</div>`;
   }
 
@@ -2112,7 +2264,7 @@
     return o;
   }
 
-  function renderYz(y, owner) {
+  function renderYz(y, owner, sc, entry) {
     const on = new Set(y.solved);
     const grade = gradeOf(y.stage);
     const ss = grade === 'SS' || grade === 'SSS';
@@ -2137,14 +2289,15 @@
     const cls = `tc-yz grade-${grade} ${open ? 'open' : 'closed'}${ss ? ' dual' : ''}${sss ? ' full' : ''}`;
     return `<div class="${cls}" data-fold="${esc((owner || 'p1') + '|yz')}" data-grade="${grade}">` +
       `<div class="kf-hd" role="button" tabindex="0">` +
-        `<b>${sss ? '完整源质' : '源质'}</b>` +
+        `<b>${esc(entry ? (sss ? '完整' + entry.name : entry.name) : (sss ? '完整源质' : '源质'))}</b>` +
+        `<i class="kb-kind">${esc(entry ? entry.kind : '内功')}</i>` +
         `<i class="kb-stage">阶 ${esc(y.stage || '—')}</i>` +
         `<i class="kb-used">解 ${y.solved.length}/${y.total}</i>` +
         `<i class="yz-tw">扭 ${TW_NAMES.map((n, i) => n + tv([t.yong, t.zhan, t.lin][i])).join(' ')}</i>` +
         (ss ? `<span class="kf-seal">${grade}</span>` : '') +
         `<span class="kf-ar" aria-hidden="true"></span>` +
       `</div>` +
-      `<div class="kf-body"><div class="yz-ring">` +
+      `<div class="kf-body"><div class="kb-cap">${esc(bloodCapLine(entry))}</div><div class="yz-ring">` +
         (ss ? `<i class="yz-inner"></i>` : '') +
         YZ_ORDER.map(dot).join('') +
         `<div class="yz-hub">${TW_NAMES.map((n, i) => `<em style="color:${TW_COLORS[i]}">${n} ${tv([t.yong, t.zhan, t.lin][i])}</em>`).join('')}</div>` +
@@ -2351,7 +2504,13 @@
         ${m.target ? `<span class="tc-mob-tg">🎯 ${esc(m.target)}</span>` : ''}
       </div>
       ${m.intent ? `<div class="tc-mob-intent">${esc(m.intent)}</div>` : ''}
-      ${m.weak ? `<div class="tc-mob-weak">弱点 ${esc(m.weak)}</div>` : ''}
+      ${m.weak ? (m.weakState
+        ? `<div class="tc-mob-weak ws-${m.weakState}">${
+            m.weakState === '未暴露'
+              ? '弱点 ???<em>需识破</em>'
+              : `弱点 ${esc(m.weakNature)}${m.weakState === '核心' ? ' · 核心' : ''}<em>+${m.weakState === '核心' ? 16 : 13}%</em>`
+          }</div>`
+        : `<div class="tc-mob-weak">弱点 ${esc(m.weak)}</div>`) : ''}
     </div>`;
   }
 
@@ -2588,6 +2747,8 @@
   function render(st) {
     /* 死核对账（v3.31.0）：结果/世界文字说了「没了」，但敌人 HP 还 > 0。 */
     st.killWarn = killWarnOf(st);
+    st.weakWarns = weakWarnOf(st);
+    st.stateWarns = stateWarnOf(st);
     const scene = seg(st.scene);
     const out = [];
     const sect = (zh, en) => `<div class="tc-sect"><i></i><b>${esc(zh)}</b><em>${en}</em></div>`;
@@ -2647,14 +2808,14 @@
       st.familiars.forEach(f => { if (!fUsed.has(f.idx)) cards.push(renderFamiliar(f)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
     }
-    if (st.kbls.length) {
-      colL.push(sect('卡巴拉 · 生命之树', 'KABBALAH'));
-      colL.push(`<div class="tc-kbls">${st.kbls.map(r => renderKbl(r, 'p' + (r.n || 1), kblScale(((st.players || [])[r.n - 1] || {}).crRow))).join('')}</div>`);
-    }
-    if (st.yzs.length) {
-      colL.push(sect('源质 · 六元', 'SEPHIRAH'));
-      colL.push(`<div class="tc-yzs">${st.yzs.map(r => renderYz(r, 'p' + (r.n || 1))).join('')}</div>`);
-    }
+    BLOOD_KEYS.forEach(function (e) {
+      const rows = st[e.field] || [];
+      if (!rows.length) return;
+      colL.push(sect(e.sect, e.name));
+      colL.push('<div class="' + e.cls + '">' + rows.map(function (r) {
+        return e.render(r, 'p' + (r.n || 1), bloodScale(r, ((st.players || [])[(r.n || 1) - 1] || {}).crRow), e);
+      }).join('') + '</div>');
+    });
     if (st.geneLocks.length) {
       colL.push(sect('基因锁', 'GENE LOCK'));
       colL.push(`<div class="tc-locks">${st.geneLocks.map(renderGeneLock).join('')}</div>`);
@@ -2733,8 +2894,25 @@
       /* 「还差多少」= 还得扣掉多少 HP 才算死，不是 max-hp（满血时那是 0，读起来像「已经死了」） */
       const gap = (typeof k.hp === 'number') ? `，还需扣 ${k.hp}` : '';
       log.push(`<div class="tc-dmg-warn tc-killwarn">⚠ 目标 HP 未归零，却写了「${esc(k.word)}」——` +
-        `死亡只能由 dmg 行把 HP 扣到 0：${esc(k.mob)} HP ${k.hp}${typeof k.max === 'number' ? '/' + k.max : ''}${gap}</div>`);
+        `死亡只能由 dmg 行把 HP 扣到 0：${esc(k.mob)} HP ${k.hp}${typeof k.max === 'number' ? '/' + k.max : ''}${gap}` +
+        (k.pct == null ? '' : `（${k.pct}%）`) +
+        (k.boss ? ' · BOSS 无处决机制' : '') + '</div>');
     }
+    (st.stateWarns || []).forEach(function (w) {
+      const hpTxt = (w.max == null ? String(w.hp) : w.hp + '/' + w.max);
+      const txt = w.why === 'near-high'
+        ? `HP 还有 ${w.pct}%（${hpTxt}），却标了濒死 —— 濒死 = 1-19%`
+        : (w.why === 'near-zero'
+          ? `HP 已归零（${hpTxt}），却标了濒死 —— 应标「已击破」`
+          : `HP 还剩 ${hpTxt}（${w.pct == null ? '?' : w.pct + '%'}），却标了已击破`);
+      log.push(`<div class="tc-dmg-warn tc-statewarn">⚠ ${txt}</div>`);
+    });
+    (st.weakWarns || []).forEach(function (w) {
+      const txt = w.why === 'hidden'
+        ? `弱点未暴露却算进了加成：${esc(w.mob)} 的弱点还没识破（判「${esc(w.verdict || '—')}」）`
+        : `未命中却算了弱点加成：${esc(w.mob)} 判「${esc(w.verdict)}」`;
+      log.push(`<div class="tc-dmg-warn tc-weakwarn">⚠ ${txt}</div>`);
+    });
     if (st.result) log.push(`<div class="tc-line tc-result"><b>🎯 行动结果</b><span>${esc(st.result)}</span></div>`);
     if (st.world && !/^(无|—|-)$/.test(String(st.world).trim())) {
       log.push(`<div class="tc-line tc-world"><b>🌊 世界涟漪</b><span>${esc(st.world)}</span></div>`);
@@ -3026,6 +3204,14 @@
 .tc-mob-intent{background:#2a1013;border:1px solid #7f1d1d;border-radius:6px;padding:3px 8px;font-size:12px;color:#fecaca;font-weight:600}
 .tc-mob-intent::before{content:"➤ "}
 .tc-mob-weak{margin-top:5px;font-size:11px;color:#8a7a80}
+.tc-mob-weak em{font-style:normal;margin-left:6px;font-size:10px;color:#7dd3fc}
+.tc-mob-weak.ws-未暴露{color:#94a3b8;letter-spacing:.02em}
+.tc-mob-weak.ws-未暴露 em{color:#a3a3a3;border:1px dashed rgba(148,163,184,.45);border-radius:2px;padding:0 4px}
+.tc-mob-weak.ws-已暴露{color:#fbbf24}
+.tc-mob-weak.ws-已暴露 em{color:#fbbf24;font-weight:700}
+.tc-mob-weak.ws-核心{color:#f97316}
+.tc-mob-weak.ws-核心 em{color:#fb923c;font-weight:700;border:1px solid rgba(249,115,22,.5);border-radius:2px;padding:0 4px}
+.tc-weakwarn{border-left-color:#fbbf24}
 /* ── NPC 卡：紫金情报网（非敌对在场人物，与敌方红色系彻底区分） ── */
 .tc-npcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:8px;margin-bottom:8px}
 .tc-npc{position:relative;overflow:hidden;font-size:12px;color:#cfc3e8;
@@ -3821,7 +4007,9 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
 .kb-pdots i.free { background: transparent; }
 .kb-pdots-empty { color: #64748b; }
 
-.kb-act { border: 1px solid rgba(129,140,248,.5); color: #a5b4fc; background: rgba(129,140,248,.14); }
+  .kb-kind { font-style: normal; font-size: 8.5px; letter-spacing: .04em; color: #c4b5fd; border: 1px solid rgba(167, 139, 250, .45); border-radius: 3px; padding: 0 3px; margin-left: 3px }
+  .kb-cap { font-size: 9px; line-height: 1.5; color: #94a3b8; margin: 3px 0 2px; letter-spacing: .02em }
+  .kb-act { border: 1px solid rgba(129,140,248,.5); color: #a5b4fc; background: rgba(129,140,248,.14); }
 .kb-act.over { border-color: rgba(252,211,77,.55); color: #fcd34d; background: rgba(252,211,77,.14); }
 .kn.act { filter: drop-shadow(0 0 4px currentColor); }
 .kn.idle { opacity: .92; }
@@ -4118,6 +4306,6 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr, parseKbl, parseYz };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr, parseKbl, parseYz, BLOOD_KEYS: BLOOD_KEYS, bloodCapLine: bloodCapLine, bloodScale: bloodScale };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();

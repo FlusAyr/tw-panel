@@ -2262,6 +2262,140 @@ console.log('\n组 22 · 卡巴拉/源质');
     { got: { mismatch: EXACT.d.mismatch, overflow: EXACT.d.overflow } });
 }
 
+  /* ===== 组 27 · 独立字段不占 cr / 表驱动 / kind 口径 ===== */
+  {
+  const api = makeApi(SRC);
+  const NL = String.fromCharCode(10);
+  const build = (lines) => {
+    const src = ['scene: 测', 'p1: 甲 ｜ 10/10 ｜ 5/5 ｜ 1/9'].concat(lines).concat(['next: a']).join(NL);
+    const st = api.parseState(api.extractBlock(src).body);
+    return { st, html: api.render(st) };
+  };
+  const txt = (h) => h.replace(/<[^>]+>/g, '');
+
+  const A = build([
+    'cr1: 卡巴拉天平 +3 ｜ 卡巴拉解析 2/2 ｜ 卡巴拉质点 4/20',
+    'kbl1: 树 双 ｜ 阶 SS ｜ 解 王冠 智慧 美 慈悲 ｜ 逆 Thaumiel ｜ 激 3/7 王冠 智慧 美 ｜ 天 +3 ｜ 析 2/2 ｜ 用 6/20'
+  ]);
+  const K = A.st.kbls[0] || {};
+  T('① 天 / 析 在 kbl 行里解析（不再读 cr）',
+    K.hasScale === true && K.scale === 3 && K.hasParse === true && K.parsed && K.parsed.n === 2 && K.parsed.cap === 2,
+    { got: { hasScale: K.hasScale, scale: K.scale, hasParse: K.hasParse, parsed: K.parsed } });
+
+  T('③ 冲突时新写法赢：同号 cr 段被滤空、卡面 0 黄字',
+    (A.st.players[0].crRow || []).length === 0 && !/class="kb-warn"/.test(A.html) && (K.warns || []).length === 0,
+    { got: { crRow: (A.st.players[0].crRow || []).map(r => r[0]), warns: K.warns } });
+
+  const B = build(['cr1: 卡巴拉天平 +3 ｜ 卡巴拉解析 2/2']);
+  T('② 旧写法照渲染（只有 cr 也能出天平/解析，0 黄字）',
+    (B.st.players[0].crRow || []).length === 2 && !/class="kb-warn"/.test(B.html),
+    { got: (B.st.players[0].crRow || []).map(r => r[0]) });
+
+  const C = build(['p2: 乙 ｜ 9/9 ｜ 3/3 ｜ 2/9', 'cr2: 源质·火 5/7', 'kbl1: 树 正 ｜ 阶 A ｜ 激 0/3']);
+  T('过滤只按同号：cr2 不被 kbl1 压制',
+    ((C.st.players[1] || {}).crRow || []).length === 1,
+    { got: ((C.st.players[1] || {}).crRow || []).map(r => r[0]) });
+
+  const D = build([
+    'kbl1: 树 正 ｜ 阶 A ｜ 激 0/3',
+    'yz1: 阶 C ｜ 解 风3 ｜ 未 地 水 火 秩序 混沌 ｜ 扭 永0 粘0 临0'
+  ]);
+  T('④ kind 分流：kbl 卡标「血统」+ B3·A4·S5',
+    /class="kb-kind">血统</.test(D.html) && /B3 · A4 · S5/.test(txt(D.html)),
+    { got: (D.html.match(/class="kb-cap">([^<]*)/) || [])[1] || '(无)' });
+  T('④ kind 分流：yz 卡标「内功」+ 主动≤4 · 被动≤1',
+    /class="kb-kind">内功</.test(D.html) && /主动≤4 · 被动≤1/.test(txt(D.html)),
+    { got: (D.html.match(/class="kb-cap">([^<]*)/g) || []).join(' | ') });
+
+  const E = build(['kbl1: 树 双 ｜ 阶 SS ｜ 解 王冠 ｜ 天 -12 ｜ 析 5/2']);
+  const EK = E.st.kbls[0] || {};
+  T('天 越界夹住并说清（-12 → -10，黄字点名原文）',
+    EK.scale === -10 && (EK.warns || []).some(w => /天平越界/.test(w) && /-12/.test(w)),
+    { got: { scale: EK.scale, warns: EK.warns } });
+  T('析 a>b 报超次数（不猜上限表）',
+    (EK.warns || []).some(w => /解析超次数/.test(w) && /5\/2/.test(w)),
+    { got: EK.warns });
+
+  T('表驱动挂载：往 BLOOD_KEYS 加一行即可渲染（不必改 dispatch / 挂载）',
+    (function () {
+      const T3 = { key: 'tst', field: 'tsts', cls: 'tc-tst', name: '测试体系', kind: '内功', sect: 'TEST',
+        parse: function (v) { return { n: 1, raw: v }; },
+        render: function (r, o, sc, e) { return '<div class="tc-tst">' + e.name + '|' + e.kind + '</div>'; } };
+      api.BLOOD_KEYS.push(T3);
+      try {
+        const st = api.parseState(['scene: 测', 'p1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1', 'next: a'].join(NL));
+        st.tsts = [{ n: 1 }];
+        const h = api.render(st);
+        return /class="tc-tst">测试体系\|内功</.test(h);
+      } finally { api.BLOOD_KEYS.pop(); }
+    })(), {});
+
+  T('BLOOD_KEYS 已导出且两项 kind 正确',
+    Array.isArray(api.BLOOD_KEYS) && api.BLOOD_KEYS.length === 2 &&
+    api.BLOOD_KEYS[0].kind === '血统' && api.BLOOD_KEYS[1].kind === '内功',
+    { got: (api.BLOOD_KEYS || []).map(e => e.key + ':' + e.kind) });
+  }
+
+  /* ===== 组 28 · 血条守卫（A 类必死词 / B 类状态位）+ 弱点三态与加成校验 ===== */
+  {
+  const api = makeApi(SRC);
+  const NL = String.fromCharCode(10);
+  const mk = (mobLine, extra) => api.render(api.parseState(
+    ['scene: 测', 'p1: 甲 ｜ 100/100 ｜ 50/50 ｜ 1/9', mobLine].concat(extra || []).concat(['next: a']).join(NL)));
+  const cnt = (h, c) => (h.match(new RegExp(c, 'g')) || []).length;
+
+  const WH = mk('mob1: 蚀虫 ｜ BOSS ｜ HP 300/300 ｜ 弱点 火·未暴露');
+  T('⑥ 弱点 未暴露：卡面只给 ???／需识破，不显性质、不显加成数字',
+    /弱点 \?\?\?/.test(WH) && /需识破/.test(WH) && !/弱点 火/.test(WH) && !/13%/.test(WH),
+    { got: (WH.match(/class="tc-mob-weak[^"]*">([^<]*)/) || [])[1] || '(无)' });
+
+  const WE = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 300/300 ｜ 弱点 火·已暴露');
+  const WC = mk('mob1: 蚀虫 ｜ BOSS ｜ HP 300/300 ｜ 弱点 火·核心');
+  T('⑦ 弱点 已暴露 / 核心：显性质 + 13% / 16%',
+    /弱点 火/.test(WE) && /\+13%/.test(WE) && /· 核心/.test(WC) && /\+16%/.test(WC),
+    { exposed: /\+13%/.test(WE), core: /\+16%/.test(WC) });
+
+  T('⑧ 无 弱点 段：该区域不渲染（老卡 0 变化）',
+    cnt(mk('mob1: 蚀虫 ｜ 精英 ｜ HP 300/300'), 'tc-mob-weak') === 0, {});
+
+  const D1 = mk('mob1: 蚀虫 ｜ BOSS ｜ HP 300/300 ｜ 弱点 火·未暴露',
+    ['dmg1: 甲→蚀虫 ｜ 因 打弱点 ｜ 算 10 ｜ 伤 撕裂·臂 12 ｜ 血 300→288 ｜ 判 命中']);
+  T('⑨ 未暴露却写了弱点加成 → 恰好 1 条黄字',
+    cnt(D1, 'tc-weakwarn') === 1 && /弱点未暴露却算进了加成/.test(D1), { n: cnt(D1, 'tc-weakwarn') });
+
+  const D2 = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 300/300 ｜ 弱点 火·已暴露',
+    ['dmg1: 甲→蚀虫 ｜ 因 弱点 ｜ 算 10 ｜ 伤 撕裂·臂 0 ｜ 血 300→300 ｜ 判 闪避']);
+  T('⑩ 判=闪避 却写了弱点加成 → 恰好 1 条黄字',
+    cnt(D2, 'tc-weakwarn') === 1 && /未命中却算了弱点加成/.test(D2), { n: cnt(D2, 'tc-weakwarn') });
+
+  const D3 = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 300/300 ｜ 弱点 火·已暴露',
+    ['dmg1: 甲→蚀虫 ｜ 因 弱点 ｜ 算 10 ｜ 伤 撕裂·臂 12 ｜ 血 300→288 ｜ 判 命中']);
+  T('⑪ 命中 + 已暴露：不算误报（0 条）', cnt(D3, 'tc-weakwarn') === 0, {});
+
+  const KA = mk('mob1: 蚀虫 ｜ BOSS ｜ HP 300/300', ['result: 蚀虫被处决']);
+  T('⑫ hp>0 + 「处决」→ 1 条，含剩余 HP 与百分比',
+    cnt(KA, 'tc-killwarn') === 1 && /HP 300\/300/.test(KA) && /（100%）/.test(KA), { n: cnt(KA, 'tc-killwarn') });
+  T('⑬ BOSS 命中时同一行追加「BOSS 无处决机制」',
+    /BOSS 无处决机制/.test(KA) && cnt(KA, 'tc-killwarn') === 1, {});
+  T('⑭ hp=0 + 「处决」→ 0 条（合法死亡）',
+    cnt(mk('mob1: 蚀虫 ｜ 精英 ｜ HP 0/300', ['result: 蚀虫被处决']), 'tc-killwarn') === 0, {});
+  T('⑮ hp>0 + 「重伤」→ 0 条（能继续打的不进 A 类表）',
+    cnt(mk('mob1: 蚀虫 ｜ 精英 ｜ HP 300/300', ['result: 蚀虫重伤，仍能战斗']), 'tc-killwarn') === 0, {});
+
+  const B8 = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 24/300 ｜ 状态 濒死', ['result: 蚀虫已濒死，仍在挣扎']);
+  const B60 = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 180/300 ｜ 状态 濒死');
+  const B0 = mk('mob1: 蚀虫 ｜ 精英 ｜ HP 0/300 ｜ 状态 濒死');
+  T('⑯ hp 8% + 状态 濒死 + result 写「濒死」→ 0 条（濒死=1-19% 合法，且它不是 A 类必死词）',
+    cnt(B8, 'tc-statewarn') === 0 && cnt(B8, 'tc-killwarn') === 0,
+    { state: cnt(B8, 'tc-statewarn'), kill: cnt(B8, 'tc-killwarn') });
+  T('⑰ hp 60% + 状态 濒死 → 1 条（B 类：比例与状态位不符）',
+    cnt(B60, 'tc-statewarn') === 1 && /濒死 = 1-19%/.test(B60), { n: cnt(B60, 'tc-statewarn') });
+  T('⑱ hp 0 + 状态 濒死 → 1 条（应标「已击破」）',
+    cnt(B0, 'tc-statewarn') === 1 && /应标「已击破」/.test(B0), { n: cnt(B0, 'tc-statewarn') });
+  T('⑲ hp>0 + 状态 已击破 → 1 条（与 ⑰⑱ 不是同一条判据）',
+    cnt(mk('mob1: 蚀虫 ｜ 精英 ｜ HP 60/300 ｜ 状态 已击破'), 'tc-statewarn') === 1, {});
+  }
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);
