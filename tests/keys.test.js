@@ -1766,6 +1766,100 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
 
 }
 
+  /* ───────── 组 19 · 负重小数 + check 算术对账 ─────────
+     两件事都只用一台机器就能验：
+     ① 负重是唯一允许小数的量（kg 会带一位），hp/sp 仍按整数；
+        改前 pair() 的 /\d+\s*\/\s*\d+/ 会把 34.8/35 逮成 8/35——数字对、含义错，且不报警。
+     ② check 卡的黄字只「解释」不改写：卡上的数照原样显示，对账结论在旁边说一句。
+        缺任一段（没写 加值构成 / DC构成）不报——「没写」不是「写错」。 */
+  console.log('\n── 组 19 · 负重小数 + check 算术对账 ──');
+
+  const mk19 = (lines) => api.parseState(['scene: 三阶 · 地下车库', 'world: 深夜'].concat(lines).concat(['next: 继续']).join('\n'));
+
+  /* ① 负重小数 */
+  const w1 = mk19(['p1: 甲 ｜ 92/100 ｜ 60/60 ｜ 7.5/60']).players[0];
+  T('负重 7.5/60 → {7.5, 60}（小数段不算 hp/sp）',
+    w1.weight && w1.weight.cur === 7.5 && w1.weight.max === 60,
+    JSON.stringify({ weight: w1.weight, hp: w1.hp, sp: w1.sp }));
+
+  const w2 = mk19(['p1: 乙 ｜ 92/100 ｜ 60/60 ｜ 34.8/35']).players[0];
+  T('负重 34.8/35 → 34.8（不是 8/35：search 型正则截断过它）',
+    w2.weight && w2.weight.cur === 34.8 && w2.weight.max === 35,
+    JSON.stringify(w2.weight));
+
+  const w3 = mk19(['p1: 丙 ｜ 92/100 ｜ 60/60 ｜ 7/60']).players[0];
+  T('整数负重 7/60 仍走原路（没被小数分支吃掉）',
+    w3.weight && w3.weight.cur === 7 && w3.weight.max === 60,
+    JSON.stringify(w3.weight));
+
+  const w4 = mk19(['p1: 丁 ｜ HP 92.5/100 ｜ 60/60']).players[0];
+  T('HP 92.5/100 不当 hp 解析（hp/sp 只吃整数，带前缀的落 status）',
+    !(w4.hp && w4.hp.cur === 92.5) && /HP 92\.5\/100/.test(w4.status.join('|')),
+    JSON.stringify({ hp: w4.hp, status: w4.status }));
+
+  const w5 = mk19(['p1: 戊 ｜ 92/100 ｜ 60/60 ｜ 34.8/35 ｜ 45.5/60']).players[0];
+  T('两个小数段 → 负重取第一个（第二个不顶替）',
+    w5.weight && w5.weight.cur === 34.8,
+    JSON.stringify(w5.weight));
+
+  const w6 = mk19(['p1: 甲 ｜ 92/100', 'eq1: 甲 ｜ 负重 34.8/35']).players[0];
+  T('eq 行的负重同样认小数（34.8/35 不是 8/35）',
+    w6.equip && w6.equip.weight && w6.equip.weight.cur === 34.8,
+    JSON.stringify(w6.equip && w6.equip.weight));
+
+  /* ② check 算术对账 */
+  const ck = (line) => mk19([line]).checks[0];
+  const aud = (line) => api.checkAudit(ck(line));
+
+  const a1 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 加值 6 ｜ 加值构成 6−40+10');
+  T('① 加值 ≠ 加值构成 → 一条黄字，且把两个数都写出来',
+    a1.length === 1 && /加值与构成不符：写 6，构成 6−40\+10=-24/.test(a1[0]),
+    JSON.stringify(a1));
+
+  const a2 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 加值 -24 ｜ 掷出 92 ｜ 合计 92');
+  T('② 合计 ≠ 掷出 + 加值 → 一条黄字（负数带括号）',
+    a2.length === 1 && /合计与算式不符：92\+\(-24\)=68/.test(a2[0]),
+    JSON.stringify(a2));
+
+  const a3 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 合计 68 ｜ DC 140 ｜ AD -70');
+  T('③ AD ≠ 合计 − DC → 一条黄字',
+    a3.length === 1 && /AD 与差值不符：68−140=-72/.test(a3[0]),
+    JSON.stringify(a3));
+
+  const a4 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ DC 150 ｜ DC构成 60+40+40');
+  T('④ DC ≠ DC构成 → 一条黄字',
+    a4.length === 1 && /DC 与构成不符：写 150，构成 60\+40\+40=140/.test(a4[0]),
+    JSON.stringify(a4));
+
+  const a5 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 加值 6 ｜ 合计 92 ｜ DC 140 ｜ AD -48');
+  T('缺 加值构成 / DC构成 → 不报（不许拿「缺」当「错」）',
+    a5.length === 0,
+    JSON.stringify(a5));
+
+  const a6 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 适用属性 STR ｜ 基础阈值 140 ｜ DL修正 +10 ｜ 边界修正 叙事门栓 ｜ 掷出结果 92 ｜ 判定等级 失败 ｜ 对抗差值 -72');
+  T('旧规格 19 字段的 check 行 → 0 条黄字（新老卡不能一上来全黄）',
+    a6.length === 0,
+    JSON.stringify(a6));
+
+  const a7 = aud('check: 甲 (乙) ｜ 类别 攻击 ｜ 加值 6 ｜ 加值构成 6−40+10 ｜ 掷出 92 ｜ 合计 92 ｜ DC 140 ｜ AD -70');
+  T('多处不符 → 同时报 3 条（互不遮蔽）',
+    a7.length === 3,
+    JSON.stringify(a7));
+
+  const h19 = api.render(mk19(['check: 甲 (乙) ｜ 类别 攻击 ｜ 加值 6 ｜ 加值构成 6−40+10']));
+  T('卡面：黄字块 tc-ckaudit / 逐条 tc-ckline / 收起时 summary 里只有 ⚠ 1',
+    /class="tc-ckaudit"/.test(h19) && /class="tc-ckline"/.test(h19) && /class="tc-ckwarn"[^>]*>⚠ 1</.test(h19),
+    JSON.stringify({
+      block: /class="tc-ckaudit"/.test(h19),
+      line: (h19.match(/tc-ckline/g) || []).length,
+      warn: /⚠ 1/.test(h19)
+    }));
+
+  T('卡面：对账不改写原值——「加值 6」仍作为原样显示',
+    />6</.test(h19),
+    (h19.match(/tc-crow/g) || []).length);
+
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

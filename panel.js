@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.34.0';
+  const VERSION = '3.35.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -145,6 +145,8 @@
 
   const seg = (s) => String(s == null ? '' : s).split(/[|｜]/).map(x => x.trim()).filter(Boolean);
   const pair = (s) => { const m = String(s || '').match(/(\d+)\s*\/\s*(\d+)/); return m ? { cur: +m[1], max: +m[2] } : null; };
+  /* 只有「负重」允许小数（kg 会带一位小数）；hp/sp 仍是整数，所以 pair() 保持原样、另开一个 */
+  const pairNum = (s) => { const m = String(s || '').match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/); return m ? { cur: +m[1], max: +m[2] } : null; };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* ══════════ 解析 ══════════ */
@@ -588,6 +590,7 @@
       pts: '', sub: '', blood: '', lock: '', title: '', weapon: '',
     };
     const ratios = [];
+    const floats = [];   /* 带小数的比值——只可能是负重 */
 
     for (let i = 1; i < p.length; i++) {
       const x = p[i].trim();
@@ -595,6 +598,7 @@
 
       if (!o.badge && HEALTH.test(x.replace(/[:：]/g, ''))) { o.badge = x; continue; }
       if (/^\d+\s*\/\s*\d+\s*(kg)?$/i.test(x)) { ratios.push(pair(x)); continue; }
+      if (/^\d+\.\d+\s*\/\s*\d+(?:\.\d+)?\s*(kg)?$/i.test(x) || /^\d+\s*\/\s*\d+\.\d+\s*(kg)?$/i.test(x)) { floats.push(pairNum(x)); continue; }
 
       const at = parseAttrs(x);
       const mv = x.match(/MOV\s*(\d+)/i), db = x.match(/\bDB\s*(\d+)/i);
@@ -631,7 +635,9 @@
 
     if (ratios.length >= 1) o.hp = ratios[0];
     if (ratios.length >= 2) o.sp = ratios[1];
-    if (ratios.length >= 3) o.weight = ratios[2];
+    /* 负重优先用小数段；没有小数段才退回第三个整数比值 */
+    if (floats.length) o.weight = floats[0];
+    else if (ratios.length >= 3) o.weight = ratios[2];
     return o;
   }
 
@@ -723,7 +729,7 @@
         else { o.slots.push({ k: '', v: k }); continue; }
       }
       if (/^(负重|重量)$/.test(k)) {
-        const pr = pair(val);
+        const pr = pairNum(val);
         if (pr) o.weight = pr;
         const st = val.match(/\[?状态[：:]\s*([^\]]+)\]?/);
         if (st) o.wstate = st[1].trim();
@@ -753,7 +759,55 @@
     '大失败': 'critfail', '大失败范围': 'critfail',
     '判定类别': 'cat', '检定类别': 'cat',
     '简述': 'note', '判定简述': 'note',
+    /* v3.35 对账字段（新版世界书写，旧行没有 → 缺段不报） */
+    '加值': 'add', '加值构成': 'addParts', '合计': 'total',
+    'DC': 'dc', '目标DC': 'dc', 'DC构成': 'dcParts',
+    '基础档': 'dcBase', '阶级修正': 'dcClass',
   };
+
+  /* ── check 卡算术对账 ──
+     原则：只解释、不改写。卡上的数照原样显示，这里只负责在旁边说一句「对不上」。
+     缺任一段就不报——「没写」不是「写错」，把缺当成错会让新老卡一起黄。*/
+  const numOf = (v) => { const m = String(v == null ? '' : v).match(/-?\d+(?:\.\d+)?/); return m ? +m[0] : null; };
+  /* 把 "6−40+10" / "属性 6 状态 -40 其他 +10" 这类构成式按带符号数字求和 */
+  const sumOf = (v) => {
+    const t = String(v == null ? '' : v), re = /([+\-−])?\s*(\d+(?:\.\d+)?)/g;
+    let m, sum = 0, n = 0;
+    while ((m = re.exec(t))) { const x = +m[2]; sum += (m[1] === '-' || m[1] === '−') ? -x : x; n++; }
+    return n ? sum : null;
+  };
+  const fmtN = (v) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10));
+  const brN = (v) => (v < 0 ? '(' + fmtN(v) + ')' : fmtN(v));
+  function checkAudit(c) {
+    const out = [];
+    if (!c || c.none) return out;
+    const add = numOf(c.add), total = numOf(c.total), dc = numOf(c.dc), ad = numOf(c.ad), roll = numOf(c.roll);
+    /* ① 加值 vs 加值构成 */
+    if (c.addParts) {
+      const w = add, k = sumOf(c.addParts);
+      if (w != null && k != null && Math.abs(w - k) > 0.01)
+        out.push('加值与构成不符：写 ' + fmtN(w) + '，构成 ' + c.addParts + '=' + fmtN(k));
+    }
+    /* ② 合计 vs 掷出 + 加值 */
+    if (roll != null && add != null && total != null && Math.abs(total - (roll + add)) > 0.01)
+      out.push('合计与算式不符：' + fmtN(roll) + '+' + brN(add) + '=' + fmtN(roll + add));
+    /* ③ AD vs 合计 − DC */
+    if (ad != null && total != null && dc != null && Math.abs(ad - (total - dc)) > 0.01)
+      out.push('AD 与差值不符：' + fmtN(total) + '−' + fmtN(dc) + '=' + fmtN(total - dc));
+    /* ④ DC vs 构成：优先用 DC构成，没有就用 基础档+边界+阶级（旧行的边界是文字，取不到数就不报） */
+    if (dc != null) {
+      if (c.dcParts) {
+        const k = sumOf(c.dcParts);
+        if (k != null && Math.abs(dc - k) > 0.01)
+          out.push('DC 与构成不符：写 ' + fmtN(dc) + '，构成 ' + c.dcParts + '=' + fmtN(k));
+      } else {
+        const b = numOf(c.dcBase), e = numOf(c.edge), cl = numOf(c.dcClass);
+        if (b != null && e != null && cl != null && Math.abs(dc - (b + e + cl)) > 0.01)
+          out.push('DC 与构成不符：写 ' + fmtN(dc) + '，' + fmtN(b) + '+' + fmtN(e) + '+' + fmtN(cl) + '=' + fmtN(b + e + cl));
+      }
+    }
+    return out;
+  }
 
   function parseCheck(v) {
     const s = String(v || '').trim();
@@ -1701,6 +1755,9 @@
       ['📊 成果层级', c.tier], ['🔍 检索进度', c.search], ['🚫 边界限制', c.edgelimit],
       ['⚡ 超限追加', c.overadd], ['🔄 对抗差值', c.ad], ['🌌 世界注视', c.gaze],
       ['🎯 类别', c.cat],
+      /* v3.35 对账字段也照原样显示（解析了不显示，对账就成了自言自语） */
+      ['➕ 加值', c.add], ['🧮 加值构成', c.addParts], ['🧾 合计', c.total],
+      ['🎚 DC', c.dc], ['📐 DC构成', c.dcParts], ['🏛 基础档', c.dcBase], ['⚖ 阶级修正', c.dcClass],
     ].filter(r => r[1]);
 
     /* AI 写歪/多写的字段不再静默丢弃，全部兜底显示 */
@@ -1709,16 +1766,19 @@
       return mm ? ['📌 ' + mm[1], mm[2]] : ['📌 补充', f];
     });
     const allRows = rows.concat(extraRows);
+    const aud = checkAudit(c);
 
     return `<details class="tc-check"${i === 0 ? ' open' : ''}>
       <summary>
         <b>🎲</b><span class="tc-ctitle">${esc(c.title || '本轮判定')}</span>
         ${c.grade ? `<u class="${/失败/.test(c.grade) ? 'bad' : 'ok'}">${esc(c.grade)}</u>` : ''}
         ${c.ad ? `<em>${esc(c.ad)}</em>` : ''}
+        ${aud.length ? `<i class="tc-ckwarn" title="${esc(aud.join(' / '))}">⚠ ${aud.length}</i>` : ''}
       </summary>
       <div class="tc-cbody">
         ${allRows.map(r => `<div class="tc-crow"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('')}
       </div>
+      ${aud.length ? `<div class="tc-ckaudit">${aud.map(t => `<div class="tc-ckline">⚠ ${esc(t)}</div>`).join('')}</div>` : ''}
       ${c.note ? `<div class="tc-cnote">📝 ${esc(c.note)}</div>` : ''}
       ${(c.cost || c.critfail) ? `<div class="tc-cfoot">${c.cost ? `⚡ 超限消耗：${esc(c.cost)}` : ''}${c.cost && c.critfail ? ' ｜ ' : ''}${c.critfail ? `大失败范围：${esc(c.critfail)}` : ''}</div>` : ''}
     </details>`;
@@ -3197,6 +3257,11 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
 .tc-lk-err em{font-style:normal}
 .tc-lk-sep{color:#475569}
 
+  /* ── check 算术对账（黄字只解释，不改卡上的数）── */
+  .tc-ckaudit{margin:1px 0 3px;padding:3px 7px;border-left:2px solid #fbbf24;background:rgba(251,191,36,.07);border-radius:0 3px 3px 0}
+  .tc-ckline{font-size:10px;line-height:1.55;color:#fcd34d;letter-spacing:0}
+  .tc-ckwarn{font-style:normal;font-size:9.5px;font-weight:700;color:#fbbf24;margin-left:2px}
+
 /* ══════════ sh 避难所卡（海上载体） ══════════
    判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、
    kb 是紫金，shelter 必须是「圆角浮筒 + 锈斑 + 一条水位线」。四张并排时先被认出来的是那条水线。 */
@@ -3424,6 +3489,6 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();
