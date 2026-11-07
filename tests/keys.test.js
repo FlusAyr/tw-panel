@@ -1860,6 +1860,68 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     (h19.match(/tc-crow/g) || []).length);
 
 
+  /* ───────── 组 20 · cr 孤儿与重复（只让卡面说出来，不改解析） ─────────
+     用户报障：「cr 行没有被正确追踪，或者说溢出给其他人了」。
+     按编号配对是既有语义（cr1→p1），本组不试图改它——
+     要证明三件事：孤儿**不再静默消失**、重复**不再静默覆盖**、正常卡一个字都不多。
+     判据一律认元素（class="tc-crwarn"），不认文字（§7 第 27 条：文字会撞车）。 */
+  console.log('\n── 组 20 · cr 孤儿与重复 ──');
+  const mk20 = (ls) => api.parseState(['scene: 三阶 · 地下车库', 'world: 深夜'].concat(ls).concat(['next: 继续']).join('\n'));
+  const CR_SRC = 'cr1: 源质·风 0/10 ｜ 源质·地 0/10 ｜ 源质·火 0/10';
+  const CR_CABA = 'cr1: 卡巴拉天平 0 ｜ 卡巴拉解析 2/2 ｜ 卡巴拉质点 0/1[]';
+  const CR2 = 'cr2: 源质·水 0/10 ｜ 源质·秩序 0/10 ｜ 源质·混沌 0/10';
+  const CR3 = 'cr3: 源质扭曲 永0 粘0 临0';
+  const P1C = 'p1: 甲 ｜ 92/100 ｜ 60/60 ｜ 11/20';
+  const warnN = (html) => (html.match(/class="tc-crwarn/g) || []).length;
+
+  /* ① 孤儿 · 一人场（只有 p1，却有 cr2 / cr3） */
+  const sa = mk20([P1C, CR_SRC, CR2, CR3]);
+  const ha = api.render(sa);
+  T('孤儿 cr2/cr3 被记下（不再是静默消失）',
+    JSON.stringify(sa.crOrphans) === '[{"n":2,"segs":3},{"n":3,"segs":1}]',
+    JSON.stringify(sa.crOrphans));
+  T('孤儿提示是元素级（认 class，不认文字）',
+    /class="tc-crwarn tc-crwarn-top"/.test(ha), 'tc-crwarn-top 不存在');
+  T('孤儿文案逐条点名：哪一行 / 该配哪个玩家 / 几段',
+    /cr2 没有同号的 p2 —— 这行资源不会显示（3 段）/.test(ha) &&
+    /cr3 没有同号的 p3 —— 这行资源不会显示（1 段）/.test(ha),
+    '文案不符');
+
+  /* ② 三人场（cr1/cr2/cr3 各有其主）：配对成立，一个字都不许多 */
+  const sb = mk20([P1C, 'p2: 乙 ｜ 88/100 ｜ 50/60 ｜ 9/20', 'p3: 丙 ｜ 40/100 ｜ 8/60 ｜ 3/20', CR_SRC, CR2, CR3]);
+  const hb = api.render(sb);
+  T('三人场无孤儿、零黄字（配对各有其主时不报警）',
+    sb.crOrphans.length === 0 && warnN(hb) === 0,
+    'orphans=' + JSON.stringify(sb.crOrphans) + ' warn=' + warnN(hb));
+
+  /* ③ 重复 cr1：后一条覆盖前一条，必须说出丢了几段 */
+  const sc = mk20([P1C, CR_SRC, CR_CABA]);
+  const hc = api.render(sc);
+  const pc1 = sc.players[0];
+  T('重复 cr1 记下次数与丢失段数（段数取自解析结果，不写死）',
+    !!pc1.crDup && pc1.crDup.times === 2 && pc1.crDup.lost === 3,
+    JSON.stringify(pc1.crDup));
+  T('重复提示是元素级，文案带次数与丢失段数',
+    /class="tc-crwarn"/.test(hc) && /cr1 出现 2 次，后一条覆盖前一条（前一条的 3 段丢失）/.test(hc),
+    '重复提示缺失或文案不符');
+  T('重复时保留的是后一条（卡巴拉），前一条（源质）不残留',
+    (pc1.crRow || []).length === 3 && pc1.crRow[0].name === '卡巴拉天平',
+    JSON.stringify(pc1.crRow));
+
+  /* ④ 正常卡：零黄字 */
+  const sd = mk20([P1C, CR_SRC]);
+  const hd = api.render(sd);
+  T('正常卡零黄字（不许拿「缺」当「错」）',
+    warnN(hd) === 0 && sd.crOrphans.length === 0 && sd.players[0].crDup === null,
+    'warn=' + warnN(hd) + ' dup=' + JSON.stringify(sd.players[0].crDup));
+
+  /* ⑤ 重复键行不该被当成「非状态行」截断其后所有状态行 */
+  const dupeb = api.extractBlock(['scene: 三阶', P1C, CR_SRC, CR_CABA, 'next: 继续'].join('\n'));
+  const oneeb = api.extractBlock(['scene: 三阶', P1C, CR_SRC, 'next: 继续'].join('\n'));
+  T('重复 cr1 不触发截断（end 比单条多 1，且 next 仍在）',
+    !!dupeb && !!oneeb && dupeb.end === oneeb.end + 1 && /next/.test(dupeb.body || ''),
+    'dup.end=' + (dupeb && dupeb.end) + ' single.end=' + (oneeb && oneeb.end));
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);

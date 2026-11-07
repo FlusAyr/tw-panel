@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.35.0';
+  const VERSION = '3.36.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -1254,13 +1254,13 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [], crOrphans: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
-    const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map();
+    const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map(), crSeen = new Map();
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const mskmap = new Map(), fskmap = new Map();
     const gmap = new Map();
@@ -1311,7 +1311,12 @@
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
       else if (/^ti\d+$/.test(k)) tim.set(+k.slice(2), parseTi(v));
-      else if (/^cr\d+$/.test(k)) crm.set(+k.slice(2), parseCr(v));
+      else if (/^cr\d+$/.test(k)) {
+        const cn = +k.slice(2), row = parseCr(v);
+        crm.set(cn, row);                                  /* 语义不变：同号后者覆盖前者 */
+        if (!crSeen.has(cn)) crSeen.set(cn, []);
+        crSeen.get(cn).push(row);
+      }
       else if (/^mob\d*$/.test(k)) {
         const mob = parseMob(v);
         if (mob.name && !/^(无|—|-)$/.test(mob.name)) mmap.set(k === 'mob' ? 1 : +k.slice(3), mob);
@@ -1328,8 +1333,15 @@
       p.lockRow = lockm.get(i) || null;
       p.tiRow = tim.get(i) || null;
       p.crRow = crm.get(i) || null;
+      const seen = crSeen.get(i) || [];
+      p.crDup = seen.length > 1
+        ? { times: seen.length, lost: seen.slice(0, -1).reduce((a, r) => a + r.length, 0), kept: seen[seen.length - 1].length }
+        : null;
       return p;
     });
+    /* 孤儿 crN：没有同号 pN 时这一行无处安放，按编号配对是既有语义，这里只负责说出来 */
+    st.crOrphans = [...crSeen.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b)
+      .map(i => ({ n: i, segs: crSeen.get(i)[crSeen.get(i).length - 1].length }));
     st.bonds = [...bmap.keys()].sort((a, b) => a - b).map(k => bmap.get(k));
     st.foes = [...fmap.keys()].sort((a, b) => a - b).map(k => fmap.get(k));
     st.ntrBonds = [...nbmap.keys()].sort((a, b) => a - b).map(k => nbmap.get(k));
@@ -1703,7 +1715,7 @@
         ${p.lockRow && p.lockRow.stage ? `<span class="tc-pill lock${/三阶|四阶|五阶/.test(p.lockRow.stage) ? ' hi' : ''}${p.lockRow.over && !/^0/.test(p.lockRow.over) ? ' warn' : ''}">${esc(p.lockRow.stage)}${p.lockRow.devil && !/^(无|未度)$/.test(p.lockRow.devil) ? ' · 心魔' + esc(p.lockRow.devil) : ''}${p.lockRow.over && !/^0/.test(p.lockRow.over) ? ' ⚠' + esc(p.lockRow.over) : ''}</span>` : ''}
         ${p.tiRow && p.tiRow.cn ? `<span class="tc-pill ti">${esc(p.tiRow.cn)}${p.tiRow.en ? ' <i>' + esc(p.tiRow.en) + '</i>' : ''}</span>` : ''}
         ${(p.crRow || []).map(r => `<span class="tc-pill cr">◈ ${esc(r.name)} <b>${esc(r.val)}</b></span>`).join('')}
-      </div>` : '';
+      </div>${p.crDup ? `<div class="tc-crwarn">cr${p.idx} 出现 ${p.crDup.times} 次，后一条覆盖前一条（前一条的 ${p.crDup.lost} 段丢失）</div>` : ''}` : '';
 
     const file = (p.pts || p.sub || p.blood || p.lock || p.title) ? `
       <details class="tc-fold"><summary>档案</summary>
@@ -2150,6 +2162,10 @@
 
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
+    if (st.crOrphans.length) {
+      colL.push('<div class="tc-crwarn tc-crwarn-top">' + st.crOrphans
+        .map(o => `cr${o.n} 没有同号的 p${o.n} —— 这行资源不会显示（${o.segs} 段）`).join('<br>') + '</div>');
+    }
     if (st.players.length || st.mechas.length || st.familiars.length) {
       colL.push(sect('我方小队', 'SQUAD'));
       /* 同号 kbm 紧跟 p 卡；找不到 p 的 kbm 排在玩家之后单独成卡（不许丢） */
@@ -2638,6 +2654,9 @@
 .tc-pill.ti i{font-style:normal;opacity:.72;font-size:9.5px}
 .tc-pill.cr{background:rgba(45,212,191,.13);color:#5eead4;border-color:rgba(45,212,191,.32)}
 .tc-pill.cr b{color:#99f6e4;font-weight:700}
+  /* cr 行的「说出来」：孤儿 / 重复。只提示，不改解析结果 */
+  .tc-crwarn{font-size:9.5px;line-height:1.6;color:#fcd34d;background:rgba(251,191,36,.08);
+    border-left:2px solid #fbbf24;border-radius:0 3px 3px 0;padding:3px 8px;margin:3px 0}
 .tc-fold{border-top:1px dashed var(--bd);padding-top:5px;margin-top:1px}
 .tc-fold summary{cursor:pointer;font-size:11px;color:var(--dim);list-style:none;letter-spacing:.04em}
 .tc-fold summary::-webkit-details-marker{display:none}
@@ -3489,6 +3508,6 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();

@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.35.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.36.0　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.35.0** | 渲染器唯一源文件，≈3.3k 行 |
+| `panel.js` | **v3.36.0** | 渲染器唯一源文件，≈3.3k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -111,6 +111,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.34.0** p 行数值胶囊换皮：HP/SP 条高 5px、负重 3px+淡出（三枚不再同重）；窄屏一行三列，390 下卡高 141.7 → 122.7
 
 - **v3.35.0** 负重小数（只放开负重）｜`check` 算术对账黄字（只解释不改写）｜支线凭证可拆可合（不可跳档、仅幕间）｜血统功法逐级升｜技能位落进世界书
+- **v3.36.0** `cr<N>` 的 N 是玩家号不是资源格号：写错会静默挂到别人卡上；面板新增两条黄字（只提示不改解析）——孤儿 `crN` 无同号 `pN`、同号 `cr` 重复后者覆盖
 
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 
