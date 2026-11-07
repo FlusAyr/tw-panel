@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.38.3';
+  const VERSION = '3.38.4';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -78,7 +78,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|kbmsk[0-9]*|kbfsk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*|kbl[0-9]*|yz[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|kbmsk[0-9]*|kbfsk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*|kbl[0-9]*|yz[0-9]*|ack';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -1359,7 +1359,7 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [], crOrphans: [], kbls: [], yzs: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [], crOrphans: [], orphans: [], ack: null, kbls: [], yzs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
@@ -1397,6 +1397,7 @@
       const k = m[1].toLowerCase(), v = m[2];
       if (k === 'scene') st.scene = v;
       else if (k === 'team') st.team = v;
+      else if (k === 'ack') st.ack = parseAck(v);
       else if (k === 'quest') st.quest = parseQuest(v);
       else if (k === 'check') checks.push(parseCheck(v));
       else if (k === 'result') st.result = v;
@@ -1489,6 +1490,20 @@
     });
     st.crOrphans = [...crSeen.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b)
       .map(i => ({ n: i, segs: crSeen.get(i)[crSeen.get(i).length - 1].length }));
+    /* 孤儿三兄弟同构：cr 段 / eq 槽 / sk 项。同一族问题给同一处置（黄字），
+       不画裸卡——没有号位就没有归属，裸卡会让玩家以为「这是谁的」。
+       lk/kbl/yz 不走这里：它们自带 owner 兜空、语义上属于角色。 */
+    st.orphans = st.crOrphans.map(o => ({ kind: 'cr', n: o.n, count: o.segs, unit: '段', what: '资源' }));
+    [...emap.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b).forEach(i => {
+      const eq = emap.get(i);
+      const cnt = eq && eq.slots ? eq.slots.length : 0;
+      st.orphans.push({ kind: 'eq', n: i, count: cnt, unit: '槽', what: '装备' });
+    });
+    [...smap.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b).forEach(i => {
+      const sk = smap.get(i);
+      const cnt = Array.isArray(sk) ? sk.length : 0;
+      st.orphans.push({ kind: 'sk', n: i, count: cnt, unit: '项', what: '技能' });
+    });
     st.bonds = [...bmap.keys()].sort((a, b) => a - b).map(k => bmap.get(k));
     st.foes = [...fmap.keys()].sort((a, b) => a - b).map(k => fmap.get(k));
     st.ntrBonds = [...nbmap.keys()].sort((a, b) => a - b).map(k => nbmap.get(k));
@@ -1841,6 +1856,39 @@
         <div class="tc-lk-meta">${cells.join('')}</div>
         ${errLine}
       </div>`;
+  }
+
+  /* ack：团队级认可度（无编号单行）。R 0-10 clamp；档/敌/DC 一律面板自算，
+     模型写的同名字段照解析但不当真（同 yz 分母口径）。
+     注意与 kbl/yz 的「无段不渲染」不同：ack 是全局机制、默认值有语义
+     （旧卡没有这行 = 本场按常规 R=3 走），所以缺行时用默认值、不出空框也不报警。 */
+  const ACK_TIERS = [[2, '轻松'], [4, '常规'], [6, '艰难'], [8, '压迫'], [10, '处刑']];
+  function ackOf(st) {
+    const a = st && st.ack;
+    const raw = a && a.rRaw != null ? a.rRaw : 3;
+    const R = Math.max(0, Math.min(10, Math.round(raw)));
+    const tier = (ACK_TIERS.find(t => R <= t[0]) || ACK_TIERS[ACK_TIERS.length - 1])[1];
+    return {
+      R: R,
+      tier: tier,
+      enemy: Math.round((1.05 + 0.03 * R) * 100) / 100,
+      dc: 2 * Math.max(0, R - 3),
+      present: !!(a && a.rRaw != null),
+      raw: (a && a.raw) || ''
+    };
+  }
+  function parseAck(v) {
+    const p = seg(v);
+    const o = { rRaw: null, tierRaw: '', enemyRaw: '', dcRaw: '', raw: v };
+    for (const x of p) {
+      let m;
+      if ((m = x.match(/^(?:R|认可度|值)\s*[:：]?\s*([-\u2212+]?\s*\d+(?:\.\d+)?)$/))) { o.rRaw = Number(m[1].replace(/\u2212/, '-')); continue; }
+      if ((m = x.match(/^档\s*[:：]?\s*([\s\S]*)$/))) { o.tierRaw = m[1].trim(); continue; }
+      if ((m = x.match(/^敌\s*[:：]?\s*[×xX*]?\s*([\d.]+)$/))) { o.enemyRaw = m[1]; continue; }
+      if ((m = x.match(/^DC\s*[:：]?\s*\+?\s*([-\u2212]?\d+)$/i))) { o.dcRaw = m[1].replace(/\u2212/, '-'); continue; }
+      if (o.rRaw == null && /^[-\u2212+]?\s*\d+(?:\.\d+)?$/.test(x)) { o.rRaw = Number(x.replace(/\u2212/, '-')); continue; }
+    }
+    return o;
   }
 
   /* ── kbl：卡巴拉·生命之树（质点解锁记录，真树 SVG · 正上逆下 · 折叠 · 四档） ── */
@@ -2770,6 +2818,18 @@
     if (st.team) {
       out.push(`<div class="tc-team">${seg(st.team).map(x => `<span>${esc(x)}</span>`).join('')}</div>`);
     }
+    /* ack：只有状态块里真写了 `ack` 行才渲染。缺行时 ackOf() 仍按 R=3 算（机制有默认值），
+       但卡面一个元素都不出 —— 与 kbl/yz 的「无段不渲染」在这一点上是一致的，
+       差别只在于「缺行时 ack 有语义、kbl/yz 没有」：前者是全局难度系数，
+       后者是某个玩家的血统，没写就是没有。 */
+    {
+      const ak = ackOf(st);
+      if (ak.present) {
+        out.push(`<div class="tc-ack" data-ack="${ak.R}" data-tier="${esc(ak.tier)}" data-enemy="${ak.enemy}" data-dc="${ak.dc}">` +
+          `<b class="tc-ack-r">认可度 ${ak.R}</b><i class="tc-ack-tier">${esc(ak.tier)}</i>` +
+          `<span class="tc-ack-k">敌 ×${ak.enemy}</span><span class="tc-ack-d">DC ${ak.dc >= 0 ? '+' : ''}${ak.dc}</span></div>`);
+      }
+    }
 
     out.push(renderQuest(st.quest));
 
@@ -2785,9 +2845,9 @@
 
     /* ── 双栏战场：左翼我方 / 右翼威胁与判定 ── */
     const colL = [], colR = [];
-    if (st.crOrphans.length) {
-      colL.push('<div class="tc-crwarn tc-crwarn-top">' + st.crOrphans
-        .map(o => `cr${o.n} 没有同号的 p${o.n} —— 这行资源不会显示（${o.segs} 段）`).join('<br>') + '</div>');
+    if (st.orphans.length) {
+      colL.push('<div class="tc-crwarn tc-crwarn-top">' + st.orphans
+        .map(o => `${o.kind}${o.n} 没有同号的 p${o.n} —— 这行${o.what}不会显示（${o.count} ${o.unit}）`).join('<br>') + '</div>');
     }
     if (st.players.length || st.mechas.length || st.familiars.length) {
       colL.push(sect('我方小队', 'SQUAD'));
@@ -3311,6 +3371,12 @@
 .tc-pill.cr{background:rgba(45,212,191,.13);color:#5eead4;border-color:rgba(45,212,191,.32)}
 .tc-pill.cr b{color:#99f6e4;font-weight:700}
   /* cr 行的「说出来」：孤儿 / 重复。只提示，不改解析结果 */
+  .tc-ack{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin:2px 0 6px;padding:3px 8px;
+    border-left:2px solid #7dd3fc;background:rgba(14,116,144,.12);border-radius:0 3px 3px 0;
+    font-size:10.5px;color:#bae6fd}
+  .tc-ack-r{font-weight:700;letter-spacing:.3px}
+  .tc-ack-tier{font-style:normal;padding:0 5px;border-radius:2px;background:rgba(125,211,252,.18);color:#e0f2fe}
+  .tc-ack-k,.tc-ack-d{font-variant-numeric:tabular-nums;opacity:.9}
   .tc-crwarn{font-size:9.5px;line-height:1.6;color:#fcd34d;background:rgba(251,191,36,.08);
     border-left:2px solid #fbbf24;border-radius:0 3px 3px 0;padding:3px 8px;margin:3px 0}
 .tc-fold{border-top:1px dashed var(--bd);padding-top:5px;margin-top:1px}
@@ -4306,6 +4372,6 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr, parseKbl, parseYz, BLOOD_KEYS: BLOOD_KEYS, bloodCapLine: bloodCapLine, bloodScale: bloodScale };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr, parseKbl, parseYz, parseAck, ackOf, BLOOD_KEYS: BLOOD_KEYS, bloodCapLine: bloodCapLine, bloodScale: bloodScale };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();

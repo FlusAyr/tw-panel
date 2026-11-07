@@ -4,7 +4,7 @@
 > 日常怎么维护、出问题去哪查。细节手册在 AGENTS.md，这里只做导览 + 补充 AGENTS.md
 > 还没来得及写进去的最新增量（2026-11-01 前的全部变更）。
 >
-> 最后更新：2026-11-01　｜　面板 v3.38.3　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
+> 最后更新：2026-11-01　｜　面板 v3.38.4　｜　引导 boot v2.1　｜　仓库 https://github.com/FlusAyr/tw-panel
 
 ---
 
@@ -64,7 +64,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 
 | 资产 | 版本/状态 | 说明 |
 |---|---|---|
-| `panel.js` | **v3.38.3** | 渲染器唯一源文件，≈3.3k 行 |
+| `panel.js` | **v3.38.4** | 渲染器唯一源文件，≈4.4k 行 |
 | `boot.mjs` | **v2.1**（跟 main，无 tag） | ESM 双通道引导，替代 loader.js 机制 |
 | `dist/loader-script.json` | 跟随 build | 玩家导入包，内容 = 一行 `import …/boot.mjs` |
 | NTR 卡 | **v3 纯净框架版**（仅本地私有副本） | 三个版本演进见 §7.3 |
@@ -116,6 +116,7 @@ curl -s https://raw.githubusercontent.com/FlusAyr/tw-panel/main/version.json
 - **v3.38.0** 卡巴拉「树之天平」引擎补齐（变动/偏斜六档/过载/恩典/协议三查）｜源质炼金补九项（四铁律、四段扭曲反应表、阈值门、SS·SSS 真实代价）｜`激` 段为激活状态唯一权威，激活名单不进 `cr`
 - **v3.38.1** 溢出伤害不再算「算错」：只有「打到 0 且伤害 > 剩余血量」判为合法溢出，其余 `delta !== amount` 照旧算错（没放宽成 `>=`、没加 `Math.abs`）；卡面另出青灰「溢出 13（伤 38／实扣 25）」
 - **v3.38.3** 独立字段定型（`kbl`/`yz` 唯一出处、`BLOOD_KEYS` 表驱动、`kind` 分流技能位）｜血条至上（必死词 + 状态位两类守卫）｜弱点三态与加成校验｜上一版未单独发布，内容并入本版
+- **v3.38.4** 认可度 `ack`（团队级，影响敌方系数与 DC，仅幕间升降）｜`eq`/`sk` 孤儿黄字（与 `cr` 共用同一容器）
 
 - **结构性约束**：boot 与面板共用同一个 tag，因此任何 boot 变更都强制面板 bump 版本（tag 不可覆盖）。v3.16.0 起 `version.json` 带独立 `boot` 字段，引导版本可独立分发、导入行不再随面板版本变——但 tag 仍是共用的，别把 `boot` 字段误当成分离 tag。
 

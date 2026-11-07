@@ -904,7 +904,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
     'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl', 'lk',
-    'kbmsk', 'kbfsk', 'kbl', 'yz',
+    'kbmsk', 'kbfsk', 'ack', 'kbl', 'yz',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -2396,6 +2396,101 @@ console.log('\n组 22 · 卡巴拉/源质');
     cnt(mk('mob1: 蚀虫 ｜ 精英 ｜ HP 60/300 ｜ 状态 已击破'), 'tc-statewarn') === 1, {});
   }
 
+
+/* ══════════════════════════════════════════════════════════════
+   组 29 · 孤儿 eq/sk 黄字 + ack 认可度
+   - 孤儿三兄弟（cr/eq/sk）共用同一容器 class `.tc-crwarn`，
+     所以这里一律用「容器整体出现次数」做判据，不用裸 class 名（会被
+     `tc-crwarn tc-crwarn-top` 里的两截都数上，count 变 2 倍）。
+   - ⑤ 的顺序有意为之：先证 `ack:7` 一定有 1 个元素、再证没有 ack 时也有 1 个
+     （默认 R=3）。只写「无 ack 时是 0 个」是单方向判据，实现整个不渲染也照样绿。
+   ══════════════════════════════════════════════════════════════ */
+{
+  const NLC = String.fromCharCode(10);
+  const BOX = /<div class="tc-crwarn tc-crwarn-top">/g;
+  const boxN = (h) => (h.match(BOX) || []).length;
+  const mkSt = (lines) => api.parseState(api.extractBlock([
+    'scene: 三阶', ...lines, 'next: 继续'
+  ].join(NLC)).body);
+
+  /* ① eq 孤儿：黄字点名 + 槽数用实际解析值 */
+  {
+    const st = mkSt(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40',
+                     'eq2: 链锯剑 ｜ 护盾发生器 ｜ 推进器']);
+    const h = api.render(st);
+    const ok = st.orphans.length === 1
+      && st.orphans[0].kind === 'eq' && st.orphans[0].n === 2 && st.orphans[0].count === 3
+      && /eq2 没有同号的 p2 —— 这行装备不会显示（3 槽）/.test(h);
+    T('eq 孤儿出黄字（点名 eq2 / 槽数取实际解析值 3）', ok,
+      JSON.stringify(st.orphans) + ' ｜ ' + (h.match(/eq2 没有同号的 p2[^<]*/) || ['(无)'])[0]);
+  }
+
+  /* ② sk 孤儿：与 eq 同一处置 */
+  {
+    const st = mkSt(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40',
+                     'sk3: 斩击 ｜ 式 1D8']);
+    const h = api.render(st);
+    const ok = st.orphans.length === 1 && st.orphans[0].kind === 'sk' && st.orphans[0].n === 3
+      && /sk3 没有同号的 p3 —— 这行技能不会显示（1 项）/.test(h);
+    T('sk 孤儿出黄字（与 eq 完全同构）', ok,
+      JSON.stringify(st.orphans) + ' ｜ ' + (h.match(/sk3 没有同号的 p3[^<]*/) || ['(无)'])[0]);
+  }
+
+  /* ③ 有 p 有 eq → 一条都不许有（反向对照，防上两条恒真） */
+  {
+    const st = mkSt(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40', 'eq1: 链锯剑 ｜ 破甲 3']);
+    const h = api.render(st);
+    T('有同号 p 时不出孤儿黄字（反向对照）', st.orphans.length === 0 && boxN(h) === 0,
+      JSON.stringify(st.orphans) + ' ｜ box=' + boxN(h));
+  }
+
+  /* ④ ack: 7 → 面板自算 档/敌/DC（模型写的同名字段不采信） */
+  {
+    const st = mkSt(['ack: 7 ｜ 档 艰难 ｜ 敌 ×9 ｜ DC +99',
+                     'p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40']);
+    const h = api.render(st);
+    const a = api.ackOf(st);
+    const okA = a.R === 7 && a.tier === '压迫' && a.enemy === 1.26 && a.dc === 8;
+    const okH = /<div class="tc-ack"/.test(h) && /认可度 7/.test(h) && /压迫/.test(h)
+      && /敌 ×1\.26/.test(h) && /DC \+8/.test(h) && !/×9/.test(h);
+    T('ack: 7 → R7 / 压迫 / 敌 ×1.26 / DC +8（模型写的 敌×9、DC+99 不采信）', okA && okH,
+      JSON.stringify(a) + ' ｜ html=' + (/<div class="tc-ack"[^>]*>/.exec(h) || ['(无)'])[0]);
+  }
+
+  /* ⑤ 无 ack 行 → 一个元素都不出（先证有行时有 1 个，再证没行时 0 个） */
+  {
+    const stA = mkSt(['ack: 7', 'p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40']);
+    const stB = mkSt(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40']);
+    const nA = (api.render(stA).match(/<div class="tc-ack"/g) || []).length;
+    const nB = (api.render(stB).match(/<div class="tc-ack"/g) || []).length;
+    const def = api.ackOf(stB);
+    T('ack 缺行：默认 R=3 且卡面 0 个元素、0 黄字（有行时 1 个，反向对照）',
+      nA === 1 && nB === 0 && def.R === 3 && def.tier === '常规' && def.present === false
+        && (api.render(stB).match(/tc-crwarn/g) || []).length === 0,
+      'ack行=' + nA + ' 无行=' + nB + ' default=' + JSON.stringify(def));
+  }
+
+  /* ⑥ R 越界 clamp 到 0..10，且方向不许反（99→10、-5→0、全角负号也算负） */
+  {
+    const g = (v) => api.ackOf(mkSt(['ack: ' + v]));
+    const a = g('99'), b = g('-5'), c = g('\u22127');
+    T('R 越界 clamp：99→10、-5→0、−7（全角负号）→0', a.R === 10 && b.R === 0 && c.R === 0,
+      '99→' + a.R + ' -5→' + b.R + ' −7→' + c.R);
+  }
+
+  /* ⑧ 三处孤儿共用同一容器 class（不新开 class） */
+  {
+    const has = (lines) => {
+      const h = api.render(mkSt(lines));
+      return /<div class="tc-crwarn tc-crwarn-top">/.test(h) && !/tc-(?:eq|sk)warn/.test(h);
+    };
+    const cr = has(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40', 'cr2: 卡巴拉天平 +3']);
+    const eq = has(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40', 'eq2: 链锯剑']);
+    const sk = has(['p1: 沈砚 ｜ 128/150 ｜ 62/90 ｜ 21/40', 'sk2: 斩击 ｜ 式 1D8']);
+    T('cr/eq/sk 三处孤儿共用同一个容器 class .tc-crwarn（不新开类）', cr && eq && sk,
+      'cr=' + cr + ' eq=' + eq + ' sk=' + sk);
+  }
+}
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 }, 0);
