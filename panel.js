@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.37.0';
+  const VERSION = '3.38.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -33,8 +33,37 @@
     DOC.__twSizeBound = true;
     DOC.addEventListener('click', (e) => {
       const t = e.target && e.target.closest ? e.target.closest('.tc-size') : null;
-      if (t) { e.preventDefault(); e.stopPropagation(); setMini(!isMini()); }
+      if (t) { e.preventDefault(); e.stopPropagation(); setMini(!isMini()); return; }
+      /* 折叠：只切本节点 class 并落 localStorage，不触发 sweep 重扫、不动别的节点 */
+      const hd = e.target && e.target.closest ? e.target.closest('.kf-hd') : null;
+      if (!hd) return;
+      const box = hd.parentNode;
+      if (!box || !box.classList || !box.classList.contains('tc-kbl') && !box.classList.contains('tc-yz')) return;
+      e.preventDefault(); e.stopPropagation();
+      toggleFold(box);
     }, true);
+    DOC.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const hd = e.target && e.target.closest ? e.target.closest('.kf-hd') : null;
+      if (!hd) return;
+      const box = hd.parentNode;
+      if (!box || !box.classList || !box.classList.contains('tc-kbl') && !box.classList.contains('tc-yz')) return;
+      e.preventDefault();
+      toggleFold(box);
+    }, true);
+  }
+
+  function toggleFold(box) {
+    const open = box.classList.contains('closed');
+    box.classList.toggle('closed', !open);
+    box.classList.toggle('open', open);
+    const key = box.getAttribute('data-fold');
+    if (!key) return;
+    try {
+      const m = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}');
+      m[key] = open ? 1 : 0;
+      localStorage.setItem(FOLD_KEY, JSON.stringify(m));
+    } catch (e) { /* 私域存储不可用就算了，下一次渲染会回到默认 */ }
   }
 
   const DOC = (function () {
@@ -1707,22 +1736,91 @@
       </div>`;
   }
 
-  /* ── kbl：卡巴拉·生命之树（质点解锁记录，双树 A2） ── */
+  /* ── kbl：卡巴拉·生命之树（质点解锁记录，真树 SVG · 正上逆下 · 折叠 · 四档） ── */
   const KBL_ORDER = ['王冠', '智慧', '理解', '慈悲', '严厉', '美', '胜利', '荣耀', '基础', '王国'];
-  const KBL_POS = { '王冠': [1, 2], '智慧': [2, 3], '理解': [2, 1], '慈悲': [3, 3], '严厉': [3, 1], '美': [4, 2], '胜利': [5, 3], '荣耀': [5, 1], '基础': [6, 2], '王国': [7, 2] };
   const KBL_TOTAL = 20;
+  /* 激活槽：同时生效的权限数。D1/C1/B2/A3/S5/SS7/SSS∞ —— 由面板按「阶」算，模型不写 */
+  const KBL_ACT_CAP = { 'D': 1, 'C': 1, 'B': 2, 'A': 3, 'S': 5, 'SS': 7, 'SSS': Infinity };
+  function actCapOf(stage) {
+    /* 直接按字符串取，别走 gradeOf —— 它把 C/D 折成 A（那是给四档印章用的），
+       而激活槽 D1/C1/B2/A3/S5/SS7 是逐档不同的。 */
+    const m = String(stage || '').toUpperCase().match(/(SSS|SS|S|A|B|C|D)/);
+    const g = m ? m[1] : 'C';
+    return KBL_ACT_CAP[g] === undefined ? KBL_ACT_CAP['C'] : KBL_ACT_CAP[g];
+  }
+  /* 十质点十色（用户指定色值），逆树同色相、亮 −25% */
+  const KBL_COLORS = {
+    '王冠': '#F2F5FF', '智慧': '#6FA8FF', '理解': '#7B5BD6', '慈悲': '#4FC3F7', '严厉': '#E2453C',
+    '美': '#F5C542', '胜利': '#2FB67A', '荣耀': '#E2703A', '基础': '#9A7BFF', '王国': '#C8A15A'
+  };
+  /* 树位：中柱 Keter/Tiferet/Yesod/Malkuth 一线，左右柱错半格 */
+  const KBL_XY = {
+    '王冠': [160, 18], '智慧': [252, 51], '理解': [68, 51], '慈悲': [252, 108], '严厉': [68, 108],
+    '美': [160, 137], '胜利': [252, 196], '荣耀': [68, 196], '基础': [160, 228], '王国': [160, 246]
+  };
+  /* 20 条主干连线（完整 22 路径里 Da'at 两条不画：隐藏质点不是格子） */
+  const KBL_PATHS = [
+    [0, 1], [0, 2], [0, 5], [1, 2], [1, 3], [1, 5], [2, 4], [2, 5],
+    [3, 4], [3, 5], [3, 6], [4, 5], [4, 7], [5, 6], [5, 7], [5, 8],
+    [6, 7], [6, 8], [7, 8], [8, 9]
+  ];
+  /* 中文名照写（源稿是中文名册），卡面统一显示英文名 */
+  const KBL_EN = {
+    '王冠': 'Keter', '智慧': 'Chokhmah', '理解': 'Binah', '慈悲': 'Chesed', '严厉': 'Gevurah',
+    '美': 'Tiferet', '胜利': 'Netzach', '荣耀': 'Hod', '基础': 'Yesod', '王国': 'Malkuth'
+  };
+  /* 逆树十壳（Qliphoth）：逆质点不是「同一个质点的暗色版」，是另一套名字 */
+  const KBL_EN_INV = {
+    '王冠': 'Thaumiel', '智慧': 'Ghagiel', '理解': 'Sathariel', '慈悲': 'Gamchicoth', '严厉': 'Golachab',
+    '美': 'Thagirion', '胜利': "A'arab Zaraq", '荣耀': 'Samael', '基础': 'Gamaliel', '王国': 'Lilith'
+  };
+  const enOf = (n, inv) => (inv ? KBL_EN_INV[n] : KBL_EN[n]) || '';
+  /* 长名在 236 宽下会撞节点：超过这个长度用 4 字母缩写 + title 挂全名（缩写是明示，不是截断） */
+  const enLabel = (n, inv) => {
+    const full = enOf(n, inv) || n;
+    const short = full.length > 11 || full.indexOf(' ') > 0;
+    const ab = short ? full.slice(0, 4) : full;
+    return { text: ab, full };
+  };
+  const DAAT_XY = [160, 96];              /* 中柱虚空：智慧/理解 与 美 之间 */
   const nameList = (s) => String(s || '').split(/[\s、,，·]+/).filter(Boolean);
+  const shade = (hex, f) => {
+    const n = parseInt(String(hex).replace('#', ''), 16);
+    const r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  };
+  /* 四档：阶 里出现 SS / SSS 就升档（A 与 S 只是颜色齐不齐，SS 起才有形制变化） */
+  const gradeOf = (stage) => {
+    const t = String(stage || '').toUpperCase();
+    if (t.indexOf('SSS') >= 0) return 'SSS';
+    if (t.indexOf('SS') >= 0) return 'SS';
+    return t.charAt(0) === 'S' ? 'S' : 'A';
+  };
+
+  /* 解/逆 两段都接受中文名与英文名：逆壳名（Thaumiel…）本身只有英文写法，
+     若只按中文表校验，写逆名会被判成「未识别的质点名」。 */
+  const KBL_EN2CN = (() => {
+    const m = {};
+    Object.keys(KBL_EN).forEach(cn => { m[KBL_EN[cn]] = cn; });
+    Object.keys(KBL_EN_INV).forEach(cn => { m[KBL_EN_INV[cn]] = cn; });
+    return m;
+  })();
+  const kblNorm = (n) => {
+    const t = String(n || '').trim();
+    return KBL_EN2CN[t] || KBL_EN2CN[t.replace(/'/g, '')] || t;
+  };
 
   function parseKbl(v) {
-    const o = { tree: '', stage: '', solved: [], inversed: [], usedRaw: '', bad: [], unknown: [], errs: [], raw: String(v || '') };
+    const o = { tree: '', stage: '', solved: [], inversed: [], usedRaw: '', bad: [], unknown: [], errs: [], warns: [], actRaw: '', raw: String(v || '') };
     String(v || '').split(/[｜|]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
       const m = seg.match(/^([^\s:：]{1,6})\s*[:：]?\s*([\s\S]*)$/);
       if (!m) return;
       const k = m[1], val = (m[2] || '').trim();
       if (k === '树') { if (/^(正|逆|双)$/.test(val)) o.tree = val; else o.errs.push('树 只认 正/逆/双：' + val); }
       else if (k === '阶') o.stage = val;                    /* 不透明字符串，原样显示 */
-      else if (k === '解') o.solved = nameList(val);
-      else if (k === '逆') o.inversed = nameList(val);
+      else if (k === '解') { o.slots = parseYzSlots(val); o.solved = o.slots.map(x => kblNorm(x.name)); }
+      else if (k === '逆') o.inversed = nameList(val).map(kblNorm);
+      else if (k === '激') o.actRaw = val;                  /* 槽数面板按阶算，不采信写法 */
       else if (k === '用') o.usedRaw = val;                  /* 面板重算，不采信写法 */
       else o.unknown.push(seg);
     });
@@ -1733,43 +1831,259 @@
     const uniq = new Set(o.solved.concat(o.inversed));
     o.used = uniq.size;
     o.total = KBL_TOTAL;
+
+    /* 激 段：`激 3/3 王冠 智慧 理解`（M 由面板按阶算；`激 0/3` 后面什么都不跟，这一段不许省）
+       「吞下了」与「正在生效」是两件事：前者是拥有，后者是这次配置。 */
+    o.actCap = actCapOf(o.stage);
+    o.act = [];
+    o.actN = 0;
+    o.actInf = false;
+    const raw = String(o.actRaw || '').trim();
+    if (raw) {
+      const infm = raw.match(/^(\u221e|inf|Infinity)\s*([\s\S]*)$/i);
+      if (infm) { o.actInf = true; o.actN = Infinity; o.actCap = Infinity; o.act = nameList((infm[2] || '').trim()); }
+      else {
+        const m = raw.match(/^\s*(\d+)\s*(?:\/\s*(\d+|\u221e)\s*)?([\s\S]*)$/);
+        if (m) {
+          o.actN = +m[1];
+          if (m[2] === '\u221e') { o.actInf = true; o.actCap = Infinity; }
+          o.act = nameList((m[3] || '').trim());
+        } else {
+          o.errs.push('激 只认「激 N/M 名单」或「激 ∞」：' + raw);
+        }
+      }
+      /* 三条黄字：只解释，不改写法、不改解析结果 */
+      if (!o.actInf && isFinite(o.actCap) && o.actN > o.actCap) {
+        o.warns.push('激活数超槽：激 ' + o.actN + '/' + o.actCap + ' —— 超出 ' + (o.actN - o.actCap) + ' 个不生效');
+      }
+      const notOwned = o.act.filter(n => !uniq.has(n));
+      if (notOwned.length) {
+        o.warns.push('激活了未吞的质点：激 名单里的「' + notOwned.join('」「') + '」不在 解/逆 里 —— 该条不生效');
+      }
+      if (o.actInf && o.act.length) {
+        o.warns.push('阶 ' + (o.stage || 'SSS') + ' 的激 只写 ∞，名单已融合（写了不生效）');
+      }
+    }
+    /* 实际生效清单：只认「既在解/逆里、又在槽内」的；SSS 融合后就是全部 */
+    const ownedAct = o.act.filter(n => uniq.has(n));
+    o.actList = o.actInf ? [...uniq] : ownedAct.slice(0, ownedAct.length);
     return o;
   }
 
-  function kblCell(name, on, inv) {
-    const pos = KBL_POS[name] || [7, 2];
-    const row = inv ? (8 - pos[0]) : pos[0];
-    return `<div class="kb-cell${inv ? ' kb-inv' : ''}" style="grid-row:${row};grid-column:${pos[1]}">` +
-      `<i class="kb-n${on ? ' on' : ''}"></i><em>${esc(name)}</em></div>`;
+  /* 折叠状态：默认「无已解 → 收起 / 有已解 → 展开」；手点那次落 localStorage，重渲染不会被弹回 */
+  const FOLD_KEY = 'tw-card:fold';
+  function foldOpen(owner, sys, used) {
+    try {
+      const m = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}');
+      const v = m[owner + '|' + sys];
+      if (v === 0 || v === 1) return v === 1;
+    } catch (e) { /* 私域存储不可用就当没记过 */ }
+    return used > 0;
   }
 
-  function renderKbl(k) {
+  function kblSvg(k, grade) {
+    const hasInv = k.inversed.length > 0;
+    const sss = grade === 'SSS';
+    const ss = grade === 'SS' || sss;
+    const forceInv = ss && !hasInv;          /* SS 只开一侧：另一侧画半透空框，明示「还差一半」 */
+    const H = (hasInv || forceInv) ? 500 : 250;
     const solved = new Set(k.solved), invd = new Set(k.inversed);
-    const hasInv = k.inversed.length > 0;                 /* 逆段为空就只画正树：不为空格子付翻倍高度 */
-    const warn = k.bad.length
-      ? `<div class="kb-warn">⚠ 未识别的质点名（照原样显示，不当作解析错误）：${esc(k.bad.join('、'))}</div>` : '';
-    return `<div class="tc-kbl">` +
-      `<div class="tc-kbl-hd"><b>卡巴拉</b>` +
-      `<i class="kb-tree">树 ${esc(k.tree || '正')}</i>` +
-      `<i class="kb-stage">${esc(k.stage || '—')}</i>` +
-      `<u>用 ${k.used}/${k.total}</u></div>` +
-      `<div class="kb-grid">${KBL_ORDER.map(n => kblCell(n, solved.has(n), false)).join('')}</div>` +
-      (hasInv ? `<div class="kb-mirror"></div><div class="kb-grid kb-grid-inv">${KBL_ORDER.map(n => kblCell(n, invd.has(n), true)).join('')}</div>` : '') +
-      warn + `</div>`;
+    const actSet = new Set(k.actInf ? [...solved, ...invd] : (k.actList || []));
+    const out = [];
+    out.push(`<svg class="kb-svg g-${grade}" viewBox="0 0 320 ${H}" xmlns="http://www.w3.org/2000/svg">`);
+    KBL_PATHS.forEach(([a, b]) => {
+      const A = KBL_XY[KBL_ORDER[a]], B = KBL_XY[KBL_ORDER[b]];
+      out.push(`<line class="kp" x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}"/>`);
+    });
+    if (hasInv || forceInv) {
+      out.push(`<line class="kb-mirror-line" x1="20" y1="250" x2="300" y2="250"/>`);
+      KBL_PATHS.forEach(([a, b]) => {
+        const A = KBL_XY[KBL_ORDER[a]], B = KBL_XY[KBL_ORDER[b]];
+        out.push(`<line class="kp inv${forceInv ? ' ghost' : ''}" x1="${A[0]}" y1="${500 - A[1]}" x2="${B[0]}" y2="${500 - B[1]}"/>`);
+      });
+      if (forceInv) out.push(`<line class="kb-pillar-ghost" x1="160" y1="14" x2="160" y2="486"/>`);
+    }
+    if (sss) {
+      out.push(`<line class="kb-pillar" x1="160" y1="12" x2="160" y2="488"/>`);
+      KBL_ORDER.forEach(n => {
+        const P = KBL_XY[n];
+        out.push(`<line class="kb-sym" x1="${P[0]}" y1="${P[1]}" x2="${P[0]}" y2="${500 - P[1]}"/>`);
+      });
+    }
+    /* Da'at：空心菱形 + 虚线 + 极淡白，三态恒亮（它是「活节点的存在」，不是获得的东西） */
+    out.push(`<rect class="kn daat" data-kind="daat" x="${DAAT_XY[0] - 8}" y="${DAAT_XY[1] - 8}" width="16" height="16" transform="rotate(45 ${DAAT_XY[0]} ${DAAT_XY[1]})" style="fill:#F7F5FF;fill-opacity:.35;stroke:#F7F5FF;stroke-opacity:.75;stroke-dasharray:3 3;stroke-width:1.3"/>`);
+    out.push(`<rect x="${DAAT_XY[0] - 4}" y="${DAAT_XY[1] - 4}" width="8" height="8" transform="rotate(45 ${DAAT_XY[0]} ${DAAT_XY[1]})" style="fill:#FFFFFF;fill-opacity:.30;stroke:none"/>`);
+    out.push(`<text class="kb-lab" x="${DAAT_XY[0] + 14}" y="${DAAT_XY[1] + 3}">Da'at 活节点</text>`);
+    KBL_ORDER.forEach((n, i) => {
+      const P = KBL_XY[n], c = KBL_COLORS[n] || '#94a3b8';
+      const on = solved.has(n);
+      const act = on && actSet.has(n);
+      /* 已解锁分两层：已激活 = 实心 + 外圈高亮实环 + 光晕；已解锁未激活 = 实心 + 虚线细环（暗，但看得出存在）。
+         认 class 不认文字：`.act` = 激活，`.on` 且非 `.act`（即 `.idle`）= 解锁未激活。 */
+      out.push(`<circle class="kn${on ? ' on' : ''}${act ? ' act' : (on ? ' idle' : '')}" data-sef="${i}" data-kind="up" cx="${P[0]}" cy="${P[1]}" r="11" style="fill:${c};fill-opacity:${on ? '1' : '.16'};stroke:${c};stroke-opacity:${on ? '.95' : '.38'}"/>`);
+      if (act) out.push(`<circle class="kn-ring" cx="${P[0]}" cy="${P[1]}" r="17" style="fill:none;stroke:${c};stroke-opacity:.85;stroke-width:2.2"/>`);
+      else if (on) out.push(`<circle class="kn-ring idle" cx="${P[0]}" cy="${P[1]}" r="17" style="fill:none;stroke:${c};stroke-opacity:.28;stroke-width:1;stroke-dasharray:2 3"/>`);
+      const L = enLabel(n, false);
+      out.push(`<text class="kb-lab"${L.text !== L.full ? ` data-full="${esc(L.full)}"` : ''} x="${P[0]}" y="${P[1] + 26}" text-anchor="middle">${esc(L.text)}${L.text !== L.full ? `<title>${esc(L.full)}</title>` : ''}</text>`);
+    });
+    if (hasInv || forceInv) {
+      KBL_ORDER.forEach((n, i) => {
+        const P = KBL_XY[n], c = shade(KBL_COLORS[n] || '#94a3b8', 0.75);
+        const on = !forceInv && invd.has(n);
+        const actInv = on && actSet.has(n);
+        const y = 500 - P[1];
+        out.push(`<rect class="kn${on ? ' on' : ''}${actInv ? ' act' : (on ? ' idle' : '')}" data-sef="${i}" data-kind="inv" x="${P[0] - 9}" y="${y - 9}" width="18" height="18" transform="rotate(45 ${P[0]} ${y})" style="fill:${c};fill-opacity:${on ? '1' : (forceInv ? '.05' : '.14')};stroke:${c};stroke-opacity:${on ? '.95' : (forceInv ? '.16' : '.34')}"/>`);
+        const L2 = enLabel(n, true);
+        out.push(`<text class="kb-lab inv-lab"${L2.text !== L2.full ? ` data-full="${esc(L2.full)}"` : ''} x="${P[0]}" y="${y + 24}" text-anchor="middle">${esc(L2.text)}${L2.text !== L2.full ? `<title>${esc(L2.full)}</title>` : ''}</text>`);
+      });
+    }
+    out.push('</svg>');
+    return out.join('');
   }
 
-  /* ── yz：源质（六元解锁记录，环 A3 · 琥珀） ── */
+  /* 天平轨的数据不在 kbl 行里，在玩家的 cr 行：`卡巴拉天平 N` / `卡巴拉解析 N/M`。
+     按段名取，不按位置——源质段可能排在前面。
+     `卡巴拉质点 N/M[...]` 是旧写法（worldbook 已改由 激 段作者），遇到就忽略、不报警。 */
+  const KBL_SCALE_MAX = 10;
+
+  function scaleTierOf(n) {
+    const a = Math.abs(n);
+    if (a <= 2) return 0;   /* 平衡区 */
+    if (a <= 5) return 1;
+    if (a <= 8) return 2;
+    return 3;               /* ±9~±10 */
+  }
+
+  function kblScale(crRow) {
+    const out = { bal: null, parse: null, warns: [] };
+    (crRow || []).forEach(seg => {
+      const name = String((seg && seg.name) || '').trim();
+      const val = String((seg && seg.val) == null ? '' : seg.val).trim();
+      if (name === '卡巴拉天平') {
+        const m = val.match(/^([+\-−]?\s*\d+)/);
+        if (m) {
+          let v = +m[1].replace(/[−]/g, '-').replace(/\s/g, '');
+          if (v > KBL_SCALE_MAX || v < -KBL_SCALE_MAX) {
+            out.warns.push('天平越界：卡巴拉天平 ' + val + ' —— 超出 −10~+10，按 ' + (v > 0 ? '+' + KBL_SCALE_MAX : String(-KBL_SCALE_MAX)) + ' 显示');
+            v = Math.max(-KBL_SCALE_MAX, Math.min(KBL_SCALE_MAX, v));
+          }
+          out.bal = v;
+        }
+      } else if (name === '卡巴拉解析') {
+        const m = val.match(/^(\d+)\s*\/\s*(\d+)/);
+        if (m) {
+          out.parse = { n: +m[1], cap: +m[2] };
+          if (+m[1] > +m[2]) out.warns.push('解析超次数：卡巴拉解析 ' + val + ' —— 超出 ' + (+m[1] - +m[2]) + ' 次');
+        }
+      }
+    });
+    return out;
+  }
+
+  /* 天平轨：−10…+10；六条规则见注释。
+     档位不只靠色相（刻度密度 + 段数一起变）；±10 过载是卡面状态（整轨实心 + 印章）；
+     ±9 预警是另一个元素；逆权限失效用删除线；恩典 |N|<5 显示「需 5」；解析圆点满/用形状不同。 */
+  function scaleHtml(k, sc) {
+    const sc2 = sc || { bal: null, parse: null, warns: [] };
+    if (typeof sc2.bal !== 'number') return '';
+    const n = sc2.bal, a = Math.abs(n), tier = scaleTierOf(n);
+    const side = n > 0 ? 'pos' : (n < 0 ? 'neg' : 'mid');
+    const pct = ((n + KBL_SCALE_MAX) / (KBL_SCALE_MAX * 2) * 100).toFixed(2);
+    const over = a === KBL_SCALE_MAX;
+    const warn9 = a === 9;
+    /* 刻度密度本身就是档位信号：密度 = 2^(tier+1)，tier0 最疏、tier3 最密 */
+    const nTk = Math.pow(2, tier + 1);
+    let ticks = '';
+    for (let i = 1; i < nTk; i++) ticks += '<i class="kb-tk" style="left:' + (i / nTk * 100).toFixed(2) + '%"></i>';
+    const scale = '<div class="kb-sc tier-' + tier + ' side-' + side + (over ? ' over' : '') + (warn9 ? ' near' : '') + '">' +
+      '<div class="kb-strack">' + ticks +
+        '<i class="kb-szero"></i>' +
+        '<i class="kb-sneedle" style="left:' + pct + '%"></i>' +
+      '</div>' +
+      '<div class="kb-slab"><span>逆 ←</span><b>' + (n > 0 ? '+' : '') + n + '</b><span>→ 正</span></div>' +
+      (over ? '<span class="kb-sover-stamp">过载</span>' : '') +
+      '</div>';
+
+    const skew = (() => {
+      if (a <= 2) return '偏斜：平衡 — 无修正';
+      const own = n > 0 ? '正' : '逆';
+      const other = n > 0 ? '逆' : '正';
+      const parts = [own + '权限 DC' + (a >= 6 ? '−2' : '−1'), '解析 ' + (n > 0 ? '+1' : '−1'),
+        '<s class="kb-off">' + other + '权限</s>'];
+      if (a >= 6) parts.push('WIL DC+' + (a >= 9 ? '2' : '1'));
+      return '偏斜：' + parts.join(' ｜ ');
+    })();
+
+    const grace = a >= 5;
+    let dots = '';
+    if (sc2.parse) {
+      dots = '<span class="kb-pdots" title="解析 ' + sc2.parse.n + '/' + sc2.parse.cap + '">';
+      for (let i = 0; i < sc2.parse.cap; i++) dots += '<i class="' + (i < sc2.parse.n ? 'used' : 'free') + '"></i>';
+      dots += '</span>';
+    }
+    const rest = '<div class="kb-srow">' +
+      (dots || '<span class="kb-pdots-empty">解析 —</span>') +
+      '<span class="kb-grace' + (grace ? ' on' : '') + '">' + (grace ? '恩典可用（≥5）' : '恩典 需 5') + '</span>' +
+      (over ? '' : '<span class="kb-sover">过载 还差 ' + (KBL_SCALE_MAX - a) + '</span>') +
+      (warn9 ? '<span class="kb-snear">⚠ 逼近过载</span>' : '') +
+      '</div>';
+
+    return '<div class="kb-scale">' + scale +
+      '<div class="kb-srow kb-skewrow">' + skew + '</div>' + rest + '</div>';
+  }
+
+  function renderKbl(k, owner, sc) {
+    const grade = gradeOf(k.stage);
+    const ss = grade === 'SS' || grade === 'SSS';
+    const sss = grade === 'SSS';
+    const open = foldOpen(owner || 'p1', 'kbl', k.used);
+    const warn = (k.bad.length
+      ? `<div class="kb-warn">⚠ 未识别的质点名（照原样显示，不当作解析错误）：${esc(k.bad.join('、'))}</div>` : '')
+      + (k.warns || []).map(w => `<div class="kb-warn">⚠ ${esc(w)}</div>`).join('')
+      + ((sc && sc.warns) || []).map(w => `<div class="kb-warn">⚠ ${esc(w)}</div>`).join('');
+    const cls = `tc-kbl grade-${grade} ${open ? 'open' : 'closed'}${ss ? ' dual' : ''}${sss ? ' full' : ''}`;
+    return `<div class="${cls}" data-fold="${esc((owner || 'p1') + '|kbl')}" data-grade="${grade}">` +
+      `<div class="kf-hd" role="button" tabindex="0">` +
+        `<b>${sss ? '完整卡巴拉' : '卡巴拉'}</b>` +
+        `<i class="kb-tree">树 ${esc(k.tree || '正')}</i>` +
+        `<i class="kb-stage">阶 ${esc(k.stage || '—')}</i>` +
+        (k.actRaw ? `<i class="kb-act${(!k.actInf && isFinite(k.actCap) && k.actN > k.actCap) ? ' over' : ''}">激 ${k.actInf ? '∞' : (k.actN + '/' + (isFinite(k.actCap) ? k.actCap : '∞'))}</i>` : '') +
+        `<i class="kb-used">解 ${k.used}/${k.total}</i>` +
+        `<i class="kb-daat${sss ? ' two' : ''}">Da'at ●</i>` +
+        (ss ? `<span class="kf-seal">${grade}</span>` : '') +
+        `<span class="kf-ar" aria-hidden="true"></span>` +
+      `</div>` +
+      `<div class="kf-body">${scaleHtml(k, sc)}<div class="kb-tree-wrap">${kblSvg(k, grade)}</div>${warn}</div>` +
+      `</div>`;
+  }
+
+  /* ── yz：源质（六元解锁记录，环 · 逐色 · 折叠 · 四档） ── */
   const YZ_ORDER = ['风', '地', '水', '火', '秩序', '混沌'];
   const YZ_POS = { '风': [50, 7], '地': [85, 29], '水': [85, 71], '火': [50, 93], '秩序': [15, 71], '混沌': [15, 29] };
+  /* 档位上限（源稿【分档】）：C 7 / B 10 / A 12 / S 15 / SS 20 / SSS 无上限 */
+  const YZ_CAP = { 'C': 7, 'B': 10, 'A': 12, 'S': 15, 'SS': 20, 'SSS': Infinity };
+  const capOf = (stage) => {
+    const t = String(stage || '').toUpperCase();
+    const k = ['SSS', 'SS', 'S', 'A', 'B', 'C'].find(x => t.indexOf(x) === 0 || t.indexOf(x) >= 0);
+    return k ? YZ_CAP[k] : 7;
+  };
+  /* 「风3」「风 3」「风3/7」都认；模型多写分母不报警，以面板算的为准 */
+  const parseYzSlots = (s) => String(s || '').split(/[\s、,，·]+/).filter(Boolean).map(tok => {
+    const m = tok.match(/^(.+?)\s*(\d+)?(?:\s*\/\s*\d+)?$/);
+    return m ? { name: m[1], pts: m[2] == null ? null : +m[2] } : { name: tok, pts: null };
+  });
+  const YZ_COLORS = { '风': '#BFE9FF', '地': '#C89B54', '水': '#3E7BFA', '火': '#FF6B4A', '秩序': '#A07BFF', '混沌': '#2E4A3F' };
+  const TW_NAMES = ['永', '粘', '临'];
+  const TW_COLORS = ['#FFC24D', '#B98A3E', '#7A5A2E'];
 
   function parseYz(v) {
-    const o = { stage: '', solved: [], unsolved: [], twist: { yong: null, zhan: null, lin: null }, bad: [], unknown: [], errs: [], raw: String(v || '') };
+    const o = { stage: '', solved: [], slots: [], unsolved: [], cap: 7, twist: { yong: null, zhan: null, lin: null }, bad: [], unknown: [], errs: [], raw: String(v || '') };
     String(v || '').split(/[｜|]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
       const m = seg.match(/^([^\s:：]{1,6})\s*[:：]?\s*([\s\S]*)$/);
       if (!m) return;
       const k = m[1], val = (m[2] || '').trim();
       if (k === '阶') o.stage = val;
-      else if (k === '解') o.solved = nameList(val);
+      else if (k === '解') { o.slots = parseYzSlots(val); o.solved = o.slots.map(x => x.name); }
       else if (k === '未') o.unsolved = nameList(val);
       else if (k === '扭') {
         const g = (re) => { const x = val.match(re); return x ? +x[1] : null; };
@@ -1781,26 +2095,51 @@
     });
     o.bad = [...new Set(o.solved.filter(n => YZ_ORDER.indexOf(n) < 0))];
     o.total = YZ_ORDER.length;
+    o.cap = capOf(o.stage);
+    o.pts = {};
+    (o.slots || []).forEach(x => { o.pts[x.name] = x.pts; });
     return o;
   }
 
-  function renderYz(y) {
+  function renderYz(y, owner) {
     const on = new Set(y.solved);
-    const dot = (n) => {
-      const p = YZ_POS[n] || [50, 50];
-      return `<div class="yz-n${on.has(n) ? ' on' : ''}" style="left:${p[0]}%;top:${p[1]}%">` +
-        `<b>${esc(n)}</b></div>`;
-    };
+    const grade = gradeOf(y.stage);
+    const ss = grade === 'SS' || grade === 'SSS';
+    const sss = grade === 'SSS';
+    const open = foldOpen(owner || 'p1', 'yz', y.solved.length);
     const t = y.twist;
     const tv = (v) => (v == null ? '—' : String(v));
     const warn = y.bad.length
       ? `<div class="kb-warn">⚠ 未识别的元名（照原样显示，不当作解析错误）：${esc(y.bad.join('、'))}</div>` : '';
-    return `<div class="tc-yz">` +
-      `<div class="tc-kbl-hd"><b>源质</b><i class="kb-stage">${esc(y.stage || '—')}</i>` +
-      `<u>解 ${y.solved.length}/${y.total}</u></div>` +
-      `<div class="yz-ring">${YZ_ORDER.map(dot).join('')}` +
-      `<div class="yz-hub"><em>永 ${tv(t.yong)}</em><em>粘 ${tv(t.zhan)}</em><em>临 ${tv(t.lin)}</em></div>` +
-      `<i class="yz-orbit"></i></div>` + warn + `</div>`;
+    const cap = y.cap == null ? 7 : y.cap;
+    const ptsTxt = (n) => {
+      if (!on.has(n)) return '未解锁';
+      const v = (y.pts && y.pts[n] != null) ? y.pts[n] : 0;   /* 入槽 0 点 ≠ 未解锁 */
+      return cap === Infinity ? String(v) : v + '/' + cap;
+    };
+    const dot = (n) => {
+      const q = YZ_POS[n] || [50, 50], c = YZ_COLORS[n] || '#94a3b8';
+      const isOn = on.has(n);
+      return `<div class="yz-n${isOn ? ' on' : ''}" style="left:${q[0]}%;top:${q[1]}%;--yzn:${c}" data-pts="${esc(ptsTxt(n))}">` +
+        `<b>${esc(n)}</b><em>${esc(ptsTxt(n))}</em></div>`;
+    };
+    const cls = `tc-yz grade-${grade} ${open ? 'open' : 'closed'}${ss ? ' dual' : ''}${sss ? ' full' : ''}`;
+    return `<div class="${cls}" data-fold="${esc((owner || 'p1') + '|yz')}" data-grade="${grade}">` +
+      `<div class="kf-hd" role="button" tabindex="0">` +
+        `<b>${sss ? '完整源质' : '源质'}</b>` +
+        `<i class="kb-stage">阶 ${esc(y.stage || '—')}</i>` +
+        `<i class="kb-used">解 ${y.solved.length}/${y.total}</i>` +
+        `<i class="yz-tw">扭 ${TW_NAMES.map((n, i) => n + tv([t.yong, t.zhan, t.lin][i])).join(' ')}</i>` +
+        (ss ? `<span class="kf-seal">${grade}</span>` : '') +
+        `<span class="kf-ar" aria-hidden="true"></span>` +
+      `</div>` +
+      `<div class="kf-body"><div class="yz-ring">` +
+        (ss ? `<i class="yz-inner"></i>` : '') +
+        YZ_ORDER.map(dot).join('') +
+        `<div class="yz-hub">${TW_NAMES.map((n, i) => `<em style="color:${TW_COLORS[i]}">${n} ${tv([t.yong, t.zhan, t.lin][i])}</em>`).join('')}</div>` +
+        `<i class="yz-orbit"></i>` +
+      `</div>${warn}</div>` +
+      `</div>`;
   }
 
   function renderPlayer(p) {
@@ -2294,11 +2633,11 @@
     }
     if (st.kbls.length) {
       colL.push(sect('卡巴拉 · 生命之树', 'KABBALAH'));
-      colL.push(`<div class="tc-kbls">${st.kbls.map(renderKbl).join('')}</div>`);
+      colL.push(`<div class="tc-kbls">${st.kbls.map(r => renderKbl(r, 'p' + (r.n || 1), kblScale(((st.players || [])[r.n - 1] || {}).crRow))).join('')}</div>`);
     }
     if (st.yzs.length) {
       colL.push(sect('源质 · 六元', 'SEPHIRAH'));
-      colL.push(`<div class="tc-yzs">${st.yzs.map(renderYz).join('')}</div>`);
+      colL.push(`<div class="tc-yzs">${st.yzs.map(r => renderYz(r, 'p' + (r.n || 1))).join('')}</div>`);
     }
     if (st.geneLocks.length) {
       colL.push(sect('基因锁', 'GENE LOCK'));
@@ -3309,10 +3648,13 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
    读者分不出哪个是哪一个 —— 它已经不算装饰。 */
 @media (max-width:520px){
   .tc-wrap{padding:9px 6px;font-size:12px}
-  .tc-main{grid-template-columns:none;grid-auto-flow:row;grid-auto-columns:auto;
+  .tc-main{grid-template-columns:minmax(0,1fr);grid-auto-flow:row;grid-auto-columns:auto;
     justify-content:stretch;overflow-x:visible;gap:2px 0}
   .tc-main>.tc-col{min-width:0}
-  .tc-card{max-width:none}
+  .tc-card{max-width:none;min-width:0;width:100%}
+  /* 卡片必须能窄过内容：min-content 会把卡撑到 464 宽（390 屏上整卡溢出），
+     而卡自己的 scrollWidth-clientWidth 仍是 0 —— 那项量的是「卡里整不整齐」，
+     不是「卡比屏幕宽没宽」。判据要用 document.scrollWidth === innerWidth。 */
   /* 属性区：单列，标签与值紧邻，不跨列对齐 */
   .tc-attrs{grid-template-columns:1fr;gap:0}
   .tc-attr{grid-template-columns:42px auto auto;gap:0 5px;justify-content:start}
@@ -3324,10 +3666,9 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   .tc-vit{grid-template-columns:36px 1fr 54px;gap:1px 6px}
   /* kbl 双树窄屏降级：网格 → 单柱竖排。用 flex 而不是 grid，是为了让 inline 的
      grid-row/grid-column 直接失效——不用 !important 也能覆盖内联样式。 */
-  .kb-grid{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-  .kb-cell{flex-direction:row;gap:5px;margin-left:0}
-  .kb-grid-inv .kb-cell{margin-left:5px}
-  .yz-ring{height:88px}
+  .kb-svg{max-width:300px}
+  .yz-ring{height:132px}
+  .yz-hub{width:58px;height:58px}
   /* 机甲 / 使魔读数：标签列收窄，数字仍等宽三位 */
   .tc-kbm-g{grid-template-columns:38px 32px 1fr}
   .tc-kbm-sub{grid-template-columns:1fr}
@@ -3402,58 +3743,135 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   .tc-ckline{font-size:10px;line-height:1.55;color:#fcd34d;letter-spacing:0}
   .tc-ckwarn{font-style:normal;font-size:9.5px;font-weight:700;color:#fbbf24;margin-left:2px}
 
-/* ══════════ kbl 卡巴拉双树 / yz 源质环（琥珀） ══════════ */
-  .tc-kbls, .tc-yzs { display: flex; flex-direction: column; gap: 6px; }
-  .tc-kbl, .tc-yz { position: relative; padding: 7px 9px 9px; border-radius: 6px;
-    background: linear-gradient(135deg, rgba(139,92,246,.07), rgba(15,23,42,.42) 70%);
-    border: 1px solid rgba(167,139,250,.22); }
-  .tc-yz { background: linear-gradient(135deg, rgba(251,191,36,.07), rgba(15,23,42,.42) 70%);
-    border-color: rgba(251,191,36,.22); }
-  .tc-kbl-hd { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-  .tc-kbl-hd b { font-size: 11px; letter-spacing: .16em; color: #ddd6fe; }
-  .tc-yz .tc-kbl-hd b { color: #fde68a; }
-  .kb-tree { font-style: normal; font-size: 8px; padding: 1px 4px; border-radius: 2px;
-    color: #c4b5fd; border: 1px solid rgba(196,181,253,.4); background: rgba(167,139,250,.1); }
-  .kb-stage { font-style: normal; font-size: 8.5px; color: #94a3b8; letter-spacing: .1em; }
-  .tc-kbl-hd u { margin-left: auto; text-decoration: none; font-size: 9px; color: #a5b4fc;
-    font-variant-numeric: tabular-nums; }
-  .tc-yz .tc-kbl-hd u { color: #fbbf24; }
-  /* 双树：3 列 × 7 行 */
-  .kb-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(7, 15px);
-    justify-items: center; align-items: center; }
-  .kb-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-  .kb-cell em { font-style: normal; font-size: 7.5px; line-height: 1; color: #6b7a90; letter-spacing: .04em; }
-  .kb-cell .kb-n { width: 11px; height: 11px; border-radius: 50%;
-    border: 1px solid rgba(167,139,250,.45); background: transparent; display: block; }
-  .kb-cell .kb-n.on { background: radial-gradient(circle at 50% 38%, #f5f3ff, #a78bfa 72%);
-    border-color: #ddd6fe; box-shadow: 0 0 6px rgba(167,139,250,.85); }
-  /* 逆质点：换成菱形 + 横向偏移，和正质点不在一条竖线上 */
-  .kb-grid-inv .kb-cell { margin-left: 7px; }
-  .kb-grid-inv .kb-n { width: 9px; height: 9px; border-radius: 1px; transform: rotate(45deg);
-    border-color: rgba(244,63,94,.5); }
-  .kb-grid-inv .kb-n.on { background: radial-gradient(circle at 50% 38%, #fecdd3, #f43f5e 72%);
-    border-color: #fda4af; box-shadow: 0 0 6px rgba(244,63,94,.8); }
-  .kb-grid-inv em { color: #7d5560; }
-  .kb-mirror { height: 1px; margin: 3px 0 2px;
-    background: repeating-linear-gradient(90deg, rgba(196,181,253,.5) 0 3px, transparent 3px 7px); }
-  .kb-warn { margin-top: 4px; font-size: 8.5px; line-height: 1.5; color: #fcd34d; }
-  /* 源质环 */
-  .yz-ring { position: relative; height: 96px; margin: 2px 0 1px; }
-  .yz-orbit { position: absolute; left: 50%; top: 50%; width: 74px; height: 74px; margin: -37px 0 0 -37px;
-    border-radius: 50%; border: 1px dashed rgba(251,191,36,.28); }
-  .yz-n { position: absolute; transform: translate(-50%, -50%); }
-  .yz-n b { display: block; width: 20px; height: 20px; border-radius: 3px; font-size: 7.5px;
-    font-weight: 400; line-height: 20px; text-align: center; color: #8a7a4f;
-    border: 1px dashed rgba(251,191,36,.35); background: rgba(251,191,36,.04); }
-  .yz-n.on b { color: #1c1917; font-weight: 700; border-style: solid; border-color: #fde68a;
-    background: linear-gradient(160deg, #fef3c7, #f59e0b 72%); box-shadow: 0 0 7px rgba(251,191,36,.75); }
-  .yz-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 44px; height: 44px; border-radius: 50%; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 1px;
-    background: radial-gradient(circle at 50% 40%, rgba(251,191,36,.14), rgba(15,23,42,.9) 72%);
-    border: 1px solid rgba(251,191,36,.3); }
-  .yz-hub em { font-style: normal; font-size: 7px; line-height: 1.15; color: #d6c08a;
-    font-variant-numeric: tabular-nums; }
+/* ══════════ kbl 卡巴拉（真树 SVG · 正上逆下 · 折叠 · 四档） / yz 源质（环 · 逐色） ══════════
+   每套体系一组变量 + 一个 theme class：新加体系就再加一组，别往 .tc-card / .tc-sec 上叠。 */
+.tc-kbls, .tc-yzs { display: flex; flex-direction: column; gap: 6px; }
+.tc-kbl, .tc-yz { position: relative; padding: 7px 9px 8px; border-radius: 6px;
+  background: linear-gradient(160deg, rgba(38,32,70,.92), rgba(20,18,38,.96));
+  border: 1px solid #3a3560; border-left: 3px solid #8b7bff; }
+.tc-yz { background: linear-gradient(160deg, rgba(56,38,12,.93), rgba(26,20,10,.96));
+  border-color: #5b3d12; border-left-color: #f0a020; }
+/* 折叠头：收起是压缩不是隐藏 —— 阶 / 解数 / Da'at / 扭 全留在这一行 */
+.kf-hd { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;
+  color: #cfd6ff; padding: 1px 0; border-radius: 3px; user-select: none; }
+.tc-yz .kf-hd { color: #f3e3c4; }
+.kf-hd > b { font-weight: 700; letter-spacing: .04em; }
+.kf-hd:focus-visible { outline: 1px solid rgba(150,140,255,.75); outline-offset: 2px; }
+.kf-hd > i { font-style: normal; font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.kb-tree { border: 1px solid rgba(150,140,255,.55); color: #b7a9ff; background: rgba(120,104,255,.14); }
+.kb-stage { border: 1px solid rgba(120,200,255,.45); color: #9fd4ff; background: rgba(60,150,220,.12); }
+.kb-used { border: 1px solid rgba(150,140,255,.45); color: #b7a9ff; background: rgba(120,104,255,.12); }
+.tc-yz .kb-used { border-color: rgba(255,190,90,.4); color: #f0c882; background: rgba(240,160,32,.12); }
+.kb-daat { border: 1px solid rgba(247,245,255,.42); color: #f2f1ff; background: rgba(247,245,255,.10); }
+.kb-daat.two { background: linear-gradient(90deg, rgba(247,245,255,.16), rgba(140,120,255,.20)); }
+
+/* ── 天平轨（−10…+10）：档位不只靠色相，靠刻度密度 + 段数 + 指针颜色一起变 ── */
+.kb-scale { margin: 3px 0 5px; }
+.kb-sc { position: relative; padding: 5px 0 0; }
+.kb-strack { position: relative; height: 6px; border-radius: 3px; overflow: visible;
+  background: linear-gradient(90deg, rgba(244,63,94,.30), rgba(148,163,184,.20) 50%, rgba(168,85,247,.30)); }
+.kb-tk { position: absolute; top: 0; width: 1px; height: 6px; background: rgba(226,232,240,.22); }
+.kb-sc.tier-1 .kb-tk { background: rgba(226,232,240,.30); }
+.kb-sc.tier-2 .kb-tk { background: rgba(226,232,240,.40); }
+.kb-sc.tier-3 .kb-tk { background: rgba(255,255,255,.55); }
+.kb-szero { position: absolute; left: 50%; top: -3px; width: 1px; height: 12px; background: rgba(226,232,240,.5); }
+.kb-sneedle { position: absolute; top: -4px; width: 2px; height: 14px; border-radius: 1px;
+  background: #94a3b8; box-shadow: 0 0 6px rgba(148,163,184,.6); }
+.kb-sc.tier-1 .kb-sneedle { background: #a78bfa; box-shadow: 0 0 6px rgba(167,139,250,.8); }
+.kb-sc.tier-2 .kb-sneedle { background: #c084fc; box-shadow: 0 0 7px rgba(192,132,252,.85); }
+.kb-sc.tier-3 .kb-sneedle { background: #f43f5e; box-shadow: 0 0 9px rgba(244,63,94,.95); }
+.kb-sc.side-neg .kb-sneedle { background: #fb7185; box-shadow: 0 0 7px rgba(251,113,133,.85); }
+.kb-sc.over .kb-strack { background: #f43f5e; box-shadow: 0 0 8px rgba(244,63,94,.7); }
+.kb-sc.over.side-neg .kb-strack { background: #e11d48; }
+.kb-slab { display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 8.5px; color: #94a3b8; letter-spacing: .05em; margin-top: 2px; }
+.kb-slab b { color: #f5f3ff; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.kb-srow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 13px; font-size: 9px; color: #cbd5e1; margin-top: 2px; }
+.kb-skewrow { color: #a5b4fc; }
+.kb-off { text-decoration: line-through; opacity: .85; }
+.kb-grace { color: #64748b; }
+.kb-grace.on { color: #86efac; font-weight: 700; }
+.kb-sover { color: #fbbf24; }
+.kb-snear { color: #fb7185; font-weight: 700; }
+.kb-sover-stamp { position: absolute; right: 0; top: -2px; font-size: 8.5px; font-weight: 700;
+  color: #fff; background: #e11d48; padding: 0 4px; border-radius: 2px; letter-spacing: .08em; }
+.kb-pdots { display: inline-flex; gap: 2px; align-items: center; }
+.kb-pdots i { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  border: 1px solid rgba(203,213,225,.6); }
+.kb-pdots i.used { background: #c4b5fd; border-color: #c4b5fd; }
+.kb-pdots i.free { background: transparent; }
+.kb-pdots-empty { color: #64748b; }
+
+.kb-act { border: 1px solid rgba(129,140,248,.5); color: #a5b4fc; background: rgba(129,140,248,.14); }
+.kb-act.over { border-color: rgba(252,211,77,.55); color: #fcd34d; background: rgba(252,211,77,.14); }
+.kn.act { filter: drop-shadow(0 0 4px currentColor); }
+.kn.idle { opacity: .92; }
+
+.yz-tw { border: 1px solid rgba(255,190,90,.35); color: #e8c98a; background: rgba(240,160,32,.10);
+  font-family: ui-monospace, Consolas, monospace; }
+.kf-seal { margin-left: 2px; font-family: ui-monospace, Consolas, monospace; font-size: 8.5px;
+  font-weight: 700; padding: 1px 5px; border-radius: 2px; border: 1px solid currentColor;
+  letter-spacing: .08em; color: #c9c0ff; }
+.tc-yz .kf-seal { color: #ffd69a; }
+.kf-ar { margin-left: auto; width: 0; height: 0; border: 4px solid transparent;
+  border-left-color: #8b83c8; transition: transform .14s ease; }
+.tc-yz .kf-ar { border-left-color: #d3a85e; }
+.kf-body { overflow: hidden; }
+.tc-kbl.closed .kf-body, .tc-yz.closed .kf-body { display: none; }
+.tc-kbl:not(.closed) .kf-ar, .tc-yz:not(.closed) .kf-ar { transform: rotate(90deg); }
+/* 树 */
+.kb-tree-wrap { position: relative; margin: 5px 0 1px; }
+.kb-svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
+.kp { stroke: rgba(150,140,255,.30); stroke-width: 1; }
+.kp.inv { stroke: rgba(150,140,255,.22); stroke-dasharray: 3 3; }
+.kp.inv.ghost { stroke: rgba(190,180,255,.10); }
+.kb-lab { font-size: 10px; fill: #a9a2d8; letter-spacing: .01em; }
+.kb-lab.inv-lab { fill: #8a7fb8; }
+.kb-mirror-line { stroke: rgba(150,140,255,.35); stroke-width: 1; stroke-dasharray: 2 4; }
+.kb-pillar { stroke: #d9d2ff; stroke-opacity: .5; stroke-width: 2.5; fill: none; }
+.kb-pillar-ghost { stroke: rgba(190,180,255,.18); stroke-width: 2; stroke-dasharray: 4 6; }
+.kb-sym { stroke: rgba(200,185,255,.22); stroke-width: .9; stroke-dasharray: 2 3; }
+/* 四档：A 素 / S 齐 / SS 双开内发光 / SSS 完整卡巴拉（光柱 + 水印 + 流光，纯 CSS） */
+.tc-kbl.dual { border-left-color: #a99bff; box-shadow: inset 0 0 22px rgba(140,120,255,.16); }
+.tc-kbl.full { border-color: rgba(190,170,255,.55); border-left-color: #cbbcff;
+  box-shadow: inset 0 0 30px rgba(150,120,255,.22); overflow: hidden; }
+.tc-kbl.full .kf-seal { color: #f0ebff; background: rgba(150,120,255,.22); }
+.tc-kbl.full::after { content: ''; position: absolute; inset: -40% -60%; pointer-events: none;
+  opacity: .06; background: linear-gradient(115deg, transparent 42%, rgba(190,175,255,.5) 50%, transparent 58%);
+  animation: kbfull 3.4s linear infinite; }
+@keyframes kbfull { 0% { transform: translateX(-38%); } 100% { transform: translateX(38%); } }
+@media (prefers-reduced-motion: reduce) { .tc-kbl.full::after { animation: none; } }
+.tc-yz.dual { border-left-color: #ffc24d; box-shadow: inset 0 0 20px rgba(240,160,32,.15); }
+.tc-yz.full { border-color: rgba(255,200,110,.5); border-left-color: #ffd27a;
+  box-shadow: inset 0 0 26px rgba(240,160,32,.2); }
+.tc-yz.full .kf-seal { color: #ffe9bf; background: rgba(240,160,32,.18); }
+/* 源质环：逐色（每元自己的色相）、点数在节点下 */
+.yz-ring { position: relative; height: 152px; margin: 5px 0 1px; }
+.yz-n { position: absolute; transform: translate(-50%,-50%); text-align: center; }
+.yz-n b { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 6px; font-size: 10.5px; font-weight: 700; color: #8b7a55;
+  border: 1.5px dashed rgba(255,255,255,.28); background: rgba(255,255,255,.03); }
+.yz-n.on b { border-style: solid; color: #17130a; font-weight: 700;
+  border-color: var(--yzn, #f0a020); background: var(--yzn, #f0a020); }
+.yz-n em { display: block; font-style: normal; font-size: 8.5px; margin-top: 2px;
+  color: #a08a62; font-variant-numeric: tabular-nums; }
+.yz-n.on em { color: #e8c98a; }
+.yz-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: 66px; height: 66px; border-radius: 50%; border: 1px solid rgba(255,190,90,.25);
+  background: rgba(20,14,4,.55); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 1px; }
+.yz-hub em { font-style: normal; font-size: 9px; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Consolas, monospace; }
+.yz-orbit { position: absolute; left: 50%; top: 50%; width: 186px; height: 132px;
+  transform: translate(-50%,-50%); border: 1px dashed rgba(255,190,90,.20); border-radius: 50%; }
+.yz-inner { position: absolute; left: 50%; top: 50%; width: 118px; height: 118px;
+  transform: translate(-50%,-50%); border: 1px dashed rgba(255,190,90,.22); border-radius: 50%; }
+.tc-yz.full .yz-inner { display: none; }
+.tc-yz.full .yz-hub { width: 104px; height: 104px; border-color: rgba(255,200,110,.45);
+  background: radial-gradient(circle at 50% 40%, rgba(80,50,10,.9), rgba(24,16,4,.95)); }
+.kb-warn { margin-top: 4px; font-size: 8.5px; line-height: 1.5; color: #fcd34d;
+  background: rgba(251,191,36,.08); border-left: 2px solid #fbbf24; border-radius: 0 3px 3px 0;
+  padding: 3px 7px; }
 /* ══════════ sh 避难所卡（海上载体） ══════════
    判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、
    kb 是紫金，shelter 必须是「圆角浮筒 + 锈斑 + 一条水位线」。四张并排时先被认出来的是那条水线。 */

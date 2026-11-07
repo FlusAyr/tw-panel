@@ -19,7 +19,7 @@
 ## 渲染器
 
 - [dist/loader-script.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/loader-script.json)：玩家唯一需要导入的文件。boot v2.1 引导包（一行 import `@vX.Y.Z` 的 boot.mjs），装一次后自动更新。
-- [dist/panel-script-v3.37.0.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.37.0.json)：离线手动版 v3.37.0，不自动更新。
+- [dist/panel-script-v3.38.0.json](https://github.com/FlusAyr/tw-panel/blob/main/dist/panel-script-v3.38.0.json)：离线手动版 v3.38.0，不自动更新。
 - [panel.js](https://github.com/FlusAyr/tw-panel/blob/main/panel.js)：唯一源文件，≈1.7k 行。改这个文件，然后跑 `python build.py`。
 - [boot.mjs](https://github.com/FlusAyr/tw-panel/blob/main/boot.mjs)：ESM 双通道自动更新引导（fetch 快速通道 + import 兜底），含设置面板（显示 BOOT_VERSION，玩家可自检）；改动后玩家需重导一次导入包（引导自身无法自更新）；拉取一律钉不可变 tag，不用 `@main`。
 - [version.json](https://github.com/FlusAyr/tw-panel/blob/main/version.json)：版本清单，boot 据此判断是否更新。

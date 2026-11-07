@@ -1942,26 +1942,26 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     const h1 = h(K1 + NL + Y1), h2 = h(K2 + NL + Y2), h3 = h(K3 + NL + Y3);
 
     /* ① 三态可数（元素级，不看文字、不靠色相） */
-    const onK = [cnt(h1, /class="kb-n on"/g), cnt(h2, /class="kb-n on"/g), cnt(h3, /class="kb-n on"/g)];
+    const onK = [cnt(h1, /class="kn on[ "]/g), cnt(h2, /class="kn on[ "]/g), cnt(h3, /class="kn on[ "]/g)];
     const onY = [cnt(h1, /class="yz-n on"/g), cnt(h2, /class="yz-n on"/g), cnt(h3, /class="yz-n on"/g)];
     T('kbl 三态已解数 [0,4,16] 互不相同', onK.join() === '0,4,16', 'onK=' + JSON.stringify(onK));
     T('yz 三态已解数 [0,3,6] 互不相同', onY.join() === '0,3,6', 'onY=' + JSON.stringify(onY));
 
     /* ② 逆段为空 → 不长逆树（不替空格子付翻倍高度）；有逆才长出 */
-    T('逆段为空时只画正树（逆树块 0 个、镜面线 0 条）',
-      cnt(h1, /kb-grid-inv/g) === 0 && cnt(h1, /kb-mirror/g) === 0 && cnt(h1, /class="kb-cell/g) === 10,
-      'inv=' + cnt(h1, /kb-grid-inv/g) + ' cells=' + cnt(h1, /class="kb-cell/g));
-    T('逆段有内容才长出逆树（逆树块 1 个 + 镜面线 1 条 + 20 格）',
-      cnt(h2, /kb-grid-inv/g) >= 1 && cnt(h2, /kb-mirror/g) === 1 && cnt(h2, /class="kb-cell/g) === 20,
-      'inv=' + cnt(h2, /kb-grid-inv/g) + ' cells=' + cnt(h2, /class="kb-cell/g));
-    T('逆质点是菱形且横向偏移（与正质点不共用一条竖线）',
-      /\.kb-grid-inv \.kb-cell\s*\{[^}]*margin-left\s*:\s*7px/.test(api.CSS) && /\.kb-grid-inv \.kb-n\s*\{[^}]*rotate\(45deg\)/.test(api.CSS),
-      'CSS 缺逆质点偏移/菱形规则');
+    T('逆段为空时只画正树（逆节点 0、镜面线 0）',
+      cnt(h1, /data-kind="inv"/g) === 0 && cnt(h1, /kb-mirror-line/g) === 0 && cnt(h1, /data-kind="up"/g) === 10,
+      'inv=' + cnt(h1, /data-kind="inv"/g) + ' mirror=' + cnt(h1, /kb-mirror-line/g));
+    T('逆段有内容才长出逆树（逆节点 10 + 镜面线 1）',
+      cnt(h2, /data-kind="inv"/g) === 10 && cnt(h2, /kb-mirror-line/g) === 1,
+      'inv=' + cnt(h2, /data-kind="inv"/g) + ' mirror=' + cnt(h2, /kb-mirror-line/g));
+    T('逆质点换形状（rect 旋转 45° 成菱形）并单独降亮',
+      /class="kn[^"]*" data-sef="\d+" data-kind="inv"[^>]*rotate\(45/.test(h2) && /\.kp\.inv\s*\{[^}]*dasharray/.test(api.CSS),
+      'markup 或 CSS 缺逆质点形状');
 
     /* ③ 「用」由面板按 解∪逆 重算，不采信写法 */
     const s2 = st(K2 + NL + Y2);
     T('用 = 解∪逆 去重后重算（写 3 却显示 4/20）',
-      s2.kbls[0].used === 4 && /用 4\/20/.test(h2) && !/用 3\/20/.test(h2),
+      s2.kbls[0].used === 4 && /解 4\/20/.test(h2) && !/解 3\/20/.test(h2),
       'used=' + s2.kbls[0].used);
 
     /* ④ 错名：黄字 + 原样显示，不落 errs */
@@ -1981,17 +1981,18 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
       'kbl=' + /class="tc-kbl"/.test(old) + ' yz=' + /class="tc-yz"/.test(old));
 
     /* ⑥ 源质用琥珀，且已解/未解不只靠色相（实心 vs 虚线） */
-    T('yz 已解是琥珀实心、未解是虚线空心',
-      /\.yz-n\.on b\s*\{[^}]*#f59e0b/.test(api.CSS) && /\.yz-n b\s*\{[^}]*border\s*:\s*1px dashed/.test(api.CSS),
-      'CSS 缺 yz 琥珀/虚线规则');
+    T('yz 已解是逐色实心、未解是虚线空心',
+      /\.yz-n\.on b\s*\{[^}]*var\(--yzn/.test(api.CSS) && /\.yz-n b\s*\{[^}]*dashed/.test(api.CSS)
+        && /--yzn:#BFE9FF/.test(h2) && /--yzn:#C89B54/.test(h2),
+      'CSS 缺逐色/虚线规则');
 
     /* ⑦ 窄屏降级为单柱竖排（flex 覆盖 grid，内联 grid-row/column 自动失效） */
-    T('窄屏 kbl 降级单柱竖排（媒体查询里 .kb-grid 改 flex）',
-      /@media \(max-width:520px\)\{[\s\S]*\.kb-grid\{display:flex/.test(api.CSS),
-      'CSS 窄屏缺 .kb-grid{display:flex}');
-    T('窄屏降级后已解数不变（dom 计数与桌面同）',
-      cnt(h3.replace(/<style[\s\S]*?<\/style>/g, ''), /class="kb-n on"/g) === 16,
-      '窄屏计数取的是同一份 markup');
+    T('窄屏 kbl 限宽 300（媒体查询里 .kb-svg）',
+      /@media \(max-width:520px\)\{[\s\S]{0,4000}?\.kb-svg\{[^}]*max-width:\s*300px/.test(api.CSS),
+      'CSS 窄屏缺 .kb-svg{max-width:300px}');
+    T('窄屏不隐藏质点（媒体查询里没有 .kn 的 display:none）',
+      !/@media \(max-width:520px\)\{[\s\S]{0,4000}?\.kn[^{]*\{[^}]*display:\s*none/.test(api.CSS),
+      '媒体查询里出现了 display:none');
 
     /* ⑧ 全角 ｜ 分隔、半角 | 残留 0（夹具与解析都不许把半角当分隔符吃掉） */
     T('kbl/yz 段分隔用全角 ｜（夹具半角 | 数为 0）',
@@ -2010,6 +2011,219 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
       !!eb && /next/.test(eb.body || ''),
       'end=' + (eb && eb.end));
   }
+
+
+// ═══════════════════════════════════════════════════════════════
+// 组 22 · 卡巴拉/源质：折叠、四档、Da'at、英文名、源质点数
+// ═══════════════════════════════════════════════════════════════
+console.log('\n组 22 · 卡巴拉/源质');
+{
+  const api = makeApi(SRC);
+  const P = 'p1: 沈砚 ｜ 100/100 ｜ 50/50 ｜ 1/10\n';
+  const run = (extra) => api.render(api.parseState('scene: 三阶\n' + P + extra + 'next: 继续'));
+
+  const kblClosed = run('kbl1: 树 正 ｜ 阶 A ｜ 解 ｜ 逆 \n yz1: 阶 A ｜ 解 ｜ 未 风 地 水 火 秩序 混沌 ｜ 扭 永0 粘0 临0\n');
+  const kblOpen   = run('kbl1: 树 正 ｜ 阶 S ｜ 解 王冠 智慧 ｜ 逆 \n');
+  const kblSS     = run('kbl1: 树 双 ｜ 阶 SS ｜ 解 王冠 智慧 美 慈悲 ｜ 逆 严厉\n');
+  const kblSSS    = run('kbl1: 树 双 ｜ 阶 SSS ｜ 解 王冠 智慧 理解 慈悲 严厉 美 胜利 荣耀 根基 王国 ｜ 逆 Thaumiel\n');
+
+  // ① 折叠：折叠头 + data-fold 键
+  T('kbl 有折叠头与 data-fold 键', /class="tc-kbl[^"]*"[^>]*data-fold="p1\|kbl"/.test(kblOpen), (kblOpen.match(/data-fold="[^"]*"/g) || []).slice(0, 3));
+
+  // ② 默认收起：解+逆 都为 0 → closed
+  T('无已解时默认收起（closed）', /class="tc-kbl[^"]*closed/.test(kblClosed), (kblClosed.match(/class="tc-kbl[^"]*"/) || [])[0]);
+
+  // ③ 有已解时默认展开
+  T('有已解时默认展开（open）', /class="tc-kbl[^"]*open/.test(kblOpen), (kblOpen.match(/class="tc-kbl[^"]*"/) || [])[0]);
+
+  // ④ 收起态仍保留信息：阶 / 解数 / Da'at
+  const headOk = /解 0\/20/.test(kblClosed) && /Da'at/.test(kblClosed) && /阶 A/.test(kblClosed);
+  T('收起态仍含 阶/解数/Da\'at', headOk, { stage: /阶 A/.test(kblClosed), used: /解 0\/20/.test(kblClosed), daat: /Da'at/.test(kblClosed) });
+
+  // ⑤ 四档 class 互不相同
+  const g = (h) => (h.match(/data-grade="([^"]+)"/) || [])[1];
+  const grades = [g(kblClosed), g(kblOpen), g(kblSS), g(kblSSS)];
+  T('四档 grade 各自可辨', JSON.stringify(grades) === '["A","S","SS","SSS"]', grades);
+
+  // ⑥ SS 双开内发光 / SSS 光柱 + 对称连线 + 流光
+  const ssOk = /tc-kbl[^"]*dual/.test(kblSS);
+  const sssOk = /tc-kbl[^"]*full/.test(kblSSS) && (kblSSS.match(/class="kb-sym"/g) || []).length === 10 && (kblSSS.match(/class="kb-pillar"/g) || []).length === 1;
+  T('SS 有 dual、SSS 有 full（光柱 1 + 对称线 10）', ssOk && sssOk, { dual: ssOk, sym: (kblSSS.match(/class="kb-sym"/g) || []).length, pillar: (kblSSS.match(/class="kb-pillar"/g) || []).length });
+
+  // ⑦ 流光水印 opacity ≤ 0.06，且 reduced-motion 关掉；文字节点不受影响
+  const css = api.CSS;
+  const wmOp = (css.match(/\.tc-kbl\.full::after\s*\{[^}]*opacity:\s*([\d.]+)/) || [])[1];
+  const seals = [kblClosed, kblOpen, kblSS, kblSSS].map(h => (h.match(/class="kf-seal">([^<]*)</) || [])[1] || '');
+  T('四档印章为空 / 空 / SS / SSS', JSON.stringify(seals) === '["","","SS","SSS"]', seals);
+
+  T('SSS 流光水印 opacity ≤ 0.06', wmOp !== undefined && parseFloat(wmOp) <= 0.06, wmOp);
+  const rmOk = /@keyframes\s+kbfull/.test(css) && /prefers-reduced-motion[\s\S]{0,240}animation:\s*none/.test(css);
+  T('流光有 keyframes 且 reduced-motion 关闭', rmOk, { kf: /@keyframes\s+kbfull/.test(css), rm: /prefers-reduced-motion[\s\S]{0,240}animation:\s*none/.test(css) });
+
+  // ⑧ Da'at 常亮：三态都在
+  const daat = [kblClosed, kblOpen, kblSSS].map(h => (h.match(/class="kb-daat/g) || []).length);
+  T('Da\'at 三态常亮（各 1 个）', JSON.stringify(daat) === '[1,1,1]', daat);
+
+  // ⑨ 用 分母恒 20
+  T('用 N/20 分母恒 20', /解 0\/20/.test(kblClosed) && /解 2\/20/.test(kblOpen), { a: /解 0\/20/.test(kblClosed), b: /解 2\/20/.test(kblOpen) });
+
+  // ⑩ 英文名：正树十名 + 逆树 Samael/Thaumiel
+  const en10 = ['Keter','Chokhmah','Binah','Chesed','Gevurah','Tiferet','Netzach','Hod','Yesod','Malkuth'];
+  const miss = en10.filter(n => !kblClosed.includes(n));
+  T('正树十质点英文名齐备', miss.length === 0, miss);
+  T('逆树用 Thaumiel / Samael 拼写', kblSSS.includes('Thaumiel') && /Samael/.test(kblSSS), { thaumiel: kblSSS.includes('Thaumiel'), samael: /Samael/.test(kblSSS) });
+
+  // ⑪ 中文输入 → 卡面同一英文标签（不是两套）
+  const zh = run('kbl1: 树 正 ｜ 阶 S ｜ 解 王冠 ｜ 逆 \n');
+  T('中文「王冠」渲染为 Keter', zh.includes('Keter') && !zh.includes('>王冠<'), { keter: zh.includes('Keter'), cn: zh.includes('>王冠<') });
+
+  // ⑫ 源质点数 3/7 · 0/7 · 5/7
+  const yz = run('yz1: 阶 C ｜ 解 风3 地0 水5 ｜ 未 火 秩序 混沌 ｜ 扭 永0 粘0 临0\n');
+  const yzOk = /3\/7/.test(yz) && /0\/7/.test(yz) && /5\/7/.test(yz) && /未解锁/.test(yz);
+  T('源质点数按阶算分母（3/7 · 0/7 · 5/7）', yzOk, { p3: /3\/7/.test(yz), p0: /0\/7/.test(yz), p5: /5\/7/.test(yz), none: /未解锁/.test(yz) });
+
+  // ⑬ SSS 源质无分母
+  const yzSSS = run('yz1: 阶 SSS ｜ 解 风3 地0 水5 ｜ 未 火 秩序 混沌 ｜ 扭 永0 粘0 临0\n');
+  T('SSS 源质不显示分母（data-pts 为纯数字）', /data-pts="3"/.test(yzSSS) && !/data-pts="3\/\d/.test(yzSSS), (yzSSS.match(/data-pts="[^"]*"/g) || []).slice(0, 4));
+
+  // ⑭ 窄屏 SVG 限宽 300（真卡片里不溢出）
+  T('窄屏 .kb-svg 限宽 300', /@media[^{]*max-width:\s*520px\)[\s\S]{0,4000}?\.kb-svg\s*\{[^}]*max-width:\s*300px/.test(css), {});
+}
+
+
+// ── 组 23 · 窄屏卡片不许比屏幕宽（v3.38.0）────────────────────────────────
+// 判据换了一次：以前量 `.tc-card` 的 scrollWidth-clientWidth，那项量的是「卡里整不整齐」——
+// 卡自己很整齐、却比屏幕宽 36px（390 屏量到 426），它照样是 0。
+// 真正该判的是「卡有没有比视口宽」，所以下面钉的是：窄屏用 minmax(0,1fr) 而不是 none/auto，
+// 且卡片允许被压窄（min-width:0）。桌面（>521）那部分一字不许动，见本组最后一条。
+{
+  const css = api.CSS;
+  const m520 = css.match(/@media\s*\(max-width:\s*520px\)\s*\{([\s\S]*?)\n\}/);
+  const b520 = m520 ? m520[1] : '';
+  const pre = css.slice(0, css.indexOf('@media (max-width:520px)'));
+
+  T('窄屏 .tc-main 用 minmax(0,1fr)（不是 none / auto —— auto 会按 min-content 撑到 430+）',
+    /\.tc-main\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(b520), b520.slice(0, 0));
+
+  T('窄屏 .tc-card 允许被压窄（min-width:0 + width:100%）',
+    /\.tc-card\s*\{[^}]*min-width:\s*0[^}]*\}/.test(b520) && /\.tc-card\s*\{[^}]*width:\s*100%/.test(b520), {});
+
+  T('窄屏不许再出现 grid-template-columns:none（旧的写法，会退回 min-content 撑宽）',
+    !/grid-template-columns:\s*none/.test(b520), {});
+
+  // 桌面侧（520 媒体块之前的所有规则）不许出现「卡片 min-width」这类压窄补丁
+  T('桌面规则里没有为窄屏塞的 .tc-card min-width 补丁',
+    !/\.tc-card\s*\{[^}]*min-width:\s*0/.test(pre), {});
+
+  // 430 的来源必须只剩两处可解释的地方：>521 的 minmax(430px,1fr) 与 ≤760 的 grid-auto-columns:430px
+  const m760 = css.match(/@media\s*\(max-width:\s*760px\)\s*\{([\s\S]*?)\n\}/);
+  T('430 只出现在 >521 的 minmax 与 ≤760 的 grid-auto-columns（窄屏已不参与）',
+    /minmax\(430px,\s*1fr\)/.test(pre) && /grid-auto-columns:\s*430px/.test(m760 ? m760[1] : '') && !/430px/.test(b520), {});
+}
+
+
+// ── 组 24 · kbl 激活槽（`激 N/M 名单`） ─────────────────────────────────
+// 「吞下了」与「正在生效」是两件事：`解/逆` 是拥有，`激` 是这次配置。
+// 槽数由面板按阶算（D1/C1/B2/A3/S5/SS7/SSS∞），模型写 M 也不采信。
+{
+  const api = makeApi(SRC);
+  const one = (stage, act) => api.parseState(
+    'scene: 测\np1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1\n' +
+    'kbl1: 树 正 ｜ 阶 ' + stage + ' ｜ 解 王冠 智慧 理解 慈悲 ｜ 激 ' + act + '\nnext: a').kbls[0];
+
+  const a1 = one('A', '3/3 王冠 智慧 理解');
+  T('激 解析成 {n, cap, list}', a1.actN === 3 && a1.actCap === 3 && JSON.stringify(a1.act) === '["王冠","智慧","理解"]',
+    { n: a1.actN, cap: a1.actCap, list: a1.act });
+
+  const caps = ['D', 'C', 'B', 'A', 'S', 'SS'].map(g => one(g, '0/9').actCap);
+  T('槽数按阶：D1 C1 B2 A3 S5 SS7', JSON.stringify(caps) === '[1,1,2,3,5,7]', caps);
+  T('阶 SSS → 槽数 Infinity', one('SSS', '∞').actCap === Infinity, one('SSS', '∞').actCap);
+
+  const over = one('A', '4/3 王冠 智慧 理解 慈悲');
+  T('激活数超槽出黄字（激 4/3）', over.warns.some(w => /超出 1 个不生效/.test(w)), over.warns);
+  const ghost = one('A', '2/3 王冠 严房');
+  T('激活了未吞的质点出黄字（严房）', ghost.warns.some(w => /严房/.test(w) && /不在 解\/逆 里/.test(w)), ghost.warns);
+  const sssList = one('SSS', '∞ 王冠');
+  T('SSS 写了名单出黄字（已融合）', sssList.warns.some(w => /名单已融合/.test(w)), sssList.warns);
+  T('缺 激 段不报黄字（老卡）', (() => { const o = api.parseState('scene: 测\np1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1\nkbl1: 树 正 ｜ 阶 A ｜ 解 王冠\nnext: a').kbls[0]; return !o.actRaw && (!o.warns || o.warns.length === 0); })(), {});
+
+  const html = api.render(api.parseState(
+    'scene: 测\np1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1\n' +
+    'kbl1: 树 正 ｜ 阶 A ｜ 解 王冠 智慧 理解 慈悲 ｜ 激 3/3 王冠 智慧 理解\nnext: a'));
+  // 认 class 不认文字：.act = 已激活；.on 且 .idle = 已解锁未激活
+  T('已激活质点带 .act（3 个）', (html.match(/class="kn on act"/g) || []).length === 3, (html.match(/class="kn on[^"]*"/g) || []).slice(0, 6));
+  T('已解锁未激活带 .idle 且不带 .act（1 个）', (html.match(/class="kn on idle"/g) || []).length === 1, {});
+  T('未解锁既无 .act 也无 .idle', (html.match(/class="kn"/g) || []).length === 6, (html.match(/class="kn"/g) || []).length);
+  T('已激活有外圈高亮环、未激活只有虚线细环',
+    /class="kn-ring"/.test(html) && /class="kn-ring idle"[^>]*stroke-dasharray/.test(html), {});
+  T('标题区显示 激 3/3', /class="kb-act[^"]*">激 3\/3</.test(html), (html.match(/kb-act[^>]*>[^<]*/) || [])[0]);
+  T('收起态那一行也带 激 3/3（折叠头同一行）', (() => {
+    const hd = (html.match(/<div class="kf-hd"[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '';
+    return /激 3\/3/.test(hd.replace(/<[^>]+>/g, ''));
+  })(), {});
+}
+
+
+// ── 组 25 · 卡巴拉天平轨（数据在 cr 行，不在 kbl 行） ──────────────────
+// `卡巴拉天平 N`（−10~+10）/ `卡巴拉解析 N/M` 按段名从 cr 取；
+// `卡巴拉质点 N/M[...]` 是旧写法，忽略、不报警。
+{
+  const api = makeApi(SRC);
+  const html = (cr, stage) => api.render(api.parseState(
+    'scene: 测\np1: 甲 ｜ 1/1 ｜ 1/1 ｜ 1/1\n' + cr + '\n' +
+    'kbl1: 树 正 ｜ 阶 ' + (stage || 'A') + ' ｜ 解 王冠 智慧\nnext: a'));
+  const cls = (h) => ((h.match(/class="kb-sc ([^"]*)"/) || [])[1] || '');
+  const warns = (h) => (h.match(/class="kb-warn">⚠ ([^<]*)</g) || []).map(x => x.replace(/.*⚠ /, ''));
+
+  T('天平 +3 解析为 +3 且落 tier-1 side-pos', cls(html('cr1: 卡巴拉天平 +3')) === 'tier-1 side-pos', cls(html('cr1: 卡巴拉天平 +3')));
+  T('天平 −7（全角负号）解析为 −7，tier-2 side-neg', cls(html('cr1: 卡巴拉天平 −7')) === 'tier-2 side-neg', cls(html('cr1: 卡巴拉天平 −7')));
+  T('天平 3（无符号）当 +3', cls(html('cr1: 卡巴拉天平 3')) === 'tier-1 side-pos', cls(html('cr1: 卡巴拉天平 3')));
+
+  const tiers = ['-2', '0', '+2'].map(v => cls(html('cr1: 卡巴拉天平 ' + v)));
+  T('平衡区 |N|≤2 → tier-0（−2/0/+2）', tiers.every(c => c.indexOf('tier-0') === 0), tiers);
+  T('档位映射 +3/+5→1、+6→2、+9→3', [
+    cls(html('cr1: 卡巴拉天平 +3')).indexOf('tier-1') === 0,
+    cls(html('cr1: 卡巴拉天平 +5')).indexOf('tier-1') === 0,
+    cls(html('cr1: 卡巴拉天平 +6')).indexOf('tier-2') === 0,
+    cls(html('cr1: 卡巴拉天平 +9')).indexOf('tier-3') === 0
+  ].every(Boolean), {});
+  T('逆侧 −3/−9 也分档且 side-neg', [
+    cls(html('cr1: 卡巴拉天平 −3')) === 'tier-1 side-neg',
+    cls(html('cr1: 卡巴拉天平 −9')) === 'tier-3 side-neg near'
+  ].every(Boolean), {});
+  T('四档轨 class 互不相同（认 class 不认文字）',
+    new Set([0, 1, 2, 3].map(i => cls(html('cr1: 卡巴拉天平 ' + [0, 4, 7, 10][i])))).size === 4, {});
+
+  const over = html('cr1: 卡巴拉天平 +10');
+  T('|N|=10 出过载状态（over class + 印章），与预警不是同一个元素',
+    /\bover\b/.test(cls(over)) && /class="kb-sover-stamp"/.test(over) && !/kb-snear/.test(over), cls(over));
+  const near = html('cr1: 卡巴拉天平 +9');
+  T('|N|=9 出预警元素（kb-snear），且没有过载印章',
+    /class="kb-snear"/.test(near) && !/kb-sover-stamp/.test(near), cls(near));
+
+  T('恩典在 |N|<5 不点亮（显示「恩典 需 5」）',
+    !/class="kb-grace on"/.test(html('cr1: 卡巴拉天平 +4')) && /恩典 需 5/.test(html('cr1: 卡巴拉天平 +4')), {});
+  T('恩典在 |N|≥5 点亮', /class="kb-grace on"/.test(html('cr1: 卡巴拉天平 +5')), {});
+
+  const oob = html('cr1: 卡巴拉天平 +12');
+  T('越界 +12：出黄字并按 +10 显示（over）',
+    warns(oob).some(w => /天平越界/.test(w) && /按 \+10 显示/.test(w)) && /\bover\b/.test(cls(oob)), warns(oob));
+  const ovp = html('cr1: 卡巴拉天平 +3 ｜ 卡巴拉解析 5/2');
+  T('解析超次数出黄字', warns(ovp).some(w => /解析超次数/.test(w) && /超出 3 次/.test(w)), warns(ovp));
+
+  const oldCard = html('cr1: 卡巴拉质点 3/3[王冠] ｜ 卡巴拉天平 +2 ｜ 卡巴拉解析 1/2');
+  T('旧卡（cr 里有 卡巴拉质点）不报警、照常渲染', warns(oldCard).length === 0 && /kb-scale/.test(oldCard), warns(oldCard));
+  T('缺 cr 天平段 → 不画天平轨（不是画一条空轨）', !/kb-scale/.test(html('cr1: 幸运LP 12/12')), {});
+  T('解析圆点数 = 分母、已用/未用形状不同',
+    (() => {
+      const h = html('cr1: 卡巴拉天平 +6 ｜ 卡巴拉解析 1/3');
+      const d = h.match(/<span class="kb-pdots"[^>]*>([\s\S]*?)<\/span>/);
+      if (!d) return false;
+      const used = (d[1].match(/class="used"/g) || []).length;
+      const free = (d[1].match(/class="free"/g) || []).length;
+      return used === 1 && free === 2;
+    })(), {});
+}
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
