@@ -904,7 +904,7 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
     'scene', 'team', 'quest', 'check', 'result', 'world', 'next',
     'bond', 'foe', 'nb', 'nf', 'nh', 'nd', 'nl', 'npc',
     'kbnpc', 'ntrnpc', 'kbm', 'kbf', 'dmg', 'sh', 'dz', 'wh', 'pl', 'lk',
-    'kbmsk', 'kbfsk',
+    'kbmsk', 'kbfsk', 'kbl', 'yz',
     'pts', 'lock', 'ti', 'cr', 'p', 'sk', 'eq', 'mob'
   ];
   /* 期望集自己也要被查一次：必须是独立字面清单，不许引用 KEYS / SRC / readKeysString。
@@ -1921,6 +1921,95 @@ T('console.warn/error 除白名单外为 0（实测 ' + warnLines.length + ' 处
   T('重复 cr1 不触发截断（end 比单条多 1，且 next 仍在）',
     !!dupeb && !!oneeb && dupeb.end === oneeb.end + 1 && /next/.test(dupeb.body || ''),
     'dup.end=' + (dupeb && dupeb.end) + ' single.end=' + (oneeb && oneeb.end));
+
+
+  /* ══════════ 组 21 · kbl 双树 / yz 源质环 ══════════ */
+  {
+    const NL = String.fromCharCode(10);   /* 写 '
+' 会被模板烤成真换行（§7 第 8 条） */
+    const base = 'scene: 三阶 · 车库' + NL + 'p1: 甲 ｜ 100/100 ｜ 60/60 ｜ 11/20' + NL;
+    const st = (x) => api.parseState(base + x + NL + 'next: 继续' + NL);
+    const h = (x) => api.render(st(x));
+    const cnt = (html, re) => (html.match(re) || []).length;
+
+    const K1 = 'kbl1: 树 正 ｜ 阶 未启 ｜ 解 ｜ 逆 ｜ 用 0/20';
+    const Y1 = 'yz1: 阶 C ｜ 解 ｜ 未 风 地 水 火 秩序 混沌 ｜ 扭 永0 粘0 临0';
+    const K2 = 'kbl1: 树 双 ｜ 阶 二阶 ｜ 解 王冠 智慧 理解 ｜ 逆 美 ｜ 用 3/20';
+    const Y2 = 'yz1: 阶 C ｜ 解 风 地 水 ｜ 未 火 秩序 混沌 ｜ 扭 永0 粘0 临0';
+    const K3 = 'kbl1: 树 双 ｜ 阶 五阶 ｜ 解 王冠 智慧 理解 慈悲 严厉 美 胜利 荣耀 基础 王国 ｜ 逆 王冠 智慧 理解 美 严厉 胜利 ｜ 用 10/20';
+    const Y3 = 'yz1: 阶 S ｜ 解 风 地 水 火 秩序 混沌 ｜ 未 ｜ 扭 永1 粘0 临2';
+
+    const h1 = h(K1 + NL + Y1), h2 = h(K2 + NL + Y2), h3 = h(K3 + NL + Y3);
+
+    /* ① 三态可数（元素级，不看文字、不靠色相） */
+    const onK = [cnt(h1, /class="kb-n on"/g), cnt(h2, /class="kb-n on"/g), cnt(h3, /class="kb-n on"/g)];
+    const onY = [cnt(h1, /class="yz-n on"/g), cnt(h2, /class="yz-n on"/g), cnt(h3, /class="yz-n on"/g)];
+    T('kbl 三态已解数 [0,4,16] 互不相同', onK.join() === '0,4,16', 'onK=' + JSON.stringify(onK));
+    T('yz 三态已解数 [0,3,6] 互不相同', onY.join() === '0,3,6', 'onY=' + JSON.stringify(onY));
+
+    /* ② 逆段为空 → 不长逆树（不替空格子付翻倍高度）；有逆才长出 */
+    T('逆段为空时只画正树（逆树块 0 个、镜面线 0 条）',
+      cnt(h1, /kb-grid-inv/g) === 0 && cnt(h1, /kb-mirror/g) === 0 && cnt(h1, /class="kb-cell/g) === 10,
+      'inv=' + cnt(h1, /kb-grid-inv/g) + ' cells=' + cnt(h1, /class="kb-cell/g));
+    T('逆段有内容才长出逆树（逆树块 1 个 + 镜面线 1 条 + 20 格）',
+      cnt(h2, /kb-grid-inv/g) >= 1 && cnt(h2, /kb-mirror/g) === 1 && cnt(h2, /class="kb-cell/g) === 20,
+      'inv=' + cnt(h2, /kb-grid-inv/g) + ' cells=' + cnt(h2, /class="kb-cell/g));
+    T('逆质点是菱形且横向偏移（与正质点不共用一条竖线）',
+      /\.kb-grid-inv \.kb-cell\s*\{[^}]*margin-left\s*:\s*7px/.test(api.CSS) && /\.kb-grid-inv \.kb-n\s*\{[^}]*rotate\(45deg\)/.test(api.CSS),
+      'CSS 缺逆质点偏移/菱形规则');
+
+    /* ③ 「用」由面板按 解∪逆 重算，不采信写法 */
+    const s2 = st(K2 + NL + Y2);
+    T('用 = 解∪逆 去重后重算（写 3 却显示 4/20）',
+      s2.kbls[0].used === 4 && /用 4\/20/.test(h2) && !/用 3\/20/.test(h2),
+      'used=' + s2.kbls[0].used);
+
+    /* ④ 错名：黄字 + 原样显示，不落 errs */
+    const s4 = st('kbl1: 树 双 ｜ 阶 二阶 ｜ 解 幻想质 王冠 ｜ 逆 无名之逆 ｜ 用 2/20' + NL + 'yz1: 阶 C ｜ 解 雷 风 ｜ 未 火 ｜ 扭 永0 粘0 临0');
+    const h4 = api.render(s4);
+    T('错名出黄字并原样显示（kbl + yz 各一条）',
+      cnt(h4, /class="kb-warn"/g) === 2 && /幻想质/.test(h4) && /无名之逆/.test(h4) && /雷/.test(h4),
+      'warn=' + cnt(h4, /class="kb-warn"/g));
+    T('错名不落 errs（用户可能自创体系，不当作解析错误）',
+      s4.kbls[0].errs.length === 0 && s4.yzs[0].errs.length === 0,
+      'kbl.errs=' + JSON.stringify(s4.kbls[0].errs) + ' yz.errs=' + JSON.stringify(s4.yzs[0].errs));
+
+    /* ⑤ 旧卡（没有 kbl/yz 行）→ 一个空框都不许出现 */
+    const old = api.render(api.parseState(base + 'next: 继续' + NL));
+    T('旧卡不出现空树/空环（tc-kbl / tc-yz 各 0）',
+      !/class="tc-kbl"/.test(old) && !/class="tc-yz"/.test(old) && !/kb-grid/.test(old),
+      'kbl=' + /class="tc-kbl"/.test(old) + ' yz=' + /class="tc-yz"/.test(old));
+
+    /* ⑥ 源质用琥珀，且已解/未解不只靠色相（实心 vs 虚线） */
+    T('yz 已解是琥珀实心、未解是虚线空心',
+      /\.yz-n\.on b\s*\{[^}]*#f59e0b/.test(api.CSS) && /\.yz-n b\s*\{[^}]*border\s*:\s*1px dashed/.test(api.CSS),
+      'CSS 缺 yz 琥珀/虚线规则');
+
+    /* ⑦ 窄屏降级为单柱竖排（flex 覆盖 grid，内联 grid-row/column 自动失效） */
+    T('窄屏 kbl 降级单柱竖排（媒体查询里 .kb-grid 改 flex）',
+      /@media \(max-width:520px\)\{[\s\S]*\.kb-grid\{display:flex/.test(api.CSS),
+      'CSS 窄屏缺 .kb-grid{display:flex}');
+    T('窄屏降级后已解数不变（dom 计数与桌面同）',
+      cnt(h3.replace(/<style[\s\S]*?<\/style>/g, ''), /class="kb-n on"/g) === 16,
+      '窄屏计数取的是同一份 markup');
+
+    /* ⑧ 全角 ｜ 分隔、半角 | 残留 0（夹具与解析都不许把半角当分隔符吃掉） */
+    T('kbl/yz 段分隔用全角 ｜（夹具半角 | 数为 0）',
+      (K2 + Y2).indexOf('|') < 0 && s2.kbls[0].solved.length === 3,
+      'half=' + (K2 + Y2).split('|').length);
+
+    /* ⑨ 两个新键进 KEYS（组 12 走双向差集，这里再钉一次「真的被 KEYS 认」） */
+    const ks = readKeysString();
+    T('KEYS 里登记了 kbl / yz 两个前缀',
+      /kbl\[0-9\]\*/.test(ks) && /yz\[0-9\]\*/.test(ks),
+      'KEYS 缺：' + ['kbl[0-9]*', 'yz[0-9]*'].filter(x => ks.indexOf(x) < 0).join(', '));
+
+    /* ⑩ 不截断：kbl/yz 行之后的状态行仍被解析（入口必须是 extractBlock，见 §7 第 20 条） */
+    const eb = api.extractBlock('scene: x' + NL + 'p1: 甲 ｜ 1/1 ｜ 1/1 ｜ 0/1' + NL + K2 + NL + Y2 + NL + 'next: 继续');
+    T('kbl/yz 行不截断后续状态行（extractBlock 吃到 next）',
+      !!eb && /next/.test(eb.body || ''),
+      'end=' + (eb && eb.end));
+  }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

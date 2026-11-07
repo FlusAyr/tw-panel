@@ -9,7 +9,7 @@
   if (window.__twCardLoaded) return;
   window.__twCardLoaded = true;
 
-  const VERSION = '3.36.0';
+  const VERSION = '3.37.0';
 
   /* 面板尺寸偏好：紧凑(tc-mini)/完整。localStorage 持久化，点击 .tc-size 全局切换 */
   const SIZE_KEY = 'tw-card:size';
@@ -49,7 +49,7 @@
 
   /* ══════════ 基础工具 ══════════ */
 
-  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|kbmsk[0-9]*|kbfsk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*';
+  const KEYS = 'scene|team|quest|check|result|world|next|bond[0-9]*|foe[0-9]*|nb[0-9]*|nf[0-9]*|nh[0-9]*|nd[0-9]*|nl[0-9]*|npc[0-9]*|kbnpc[0-9]*|ntrnpc[0-9]*|kbm[0-9]*|kbf[0-9]*|dmg[0-9]*|sh[0-9]*|dz[0-9]*|wh[0-9]*|pl[0-9]*|lk[0-9]*|kbmsk[0-9]*|kbfsk[0-9]*|pts[0-9]+|lock[0-9]+|ti[0-9]+|cr[0-9]+|p[0-9]+|sk[0-9]+|eq[0-9]+|mob[0-9]*|kbl[0-9]*|yz[0-9]*';
   const LINE_RE = new RegExp('^[ \\t]*(' + KEYS + ')[:：][ \\t]*(.*)$', 'i');
   /* 拓展键登记表（AGENTS.md §3.1 规则 7）四列：键前缀 | base 名 | 渲染器 | 主题 class
      （派生第五列 field = 状态对象存放字段）。编号一律按「键前缀长度」取，禁字面量偏移
@@ -1254,13 +1254,14 @@
   function parseState(text) {
     const st = {
       scene: '', team: '', quest: null, checks: [],
-      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [], crOrphans: [],
+      players: [], npcs: [], kbnpcs: [], ntrnpcs: [], bonds: [], foes: [], mobs: [], ntrBonds: [], ntrFoes: [], ntrHearts: [], ntrFalls: [], ntrLogs: [], mechas: [], familiars: [], dmgs: [], shelters: [], disasters: [], warehouses: [], places: [], geneLocks: [], crOrphans: [], kbls: [], yzs: [],
       result: '', world: '', next: '',
     };
     const pmap = new Map(), smap = new Map(), emap = new Map();
     const bmap = new Map(), fmap = new Map(), nmap = new Map();
     const nbmap = new Map(), nfmap = new Map(), nhmap = new Map(), ndmap = new Map(), nlmap = new Map();
     const ptsm = new Map(), lockm = new Map(), tim = new Map(), crm = new Map(), crSeen = new Map();
+    const kblm = new Map(), yzm = new Map();
     const mmap = new Map(), kmmap = new Map(), kfmap = new Map();
     const mskmap = new Map(), fskmap = new Map();
     const gmap = new Map();
@@ -1311,6 +1312,8 @@
       else if (/^pts\d+$/.test(k)) ptsm.set(+k.slice(3), parsePts(v));
       else if (/^lock\d+$/.test(k)) lockm.set(+k.slice(4), parseLock(v));
       else if (/^ti\d+$/.test(k)) tim.set(+k.slice(2), parseTi(v));
+      else if (/^kbl\d*$/.test(k)) kblm.set(k === 'kbl' ? 1 : +k.slice(3), parseKbl(v));
+      else if (/^yz\d*$/.test(k)) yzm.set(k === 'yz' ? 1 : +k.slice(2), parseYz(v));
       else if (/^cr\d+$/.test(k)) {
         const cn = +k.slice(2), row = parseCr(v);
         crm.set(cn, row);                                  /* 语义不变：同号后者覆盖前者 */
@@ -1340,6 +1343,14 @@
       return p;
     });
     /* 孤儿 crN：没有同号 pN 时这一行无处安放，按编号配对是既有语义，这里只负责说出来 */
+    const hook = (m) => [...m.keys()].sort((a, b) => a - b).map(i => {
+      const row = m.get(i);
+      row.n = i;
+      row.owner = (pmap.get(i) || {}).name || '';
+      return row;
+    });
+    st.kbls = hook(kblm);
+    st.yzs = hook(yzm);
     st.crOrphans = [...crSeen.keys()].filter(i => !pmap.has(i)).sort((a, b) => a - b)
       .map(i => ({ n: i, segs: crSeen.get(i)[crSeen.get(i).length - 1].length }));
     st.bonds = [...bmap.keys()].sort((a, b) => a - b).map(k => bmap.get(k));
@@ -1694,6 +1705,102 @@
         <div class="tc-lk-meta">${cells.join('')}</div>
         ${errLine}
       </div>`;
+  }
+
+  /* ── kbl：卡巴拉·生命之树（质点解锁记录，双树 A2） ── */
+  const KBL_ORDER = ['王冠', '智慧', '理解', '慈悲', '严厉', '美', '胜利', '荣耀', '基础', '王国'];
+  const KBL_POS = { '王冠': [1, 2], '智慧': [2, 3], '理解': [2, 1], '慈悲': [3, 3], '严厉': [3, 1], '美': [4, 2], '胜利': [5, 3], '荣耀': [5, 1], '基础': [6, 2], '王国': [7, 2] };
+  const KBL_TOTAL = 20;
+  const nameList = (s) => String(s || '').split(/[\s、,，·]+/).filter(Boolean);
+
+  function parseKbl(v) {
+    const o = { tree: '', stage: '', solved: [], inversed: [], usedRaw: '', bad: [], unknown: [], errs: [], raw: String(v || '') };
+    String(v || '').split(/[｜|]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+      const m = seg.match(/^([^\s:：]{1,6})\s*[:：]?\s*([\s\S]*)$/);
+      if (!m) return;
+      const k = m[1], val = (m[2] || '').trim();
+      if (k === '树') { if (/^(正|逆|双)$/.test(val)) o.tree = val; else o.errs.push('树 只认 正/逆/双：' + val); }
+      else if (k === '阶') o.stage = val;                    /* 不透明字符串，原样显示 */
+      else if (k === '解') o.solved = nameList(val);
+      else if (k === '逆') o.inversed = nameList(val);
+      else if (k === '用') o.usedRaw = val;                  /* 面板重算，不采信写法 */
+      else o.unknown.push(seg);
+    });
+    /* 名字写错：照原样显示 + 黄字，不落 errs（用户可能自创体系） */
+    const seen = new Set();
+    o.solved.concat(o.inversed).forEach(n => { if (KBL_ORDER.indexOf(n) < 0) seen.add(n); });
+    o.bad = [...seen];
+    const uniq = new Set(o.solved.concat(o.inversed));
+    o.used = uniq.size;
+    o.total = KBL_TOTAL;
+    return o;
+  }
+
+  function kblCell(name, on, inv) {
+    const pos = KBL_POS[name] || [7, 2];
+    const row = inv ? (8 - pos[0]) : pos[0];
+    return `<div class="kb-cell${inv ? ' kb-inv' : ''}" style="grid-row:${row};grid-column:${pos[1]}">` +
+      `<i class="kb-n${on ? ' on' : ''}"></i><em>${esc(name)}</em></div>`;
+  }
+
+  function renderKbl(k) {
+    const solved = new Set(k.solved), invd = new Set(k.inversed);
+    const hasInv = k.inversed.length > 0;                 /* 逆段为空就只画正树：不为空格子付翻倍高度 */
+    const warn = k.bad.length
+      ? `<div class="kb-warn">⚠ 未识别的质点名（照原样显示，不当作解析错误）：${esc(k.bad.join('、'))}</div>` : '';
+    return `<div class="tc-kbl">` +
+      `<div class="tc-kbl-hd"><b>卡巴拉</b>` +
+      `<i class="kb-tree">树 ${esc(k.tree || '正')}</i>` +
+      `<i class="kb-stage">${esc(k.stage || '—')}</i>` +
+      `<u>用 ${k.used}/${k.total}</u></div>` +
+      `<div class="kb-grid">${KBL_ORDER.map(n => kblCell(n, solved.has(n), false)).join('')}</div>` +
+      (hasInv ? `<div class="kb-mirror"></div><div class="kb-grid kb-grid-inv">${KBL_ORDER.map(n => kblCell(n, invd.has(n), true)).join('')}</div>` : '') +
+      warn + `</div>`;
+  }
+
+  /* ── yz：源质（六元解锁记录，环 A3 · 琥珀） ── */
+  const YZ_ORDER = ['风', '地', '水', '火', '秩序', '混沌'];
+  const YZ_POS = { '风': [50, 7], '地': [85, 29], '水': [85, 71], '火': [50, 93], '秩序': [15, 71], '混沌': [15, 29] };
+
+  function parseYz(v) {
+    const o = { stage: '', solved: [], unsolved: [], twist: { yong: null, zhan: null, lin: null }, bad: [], unknown: [], errs: [], raw: String(v || '') };
+    String(v || '').split(/[｜|]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+      const m = seg.match(/^([^\s:：]{1,6})\s*[:：]?\s*([\s\S]*)$/);
+      if (!m) return;
+      const k = m[1], val = (m[2] || '').trim();
+      if (k === '阶') o.stage = val;
+      else if (k === '解') o.solved = nameList(val);
+      else if (k === '未') o.unsolved = nameList(val);
+      else if (k === '扭') {
+        const g = (re) => { const x = val.match(re); return x ? +x[1] : null; };
+        o.twist.yong = g(/永\s*(-?\d+(?:\.\d+)?)/);
+        o.twist.zhan = g(/粘\s*(-?\d+(?:\.\d+)?)/);
+        o.twist.lin = g(/临\s*(-?\d+(?:\.\d+)?)/);
+      }
+      else o.unknown.push(seg);
+    });
+    o.bad = [...new Set(o.solved.filter(n => YZ_ORDER.indexOf(n) < 0))];
+    o.total = YZ_ORDER.length;
+    return o;
+  }
+
+  function renderYz(y) {
+    const on = new Set(y.solved);
+    const dot = (n) => {
+      const p = YZ_POS[n] || [50, 50];
+      return `<div class="yz-n${on.has(n) ? ' on' : ''}" style="left:${p[0]}%;top:${p[1]}%">` +
+        `<b>${esc(n)}</b></div>`;
+    };
+    const t = y.twist;
+    const tv = (v) => (v == null ? '—' : String(v));
+    const warn = y.bad.length
+      ? `<div class="kb-warn">⚠ 未识别的元名（照原样显示，不当作解析错误）：${esc(y.bad.join('、'))}</div>` : '';
+    return `<div class="tc-yz">` +
+      `<div class="tc-kbl-hd"><b>源质</b><i class="kb-stage">${esc(y.stage || '—')}</i>` +
+      `<u>解 ${y.solved.length}/${y.total}</u></div>` +
+      `<div class="yz-ring">${YZ_ORDER.map(dot).join('')}` +
+      `<div class="yz-hub"><em>永 ${tv(t.yong)}</em><em>粘 ${tv(t.zhan)}</em><em>临 ${tv(t.lin)}</em></div>` +
+      `<i class="yz-orbit"></i></div>` + warn + `</div>`;
   }
 
   function renderPlayer(p) {
@@ -2184,6 +2291,14 @@
       st.mechas.forEach(m => { if (!kUsed.has(m.idx)) cards.push(renderMecha(m, false)); });
       st.familiars.forEach(f => { if (!fUsed.has(f.idx)) cards.push(renderFamiliar(f)); });
       colL.push(`<div class="tc-grid tc-stack">${cards.join('')}</div>`);
+    }
+    if (st.kbls.length) {
+      colL.push(sect('卡巴拉 · 生命之树', 'KABBALAH'));
+      colL.push(`<div class="tc-kbls">${st.kbls.map(renderKbl).join('')}</div>`);
+    }
+    if (st.yzs.length) {
+      colL.push(sect('源质 · 六元', 'SEPHIRAH'));
+      colL.push(`<div class="tc-yzs">${st.yzs.map(renderYz).join('')}</div>`);
     }
     if (st.geneLocks.length) {
       colL.push(sect('基因锁', 'GENE LOCK'));
@@ -3207,6 +3322,12 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   /* 窄屏沿用 A 的一行三列，只把标签列与数值列收窄——
      旧的「数值一行、条下一行通栏」是两行，比现在高。 */
   .tc-vit{grid-template-columns:36px 1fr 54px;gap:1px 6px}
+  /* kbl 双树窄屏降级：网格 → 单柱竖排。用 flex 而不是 grid，是为了让 inline 的
+     grid-row/grid-column 直接失效——不用 !important 也能覆盖内联样式。 */
+  .kb-grid{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+  .kb-cell{flex-direction:row;gap:5px;margin-left:0}
+  .kb-grid-inv .kb-cell{margin-left:5px}
+  .yz-ring{height:88px}
   /* 机甲 / 使魔读数：标签列收窄，数字仍等宽三位 */
   .tc-kbm-g{grid-template-columns:38px 32px 1fr}
   .tc-kbm-sub{grid-template-columns:1fr}
@@ -3281,6 +3402,58 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   .tc-ckline{font-size:10px;line-height:1.55;color:#fcd34d;letter-spacing:0}
   .tc-ckwarn{font-style:normal;font-size:9.5px;font-weight:700;color:#fbbf24;margin-left:2px}
 
+/* ══════════ kbl 卡巴拉双树 / yz 源质环（琥珀） ══════════ */
+  .tc-kbls, .tc-yzs { display: flex; flex-direction: column; gap: 6px; }
+  .tc-kbl, .tc-yz { position: relative; padding: 7px 9px 9px; border-radius: 6px;
+    background: linear-gradient(135deg, rgba(139,92,246,.07), rgba(15,23,42,.42) 70%);
+    border: 1px solid rgba(167,139,250,.22); }
+  .tc-yz { background: linear-gradient(135deg, rgba(251,191,36,.07), rgba(15,23,42,.42) 70%);
+    border-color: rgba(251,191,36,.22); }
+  .tc-kbl-hd { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .tc-kbl-hd b { font-size: 11px; letter-spacing: .16em; color: #ddd6fe; }
+  .tc-yz .tc-kbl-hd b { color: #fde68a; }
+  .kb-tree { font-style: normal; font-size: 8px; padding: 1px 4px; border-radius: 2px;
+    color: #c4b5fd; border: 1px solid rgba(196,181,253,.4); background: rgba(167,139,250,.1); }
+  .kb-stage { font-style: normal; font-size: 8.5px; color: #94a3b8; letter-spacing: .1em; }
+  .tc-kbl-hd u { margin-left: auto; text-decoration: none; font-size: 9px; color: #a5b4fc;
+    font-variant-numeric: tabular-nums; }
+  .tc-yz .tc-kbl-hd u { color: #fbbf24; }
+  /* 双树：3 列 × 7 行 */
+  .kb-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(7, 15px);
+    justify-items: center; align-items: center; }
+  .kb-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .kb-cell em { font-style: normal; font-size: 7.5px; line-height: 1; color: #6b7a90; letter-spacing: .04em; }
+  .kb-cell .kb-n { width: 11px; height: 11px; border-radius: 50%;
+    border: 1px solid rgba(167,139,250,.45); background: transparent; display: block; }
+  .kb-cell .kb-n.on { background: radial-gradient(circle at 50% 38%, #f5f3ff, #a78bfa 72%);
+    border-color: #ddd6fe; box-shadow: 0 0 6px rgba(167,139,250,.85); }
+  /* 逆质点：换成菱形 + 横向偏移，和正质点不在一条竖线上 */
+  .kb-grid-inv .kb-cell { margin-left: 7px; }
+  .kb-grid-inv .kb-n { width: 9px; height: 9px; border-radius: 1px; transform: rotate(45deg);
+    border-color: rgba(244,63,94,.5); }
+  .kb-grid-inv .kb-n.on { background: radial-gradient(circle at 50% 38%, #fecdd3, #f43f5e 72%);
+    border-color: #fda4af; box-shadow: 0 0 6px rgba(244,63,94,.8); }
+  .kb-grid-inv em { color: #7d5560; }
+  .kb-mirror { height: 1px; margin: 3px 0 2px;
+    background: repeating-linear-gradient(90deg, rgba(196,181,253,.5) 0 3px, transparent 3px 7px); }
+  .kb-warn { margin-top: 4px; font-size: 8.5px; line-height: 1.5; color: #fcd34d; }
+  /* 源质环 */
+  .yz-ring { position: relative; height: 96px; margin: 2px 0 1px; }
+  .yz-orbit { position: absolute; left: 50%; top: 50%; width: 74px; height: 74px; margin: -37px 0 0 -37px;
+    border-radius: 50%; border: 1px dashed rgba(251,191,36,.28); }
+  .yz-n { position: absolute; transform: translate(-50%, -50%); }
+  .yz-n b { display: block; width: 20px; height: 20px; border-radius: 3px; font-size: 7.5px;
+    font-weight: 400; line-height: 20px; text-align: center; color: #8a7a4f;
+    border: 1px dashed rgba(251,191,36,.35); background: rgba(251,191,36,.04); }
+  .yz-n.on b { color: #1c1917; font-weight: 700; border-style: solid; border-color: #fde68a;
+    background: linear-gradient(160deg, #fef3c7, #f59e0b 72%); box-shadow: 0 0 7px rgba(251,191,36,.75); }
+  .yz-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 44px; height: 44px; border-radius: 50%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+    background: radial-gradient(circle at 50% 40%, rgba(251,191,36,.14), rgba(15,23,42,.9) 72%);
+    border: 1px solid rgba(251,191,36,.3); }
+  .yz-hub em { font-style: normal; font-size: 7px; line-height: 1.15; color: #d6c08a;
+    font-variant-numeric: tabular-nums; }
 /* ══════════ sh 避难所卡（海上载体） ══════════
    判据：遮住文字只看轮廓 —— kbm 是直角切角钢板、fam 是小一号的副卡、ntr 是竖排绯红、
    kb 是紫金，shelter 必须是「圆角浮筒 + 锈斑 + 一条水位线」。四张并排时先被认出来的是那条水线。 */
@@ -3508,6 +3681,6 @@ details[open]>.tc-skfl-ar::after{content:'▴'}
   } catch (e) { /* 忽略 */ }
 
   /* 仅供测试，非公开 API，可随实现变动 */
-  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr };
+  window.__twCard = { version: VERSION, parseState, render, sweep, keys: EXT_KEYS, extractBlock: extractBlock, extHit: extHit, CSS: CSS, injectCss: injectCss, parseShelter, parseDisaster, parseWarehouse, parsePlace, splitInlineKeys, keyHits, checkAudit, parseCr, parseKbl, parseYz };
   console.log('[tw-card] v' + VERSION + ' ready');
 })();
